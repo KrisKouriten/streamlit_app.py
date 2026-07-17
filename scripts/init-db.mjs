@@ -1,4 +1,7 @@
 import pg from "pg";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const { Pool } = pg;
 
@@ -13,7 +16,8 @@ const pool = new Pool({
   ssl: connectionString.includes("localhost") ? false : { rejectUnauthorized: false },
 });
 
-const sql = `
+// App tables: login accounts and the month-end close tracker.
+const appSql = `
 CREATE TABLE IF NOT EXISTS users (
   id          SERIAL PRIMARY KEY,
   email       TEXT UNIQUE NOT NULL,
@@ -34,9 +38,16 @@ CREATE TABLE IF NOT EXISTS task_state (
 CREATE INDEX IF NOT EXISTS idx_task_state_period ON task_state (period);
 `;
 
+// Finance Operating System schema (dimensions, facts, reporting views, KPI catalogue).
+const here = dirname(fileURLToPath(import.meta.url));
+const financeOsSql = readFileSync(join(here, "..", "db", "schema.sql"), "utf8");
+
 try {
-  await pool.query(sql);
-  console.log("Database initialised: tables users, task_state are ready.");
+  await pool.query(appSql);
+  console.log("App tables ready: users, task_state.");
+  await pool.query(financeOsSql);
+  console.log("Finance OS schema ready: core / finance / commercial / operations / intelligence / governance.");
+  console.log("\nDatabase initialised.");
 } catch (e) {
   console.error("Init failed:", e.message);
   process.exit(1);

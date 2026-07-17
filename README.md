@@ -1,8 +1,21 @@
-# Month-end close — team dashboard
+# Miniso UK — Finance Operating System
 
-A shared web app for tracking finance month-end close across all your entities.
-Live shared state, individual logins, who/when stamps on every task, and a
-month-by-month history. Built with Next.js + Postgres.
+A connected dashboard platform for finance, built on one governed database so a
+number means the same thing everywhere. Built with Next.js + Postgres.
+
+It has two parts today:
+
+1. **Month-end close tracker** — shared task tracking across every entity, with
+   who/when stamps and a month-by-month history. (This is the original app.)
+2. **Finance Operating System** (`/finance-os`) — the connected dashboard
+   ecosystem: a registry of eight dashboards across four layers (strategy,
+   performance, operations, executive), a shared data warehouse, a governed KPI
+   catalogue, and an AI-insight log where every recommendation waits for a human
+   to review it. The **Executive Intelligence Hub** is the first live dashboard;
+   the others are scaffolded and marked "Coming soon".
+
+The database design (schemas, tables, reporting views, KPI catalogue) lives in
+[`db/schema.sql`](db/schema.sql).
 
 ---
 
@@ -77,7 +90,23 @@ npm install
 DATABASE_URL="postgres://...your string..." npm run init-db
 ```
 
-You should see `Database initialised`.
+You should see `Database initialised`. This creates the month-end tables **and**
+the full Finance Operating System schema (dimensions, facts, reporting views,
+dashboard registry and KPI catalogue).
+
+### Optional — load demo data so the dashboards aren't empty
+
+Before you have real feeds connected, you can load illustrative demo data
+(entities, stores, a year of budget/forecast/actual, KPIs and sample AI
+insights) so you can see the dashboards working:
+
+```bash
+DATABASE_URL="postgres://...your string..." npm run seed-demo
+```
+
+Every figure it loads is invented for illustration. It's safe to re-run, and it
+never touches your login accounts or month-end close data. Once real ETL feeds
+are connected, stop running it.
 
 ## Step 5 — Add your team members (you set the passwords)
 
