@@ -117,6 +117,31 @@ export function Table({ columns, rows, empty = "No data." }) {
   );
 }
 
+export function SubNav({ items, active }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
+      {items.map(([href, label]) => {
+        const on = href === active;
+        return (
+          <Link key={href} href={href} style={{
+            fontSize: 12.5, padding: "5px 12px", borderRadius: 7, textDecoration: "none",
+            border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+            background: on ? "var(--accent-bg)" : "transparent",
+            color: on ? "var(--accent)" : "var(--muted)",
+          }}>{label}</Link>
+        );
+      })}
+    </div>
+  );
+}
+
+export const STORE_SALES_NAV = [
+  ["/finance-os/store-sales", "Executive view"],
+  ["/finance-os/store-sales/league", "Store league"],
+  ["/finance-os/store-sales/store", "Store drilldown"],
+  ["/finance-os/store-sales/break-even", "Break-even"],
+];
+
 export function varianceTone(v, favourableUp = true) {
   if (v === null || v === undefined) return "muted";
   const good = favourableUp ? Number(v) >= 0 : Number(v) <= 0;
