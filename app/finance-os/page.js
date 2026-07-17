@@ -13,7 +13,16 @@ const LAYERS = {
 };
 
 // Dashboards that have a built screen. Others show as "Coming soon".
-const LIVE = { MASTER: "/finance-os/executive" };
+const LIVE = {
+  MASTER: "/finance-os/executive",
+  BUDGET_FORECAST: "/finance-os/budget-forecast",
+  MANAGEMENT_ACCOUNTS: "/finance-os/management-accounts",
+  STORE_SALES_KPI: "/finance-os/store-sales",
+  FRANCHISE: "/finance-os/franchise",
+  FIXED_ASSETS: "/finance-os/fixed-assets",
+  INVENTORY: "/finance-os/inventory",
+  CASHFLOW: "/finance-os/cashflow",
+};
 
 export default async function FinanceOsHome() {
   const session = await getSession();
