@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "init-db": "node scripts/init-db.mjs",
+    "seed-demo": "node scripts/seed-demo.mjs",
     "create-user": "node scripts/create-user.mjs"
   },
   "dependencies": {

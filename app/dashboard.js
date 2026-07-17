@@ -98,6 +98,7 @@ export default function Dashboard({ user, stages, entities }) {
           <div style={{ fontSize: 18, fontWeight: 600 }}>Month-end close</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13.5, color: "var(--muted)" }}>
+          <a href="/finance-os" style={{ textDecoration: "none" }}>Finance OS</a>
           <span>{user.name}</span>
           <button onClick={logout} style={{ border: "1px solid var(--line-strong)", background: "var(--surface)", color: "var(--ink)", borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Sign out</button>
         </div>
