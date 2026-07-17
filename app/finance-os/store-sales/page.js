@@ -104,11 +104,25 @@ function PeriodBlock({ title, range, s, fyPlan, mkt }) {
   );
 }
 
+function AwaitingData({ crumb, title }) {
+  return (
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+      <PageHeader crumb={crumb} title={title} />
+      <SubNav items={STORE_SALES_NAV} active="" />
+      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "18px 20px", fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
+        No store trading data has been loaded yet. Run the four store-data load files
+        (foundation, 2025 actuals, 2026 actuals, forecast) against the database, then refresh this page.
+      </div>
+    </div>
+  );
+}
+
 export default async function StoreSalesExecutive() {
   const session = await getSession();
   if (!session) redirect("/login");
 
   const wins = await getWindows();
+  if (!wins) return <AwaitingData crumb="Operational intelligence" title="Store Sales & KPI — All Stores" />;
   const [week, mtd, ytd, fyPlan, mkt] = await Promise.all([
     getPeriodSummary(wins.week), getPeriodSummary(wins.mtd), getPeriodSummary(wins.ytd),
     getFyPlanTotal(), getMarketAssumptions(),
