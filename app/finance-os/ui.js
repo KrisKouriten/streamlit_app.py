@@ -204,13 +204,21 @@ export function IllustrativeBanner({ children }) {
 // partial feed explicit: which entities are live and as at when. Shown whenever
 // a page reports real statutory finance so no one reads it as the whole group.
 export function EntityScopeBanner({ scope, asAt }) {
+  const joiin = scope?.kind === "JOIIN";
   const count = scope?.count || 0;
   const names = (scope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
-  const empty = count === 0;
+  const empty = !joiin && count === 0;
   return (
     <div style={{ background: "linear-gradient(135deg, var(--accent-bg), color-mix(in srgb, var(--accent-bg) 45%, var(--surface)))", border: "1px solid color-mix(in srgb, var(--accent-deep) 55%, var(--line))", borderRadius: "var(--radius)", boxShadow: "var(--card-top)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>Real Xero feed</span>
-      {empty ? (
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>
+        {joiin ? "Real feed · Joiin" : "Real Xero feed"}
+      </span>
+      {joiin ? (
+        <span>
+          Consolidated across the full group — {count} companies via Joiin, intercompany eliminations applied
+          {asAt ? ` · as at ${dateLabel(asAt)}` : ""}.
+        </span>
+      ) : empty ? (
         <span>No Xero organisation is connected yet — connect one to populate these figures.</span>
       ) : (
         <span>
