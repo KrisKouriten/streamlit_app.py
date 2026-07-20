@@ -1,7 +1,10 @@
 import PillarHub from "../pillar-hub";
 export const dynamic = "force-dynamic";
 export default function Workflow() {
-  return <PillarHub pillar="PERFORM" title="Workflow"
+  // Pillar key "WORKFLOW": no dashboard registers here, so this hub shows only
+  // the team-cadence screens regardless of registry state (the old PERFORM key
+  // still carries Management Accounts until migration 010 runs in production).
+  return <PillarHub pillar="WORKFLOW" title="Workflow"
     intro="The finance team's working cadence — the tasks that keep the numbers trustworthy: who does what this week, review and sign-off, and the templates the week is built from."
     extras={[
       { title: "My Finance Week", href: "/perform/my-week", purpose: "Your tasks for the week — take, work, submit for review.", meta: "Live" },
