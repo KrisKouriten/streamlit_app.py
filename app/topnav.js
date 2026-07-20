@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const PILLARS = [
   ["HOME", "/finance-os/executive", ["/finance-os/executive"]],
   ["PLAN", "/plan", ["/plan", "/finance-os/budget-forecast"]],
-  ["PERFORM", "/perform", ["/perform", "/finance-os/management-accounts", "/"]],
+  ["PERFORM", "/perform", ["/perform", "/finance-os/management-accounts"]],
   ["OPERATE", "/operate", ["/operate", "/finance-os/store-sales", "/finance-os/franchise", "/finance-os/fixed-assets", "/finance-os/inventory", "/finance-os/cashflow"]],
   ["AI CONTROL TOWER", "/ai", ["/ai"]],
-  ["GOVERN", "/govern", ["/govern"]],
+  ["GOVERN", "/govern", ["/govern", "/handbook"]],
 ];
 
 function activePillar(path) {
-  if (path === "/") return "PERFORM";
   let best = null, bestLen = -1;
   for (const [name, , prefixes] of PILLARS) {
     for (const p of prefixes) {
@@ -37,6 +36,23 @@ function ThemeToggle() {
     <button onClick={toggle} aria-label={light ? "Switch to dark theme" : "Switch to light theme"} title={light ? "Dark" : "Light"}
       style={{ background: "transparent", border: "1px solid var(--line-strong)", color: "var(--muted)", borderRadius: 7, width: 30, height: 30, fontSize: 14, lineHeight: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
       {light ? "☾" : "☀"}
+    </button>
+  );
+}
+
+function SignOut() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function signOut() {
+    setBusy(true);
+    try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+    router.push("/login");
+    router.refresh();
+  }
+  return (
+    <button onClick={signOut} disabled={busy} title="Sign out"
+      style={{ background: "transparent", border: "1px solid var(--line-strong)", color: "var(--muted)", borderRadius: 7, height: 30, padding: "0 11px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", flex: "none", opacity: busy ? 0.6 : 1 }}>
+      {busy ? "Signing out…" : "Sign out"}
     </button>
   );
 }
@@ -68,6 +84,7 @@ export default function TopNav({ userName }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: 6 }}>
           <ThemeToggle />
           {userName && <span style={{ fontSize: 12, color: "var(--faint)", whiteSpace: "nowrap" }}>{userName}</span>}
+          <SignOut />
         </div>
       </div>
     </nav>

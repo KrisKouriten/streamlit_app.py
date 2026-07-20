@@ -1,6 +1,9 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.0 · 20/07/2026 · Owner: Finance (Miniso UK)**
+**Version 1.1 · 20/07/2026 · Owner: Finance (Miniso UK)**
+
+> Also available in-app: **Govern → Handbook** (`/handbook`) renders this for the
+> signed-in team.
 
 This is the operating manual for the Finance Operating System (FOS): what it is, who
 does what, the weekly and monthly rhythm, how each module works, how the data feeds
@@ -53,15 +56,15 @@ Design principles that everything else follows:
 ## 2. Access, roles & permissions
 
 Sign in at the app URL with your Miniso UK email and password. Sessions last 12
-hours. There is no self-registration — an ADMIN creates accounts under **GOVERN →
-Users & roles**.
+hours; **Sign out** is in the top-right of every screen, beside your name. There is
+no self-registration — an ADMIN creates accounts under **GOVERN → Users & roles**.
 
 **Roles** (a user can hold more than one; new users default to FINANCE):
 
 | Role | What it can do beyond viewing |
 |---|---|
-| **ADMIN** | Everything, plus manage users & roles. |
-| **FINANCE** | Run agents; approve task reviews; approve action closure; validate benefits; generate the weekly schedule. |
+| **ADMIN** | Everything, plus manage users, roles & entities. |
+| **FINANCE** | Run agents; approve task reviews; approve action closure; validate benefits; generate the weekly schedule; manage entities. |
 | **EXEC** | Approve action closure; validate benefits. |
 | **OPS** | Do and complete assigned work; raise actions. Cannot approve closure or validate benefits. |
 
@@ -88,7 +91,7 @@ The top navigation is the same on every screen.
 | **PERFORM** | `/perform` | Management Accounts + the Weekly Finance Schedule. |
 | **OPERATE** | `/operate` | Store Sales & KPIs, Franchise, Fixed Assets, Inventory, Cash Flow. |
 | **AI CONTROL TOWER** | `/ai` | The Finance Agent Control Centre. |
-| **GOVERN** | `/govern` | Action Centre, Benefits tracker, Users & roles. |
+| **GOVERN** | `/govern` | Users & roles, Entities, Action Centre, Benefits tracker, and this Handbook. |
 
 **Start every day at HOME.** It is exception-led: it surfaces what needs a person's
 decision and links straight to where that decision is made.
@@ -229,10 +232,14 @@ scheduled routine):
 totals match the Xero report exactly.
 
 ### 6.3 Adding a Xero entity (consolidation)
-Miniso UK spans several legal entities; the dashboards consolidate whatever is
-connected. To add one: connect its Xero org, add a `dim_entity` row and a
-`finance.xero_org_map` row, then load it as above. The dashboards consolidate it
-automatically and the scope banner updates ("N connected entities").
+Miniso UK spans several legal entities (managed under **GOVERN → Entities** —
+display name, legal name, type and Xero connection status). The dashboards
+consolidate whatever is connected. To add one: create/confirm it under Entities,
+connect its Xero org (a `finance.xero_org_map` row), then load it as above. The
+dashboards consolidate it automatically and the scope banner updates.
+
+> The standalone legacy month-end close tracker has been **retired** — month-end
+> now runs through the PERFORM weekly schedule, so there is one place for the work.
 
 ---
 

@@ -1,12 +1,7 @@
 import { redirect } from "next/navigation";
-import { getSession } from "../lib/auth";
-import { STAGES, ENTITIES } from "../lib/close-config";
-import Dashboard from "./dashboard";
 
-export const dynamic = "force-dynamic";
-
-export default async function Home() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  return <Dashboard user={session} stages={STAGES} entities={ENTITIES} />;
+// The legacy month-end close tracker has been retired — month-end now runs through
+// the PERFORM weekly schedule. Home is the Finance OS.
+export default function Home() {
+  redirect("/finance-os/executive");
 }
