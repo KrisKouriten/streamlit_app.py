@@ -51,15 +51,15 @@ export default async function Handbook() {
       <H>2 · The six pillars</H>
       <Rows head={["Pillar", "Purpose"]} rows={[
         ["HOME", "The connected sphere — position, what needs attention, operating health."],
-        ["PLAN", "Budget & Forecast."],
-        ["PERFORM", "Management Accounts + the Weekly Finance Schedule (month-end runs here)."],
-        ["OPERATE", "Store Sales & KPIs, Franchise, Fixed Assets, Inventory, Cash Flow."],
+        ["DASHBOARDS", "The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets — each badged real feed or illustrative."],
+        ["OPERATE", "Operational controls: the Month-end close and Intercompany."],
+        ["WORKFLOW", "The finance team's cadence — My Week, Team Schedule, Review queue, Task Library."],
         ["AI CONTROL TOWER", "The finance agents — runs, review and controls."],
         ["GOVERN", "Users, Entities, Action Centre, Benefits, this Handbook."],
       ]} />
 
       <H>3 · The operating rhythm</H>
-      <P><strong>Daily:</strong> start at HOME → "Needs attention" (ranked; clear critical first) and clear the AI review queue. <strong>Weekly (Mon):</strong> generate the week (PERFORM → Schedule), the team works My Week, reviewers approve, run the store agents, review store trading. <strong>Monthly:</strong> management accounts once Xero actuals are loaded; month-end close tasks; validate realised benefits; chase overdue actions. <strong>Quarterly:</strong> review agent performance, refresh task templates, review roles and entities.</P>
+      <P><strong>Daily:</strong> start at HOME → "Needs attention" (ranked; clear critical first) and clear the AI review queue. <strong>Weekly (Mon):</strong> generate the week (WORKFLOW → Schedule), the team works My Week, reviewers approve, run the store agents, review store trading (DASHBOARDS → Store Sales). <strong>Monthly:</strong> management accounts once Xero actuals are loaded; month-end close tasks; validate realised benefits; chase overdue actions. <strong>Quarterly:</strong> review agent performance, refresh task templates, review roles and entities.</P>
 
       <H>4 · Modules</H>
       <P><strong>HOME</strong> shows two truths kept distinct by source chip: trading (all stores, store feed) and statutory finance (connected Xero entities). <strong>Weekly Schedule</strong>: an assignee can only reach "ready for review" — only a reviewer's decision completes a task. <strong>AI agents</strong> can only read (SELECT); material outputs require human sign-off before becoming an insight or action. <strong>Action Centre</strong>: OPEN → IN_PROGRESS → COMPLETE → CLOSED, where closure is a separate approval; an expected value auto-creates a benefit opportunity to realise then validate. <strong>Finance dashboards</strong> show real Xero actuals, consolidated across connected entities, with a scope banner.</P>

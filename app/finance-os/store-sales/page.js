@@ -122,7 +122,7 @@ export default async function StoreSalesExecutive() {
   if (!session) redirect("/login");
 
   const wins = await getWindows();
-  if (!wins) return <AwaitingData crumb="Operational intelligence" title="Store Sales & KPI — All Stores" />;
+  if (!wins) return <AwaitingData crumb="Trading" title="Store Sales & KPI — All Stores" />;
   const [week, mtd, ytd, fyPlan, mkt] = await Promise.all([
     getPeriodSummary(wins.week), getPeriodSummary(wins.mtd), getPeriodSummary(wins.ytd),
     getFyPlanTotal(), getMarketAssumptions(),
@@ -131,7 +131,7 @@ export default async function StoreSalesExecutive() {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title="Store Sales & KPI — All Stores"
+      <PageHeader crumb="Trading" title="Store Sales & KPI — All Stores"
         right={`Data to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales" />
 

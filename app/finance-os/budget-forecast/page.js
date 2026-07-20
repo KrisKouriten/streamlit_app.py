@@ -21,7 +21,7 @@ export default async function BudgetForecast() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Strategic planning · Budget & Forecast" title="Budget & Forecast"
+      <PageHeader crumb="Planning" title="Budget & Forecast"
         right={loaded ? "Plan 2025A–2028B" : "Awaiting plan upload"} />
       <BudgetForecastUI
         groupPl={groupPl} stores={stores} monthly={monthly} breakeven={breakeven} kpi={kpi}

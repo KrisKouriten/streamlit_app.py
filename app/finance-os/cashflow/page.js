@@ -1,21 +1,23 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
-import { getRealCashPosition, getConnectedEntities } from "../../../lib/finance-os";
-import { PageHeader, StatRow, Stat, Panel, EntityScopeBanner, money } from "../ui";
+import { getRealCashPosition, getRealCashByEntity, getConnectedEntities } from "../../../lib/finance-os";
+import { PageHeader, StatRow, Stat, Panel, Table, EntityScopeBanner, Badge, Bar, money } from "../ui";
 
 export const dynamic = "force-dynamic";
 
 // Cash & Treasury on the real feed: consolidated cash across connected Xero
-// entities. Facility lines and forward cashflow movements await a treasury feed.
+// entities, with the per-entity breakdown. Facility lines and forward cashflow
+// movements await a treasury feed.
 export default async function CashFlow() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [cash, scope] = await Promise.all([getRealCashPosition(), getConnectedEntities()]);
+  const [cash, byEntity, scope] = await Promise.all([getRealCashPosition(), getRealCashByEntity(), getConnectedEntities()]);
+  const maxCash = byEntity.reduce((m, r) => Math.max(m, Math.abs(Number(r.available_cash) || 0)), 0);
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title="Cash Flow & Treasury" right={cash ? "Xero cash position" : "Awaiting Xero feed"} />
+      <PageHeader crumb="Treasury" title="Cash Flow" right={cash ? "Xero cash position" : "Awaiting Xero feed"} />
       <EntityScopeBanner scope={scope} asAt={cash?.calendar_date} />
 
       {!cash ? (
@@ -30,6 +32,21 @@ export default async function CashFlow() {
             <Stat label="Facility drawn" value={Number(cash.facility_limit) ? money(cash.facility_used, { compact: true }) : "—"} sub="on connected entities" />
             <Stat label="Bank recs" value={cash.all_reconciled ? "Clean" : "Open items"} tone={cash.all_reconciled ? "green" : "amber"} />
           </StatRow>
+
+          {byEntity.length > 0 && (
+            <Panel title="Cash by entity" note="reconciled bank balance, connected Xero entities">
+              <Table
+                columns={[
+                  { label: "Entity", render: (r) => r.entity_name },
+                  { label: "Cash at bank", align: "right", render: (r) => money(r.available_cash) },
+                  { label: "", align: "right", render: (r) => <Bar value={r.available_cash} max={maxCash} /> },
+                  { label: "Headroom", align: "right", render: (r) => (Number(r.headroom) ? money(r.headroom) : "—") },
+                  { label: "Recs", align: "right", render: (r) => <Badge tone={r.all_reconciled ? "green" : "amber"}>{r.all_reconciled ? "Clean" : "Open"}</Badge> },
+                ]}
+                rows={byEntity}
+              />
+            </Panel>
+          )}
 
           <Panel title="Treasury notes">
             <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>

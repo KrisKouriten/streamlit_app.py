@@ -41,7 +41,7 @@ export default async function StoreDrilldown({ searchParams }) {
 
   const params = await searchParams;
   const [wins, stores, mkt] = await Promise.all([getWindows(), getStoreList(), getMarketAssumptions()]);
-  if (!wins || !stores.length) return <AwaitingData crumb="Operational intelligence" title="Store drilldown" />;
+  if (!wins || !stores.length) return <AwaitingData crumb="Trading" title="Store drilldown" />;
   const code = params?.store && stores.some((s) => s.store_code === params.store) ? params.store : stores[0]?.store_code;
   const store = stores.find((s) => s.store_code === code);
   const d = await getStoreDetail(code, wins.ytd);
@@ -84,7 +84,7 @@ export default async function StoreDrilldown({ searchParams }) {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title={`Store drilldown — ${store?.store_name || code}`}
+      <PageHeader crumb="Trading" title={`Store drilldown — ${store?.store_name || code}`}
         right={`YTD to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/store" />
 

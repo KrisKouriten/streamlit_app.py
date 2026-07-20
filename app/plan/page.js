@@ -1,7 +1,8 @@
-import PillarHub from "../pillar-hub";
+import { redirect } from "next/navigation";
+
+// PLAN folded into DASHBOARDS (Phase 8). Budget & Forecast now lives under the
+// DASHBOARDS section; this route is kept so old links/bookmarks still resolve.
 export const dynamic = "force-dynamic";
 export default function Plan() {
-  return <PillarHub pillar="PLAN" title="Plan"
-    intro="Strategic planning — budgets, forecasts and the long-term financial direction of the business."
-    extras={[{ title: "Scenario planning", purpose: "Upside / base / downside planning views.", disabled: true }]} />;
+  redirect("/dashboards");
 }

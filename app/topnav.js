@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 
 const PILLARS = [
   ["HOME", "/finance-os/executive", ["/finance-os/executive"]],
-  ["PLAN", "/plan", ["/plan", "/finance-os/budget-forecast"]],
-  ["PERFORM", "/perform", ["/perform", "/finance-os/management-accounts"]],
-  ["OPERATE", "/operate", ["/operate", "/finance-os/store-sales", "/finance-os/franchise", "/finance-os/fixed-assets", "/finance-os/inventory", "/finance-os/cashflow"]],
+  ["DASHBOARDS", "/dashboards", ["/dashboards", "/finance-os/management-accounts", "/finance-os/budget-forecast", "/finance-os/cashflow", "/finance-os/store-sales", "/finance-os/inventory", "/finance-os/franchise", "/finance-os/fixed-assets", "/plan"]],
+  ["OPERATE", "/operate", ["/operate"]],
+  ["WORKFLOW", "/perform", ["/perform"]],
   ["AI CONTROL TOWER", "/ai", ["/ai"]],
   ["GOVERN", "/govern", ["/govern", "/handbook"]],
 ];

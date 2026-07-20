@@ -39,7 +39,7 @@ export function PageHeader({ crumb, title, right }) {
     <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", gap: 12, flexWrap: "wrap" }}>
       <div>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-          <Link href="/finance-os" style={{ textDecoration: "none", color: "var(--faint)" }}>Finance OS</Link> · {crumb}
+          <Link href="/dashboards" style={{ textDecoration: "none", color: "var(--faint)" }}>Dashboards</Link> · {crumb}
         </div>
         <div style={{ fontSize: 18, fontWeight: 600 }}>{title}</div>
       </div>
@@ -146,6 +146,55 @@ export function varianceTone(v, favourableUp = true) {
   if (v === null || v === undefined) return "muted";
   const good = favourableUp ? Number(v) >= 0 : Number(v) <= 0;
   return good ? "green" : "red";
+}
+
+const BADGE_FG = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)", accent: "var(--accent)", muted: "var(--muted)" };
+const BADGE_BG = { green: "var(--green-bg)", amber: "var(--amber-bg)", red: "var(--red-bg)", accent: "var(--accent-bg)", muted: "var(--raise)" };
+
+// Small uppercase pill. tone ∈ green|amber|red|accent|muted.
+export function Badge({ tone = "muted", children }) {
+  return (
+    <span style={{
+      display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600,
+      textTransform: "uppercase", letterSpacing: ".06em", color: BADGE_FG[tone], background: BADGE_BG[tone],
+      border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap", lineHeight: 1.2,
+    }}>{children}</span>
+  );
+}
+
+// Data-provenance badge — makes "is this real?" legible on every dashboard.
+// kind ∈ xero | feed | model | illustrative.
+const PROVENANCE = {
+  xero: ["accent", "Real · Xero feed"],
+  feed: ["accent", "Real · governed feed"],
+  model: ["accent", "Real · uploaded model"],
+  illustrative: ["amber", "Illustrative · no live feed"],
+};
+export function ProvenanceBadge({ kind }) {
+  const [tone, label] = PROVENANCE[kind] || PROVENANCE.illustrative;
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
+// Inline proportional bar for tables / mini-charts. Renders |value| against max.
+export function Bar({ value, max, tone = "accent", width = 88 }) {
+  const w = max ? Math.max(0, Math.min(100, (Math.abs(Number(value)) / Math.abs(max)) * 100)) : 0;
+  const color = BADGE_FG[tone] || "var(--accent)";
+  return (
+    <span style={{ display: "inline-block", width, height: 8, background: "var(--raise)", borderRadius: 4, overflow: "hidden", verticalAlign: "middle" }}>
+      <span style={{ display: "block", width: `${w}%`, height: "100%", background: color, borderRadius: 4 }} />
+    </span>
+  );
+}
+
+// Amber "this is illustrative" banner — the honesty device for no-feed dashboards.
+// Mirrors EntityScopeBanner so real and illustrative dashboards read as one family.
+export function IllustrativeBanner({ children }) {
+  return (
+    <div style={{ background: "var(--amber-bg)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: ".05em", marginRight: 8 }}>Illustrative data</span>
+      {children}
+    </div>
+  );
 }
 
 // Consolidation-scope banner for the real Xero finance dashboards. Makes the

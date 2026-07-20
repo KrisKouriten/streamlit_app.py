@@ -54,14 +54,14 @@ export default async function StoreLeague() {
   if (!session) redirect("/login");
 
   const wins = await getWindows();
-  if (!wins) return <AwaitingData crumb="Operational intelligence" title="Store League" />;
+  if (!wins) return <AwaitingData crumb="Trading" title="Store League" />;
   const [mtdRows, ytdRows] = await Promise.all([getStoreLeague(wins.mtd), getStoreLeague(wins.ytd)]);
   const mtdBy = Object.fromEntries(mtdRows.map((r) => [r.store_code, derive(r)]));
   const rows = ytdRows.map((r, i) => ({ rank: i + 1, ytd: derive(r), mtd: mtdBy[r.store_code] }));
 
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title="Store League — ranked by YTD net sales"
+      <PageHeader crumb="Trading" title="Store League — ranked by YTD net sales"
         right={`Data to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/league" />
 

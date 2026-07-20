@@ -1,8 +1,8 @@
 import PillarHub from "../pillar-hub";
 export const dynamic = "force-dynamic";
-export default function Perform() {
-  return <PillarHub pillar="PERFORM" title="Perform"
-    intro="Performance management — how the business is doing against plan, and the finance work that keeps the numbers trustworthy."
+export default function Workflow() {
+  return <PillarHub pillar="PERFORM" title="Workflow"
+    intro="The finance team's working cadence — the tasks that keep the numbers trustworthy: who does what this week, review and sign-off, and the templates the week is built from."
     extras={[
       { title: "My Finance Week", href: "/perform/my-week", purpose: "Your tasks for the week — take, work, submit for review.", meta: "Live" },
       { title: "Finance Team Schedule", href: "/perform/schedule", purpose: "Whole-team view: workload, allocation and week completion.", meta: "Live · managers can generate the week" },

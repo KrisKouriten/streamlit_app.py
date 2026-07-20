@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.1 · 20/07/2026 · Owner: Finance (Miniso UK)**
+**Version 1.2 · 20/07/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → Handbook** (`/handbook`) renders this for the
 > signed-in team.
@@ -8,7 +8,8 @@
 This is the operating manual for the Finance Operating System (FOS): what it is, who
 does what, the weekly and monthly rhythm, how each module works, how the data feeds
 are kept fresh, and how the governance controls hold. It reflects the platform as
-delivered through Phases 1–6.
+delivered through Phase 8 (the specialist dashboards gathered under a single
+DASHBOARDS section).
 
 > **Entity note.** In this document and everywhere in the app, the business is
 > "Miniso UK". The underlying legal entities (e.g. *Kouriten Cambridge Limited*,
@@ -87,9 +88,9 @@ The top navigation is the same on every screen.
 | Pillar | Route | Purpose |
 |---|---|---|
 | **HOME** | `/finance-os/executive` | Executive Intelligence Hub — position, what needs attention, operating health. |
-| **PLAN** | `/plan` | Budget & Forecast. |
-| **PERFORM** | `/perform` | Management Accounts + the Weekly Finance Schedule. |
-| **OPERATE** | `/operate` | Store Sales & KPIs, Franchise, Fixed Assets, Inventory, Cash Flow. |
+| **DASHBOARDS** | `/dashboards` | The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets. Each declares its data provenance (real feed vs illustrative). |
+| **OPERATE** | `/operate` | Operational controls: the Month-end close and Intercompany. |
+| **WORKFLOW** | `/perform` | The finance team's cadence — My Week, Team Schedule, Review queue and the Task Library. |
 | **AI CONTROL TOWER** | `/ai` | The Finance Agent Control Centre. |
 | **GOVERN** | `/govern` | Users & roles, Entities, Action Centre, Benefits tracker, and this Handbook. |
 
@@ -109,19 +110,19 @@ decision and links straight to where that decision is made.
   unreviewed.
 
 ### Weekly (Monday)
-1. **Generate the week** — PERFORM → Schedule → *Generate week*. This creates dated
+1. **Generate the week** — WORKFLOW → Schedule → *Generate week*. This creates dated
    task instances from the active templates (idempotent — safe to click twice).
-2. **Team picks up work** — each person works their tasks in PERFORM → My Week
+2. **Team picks up work** — each person works their tasks in WORKFLOW → My Week
    (assign → in progress → ready for review / complete).
-3. **Reviewers approve** — PERFORM → Review clears tasks that require a second pair
+3. **Reviewers approve** — WORKFLOW → Review clears tasks that require a second pair
    of eyes. Approval, not completion, moves a task to COMPLETE.
 4. **Run the store agents** — AI Control Tower → run *Store Priorities* and *Data
    Quality*; review their outputs.
-5. **Review store trading** — OPERATE → Store Sales (executive view, league,
+5. **Review store trading** — DASHBOARDS → Store Sales (executive view, league,
    drilldown, break-even) once the weekly store data is loaded.
 
 ### Monthly
-- **Management accounts** — PERFORM → Management Accounts, once the month's Xero
+- **Management accounts** — DASHBOARDS → Management Accounts, once the month's Xero
   actuals are loaded (see §6).
 - **Month-end close** — work the monthly close tasks on the schedule.
 - **Benefits validation** — GOVERN → Benefits: validate realised value on delivered
@@ -130,7 +131,7 @@ decision and links straight to where that decision is made.
 
 ### Quarterly
 - Review agent performance and controls (AI Control Tower), refresh task templates
-  (PERFORM → Library), and review roles (GOVERN → Users).
+  (WORKFLOW → Library), and review roles (GOVERN → Users).
 
 ---
 
@@ -148,7 +149,7 @@ Below the tiles: a year-to-date-vs-plan strip, the **Needs attention** feed, and
 three operating-health panels (Actions & benefits, this week's schedule, AI agents).
 The hub never auto-actions — it points.
 
-### 5.2 Store Sales & KPIs (OPERATE)
+### 5.2 Store Sales & KPIs (DASHBOARDS)
 Four screens: executive view, store league, store drilldown, break-even. Governed
 definitions (mirroring the finance Excel model, applied consistently everywhere):
 - Only **valid trading days** are counted; only **real stores** (an operator is set)
@@ -159,7 +160,7 @@ definitions (mirroring the finance Excel model, applied consistently everywhere)
   footfall. **Like-for-like** = stores trading in both years with 4+ weeks' history
   before the window.
 
-### 5.3 Weekly Finance Schedule (PERFORM)
+### 5.3 Weekly Finance Schedule (WORKFLOW)
 A controlled task workflow. **11 statuses**; the important rule is that an assignee
 can only take a task to *Ready for review* (or *Complete* where no review is
 required) — **only a reviewer's decision** moves it to Complete or Returned.
@@ -193,7 +194,7 @@ agent, board, control, audit, manual).
   (ADMIN/FINANCE/EXEC) → the opportunity becomes VALIDATED. The Benefits tracker
   splits expected / realised / validated by **AI vs human** origin.
 
-### 5.6 Finance dashboards on the real feed (PLAN / PERFORM / OPERATE)
+### 5.6 Finance dashboards on the real feed (DASHBOARDS)
 - **Management Accounts** — the real Xero P&L by account, consolidated across
   connected entities, with the scope banner. Budget/forecast comparatives are blank
   until a real plan is loaded (no illustrative numbers).
@@ -239,7 +240,7 @@ connect its Xero org (a `finance.xero_org_map` row), then load it as above. The
 dashboards consolidate it automatically and the scope banner updates.
 
 > The standalone legacy month-end close tracker has been **retired** — month-end
-> now runs through the PERFORM weekly schedule, so there is one place for the work.
+> now runs through the WORKFLOW weekly schedule, so there is one place for the work.
 
 ---
 
