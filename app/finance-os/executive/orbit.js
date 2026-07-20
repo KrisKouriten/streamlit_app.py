@@ -34,8 +34,9 @@ export default function Orbit({ core, nodes }) {
     .orb-pulse{animation:orbpulse 3.4s ease-in-out infinite}
     @keyframes orbpulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:.15;transform:scale(1.28)}}
     @media (prefers-reduced-motion:reduce){.orb-pulse{animation:none}}
-    .orb-hit:hover .orb-chip{border-color:var(--accent);color:var(--ink)}
-    .orb-hit:hover .orb-dot{transform:scale(1.15)}
+    .orb-hit .orb-chip{transition:border-color .2s var(--ease),transform .2s var(--ease),box-shadow .3s var(--ease)}
+    .orb-hit:hover .orb-chip{border-color:var(--accent);color:var(--ink);transform:translateY(-2px);box-shadow:var(--shadow-2)}
+    .orb-hit:hover .orb-dot{transform:scale(1.2)}
   `;
 
   const CoreInner = (
@@ -76,7 +77,8 @@ export default function Orbit({ core, nodes }) {
         {/* core */}
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "36%", aspectRatio: "1/1", borderRadius: "50%",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center",
-          background: "radial-gradient(circle at 50% 38%, var(--surface), var(--bg))", border: "1px solid var(--accent-deep)", zIndex: 3, padding: 8 }}>
+          background: "radial-gradient(circle at 50% 32%, var(--raise), var(--bg) 78%)", border: "1px solid var(--accent-deep)",
+          boxShadow: "0 0 60px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-2), inset 0 1px 0 rgba(255,255,255,.06)", zIndex: 3, padding: 8 }}>
           <span className="orb-pulse" style={{ position: "absolute", inset: -1, borderRadius: "50%", border: "1px solid var(--accent)", pointerEvents: "none" }} />
           <a href="#attention" style={{ textDecoration: "none", color: "inherit", display: "flex", flexDirection: "column", alignItems: "center" }}>{CoreInner}</a>
         </div>
@@ -100,7 +102,7 @@ export default function Orbit({ core, nodes }) {
 function NodeCard({ n, centered }) {
   const tone = n.tone ? TONE[n.tone] : "var(--faint)";
   const body = (
-    <div className="orb-chip" style={{ background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 11, padding: "10px 12px", textAlign: centered ? "center" : "left", transition: "border-color .2s, color .2s" }}>
+    <div className="orb-chip fos-glass" style={{ borderRadius: 11, padding: "10px 12px", textAlign: centered ? "center" : "left", boxShadow: "var(--shadow-1)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, justifyContent: centered ? "center" : "flex-start" }}>
         <span className="orb-dot" style={{ width: 7, height: 7, borderRadius: "50%", background: n.planned ? "var(--faint)" : tone, flex: "none", transition: "transform .2s" }} />
         <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", color: "var(--ink)" }}>{n.label}</span>

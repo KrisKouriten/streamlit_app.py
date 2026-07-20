@@ -36,38 +36,38 @@ const TONE = {
 
 export function PageHeader({ crumb, title, right }) {
   return (
-    <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", gap: 12, flexWrap: "wrap" }}>
+    <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", margin: "0.5rem 0 1.9rem", gap: 12, flexWrap: "wrap" }}>
       <div>
-        <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>
           <Link href="/dashboards" style={{ textDecoration: "none", color: "var(--faint)" }}>Dashboards</Link> · {crumb}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em", lineHeight: 1.15 }}>{title}</div>
       </div>
-      {right && <div style={{ fontSize: 13, color: "var(--muted)" }}>{right}</div>}
+      {right && <div style={{ fontSize: 12.5, color: "var(--muted)", paddingBottom: 3 }}>{right}</div>}
     </header>
   );
 }
 
 export function StatRow({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 26 }}>{children}</div>;
+  return <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 30 }}>{children}</div>;
 }
 
 export function Stat({ label, value, sub, tone }) {
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1, color: tone ? TONE[tone] : "var(--ink)" }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 5 }}>{sub}</div>}
+    <div className="fos-card" style={{ padding: "15px 17px 14px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 9 }}>{label}</div>
+      <div className="fos-num" style={{ fontSize: 27, fontWeight: 650, lineHeight: 1, letterSpacing: "-.025em", color: tone ? TONE[tone] : "var(--ink)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 7 }}>{sub}</div>}
     </div>
   );
 }
 
 export function Panel({ title, note, children }) {
   return (
-    <section style={{ marginBottom: 26 }}>
+    <section style={{ marginBottom: 32 }}>
       {title && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 11 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 650, letterSpacing: "-.015em" }}>{title}</div>
           {note && <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {note}</span>}
         </div>
       )}
@@ -82,12 +82,12 @@ export function Table({ columns, rows, empty = "No data." }) {
     return <div style={{ fontSize: 13.5, color: "var(--faint)", padding: "12px 0" }}>{empty}</div>;
   }
   return (
-    <div style={{ overflowX: "auto", border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--surface)" }}>
+    <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 520 }}>
         <thead>
           <tr>
             {columns.map((c, i) => (
-              <th key={i} style={{ textAlign: c.align || "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 500, fontSize: 12, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
+              <th key={i} style={{ textAlign: c.align || "left", padding: "11px 16px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
                 {c.label}
               </th>
             ))}
@@ -99,11 +99,10 @@ export function Table({ columns, rows, empty = "No data." }) {
               {columns.map((c, ci) => {
                 const tone = typeof c.tone === "function" ? c.tone(row) : c.tone;
                 return (
-                  <td key={ci} style={{
-                    textAlign: c.align || "left", padding: "10px 14px",
-                    borderBottom: ri === rows.length - 1 ? "none" : "1px solid var(--line)",
+                  <td key={ci} className={c.align === "right" ? "fos-num" : undefined} style={{
+                    textAlign: c.align || "left", padding: "10.5px 16px",
+                    borderBottom: ri === rows.length - 1 ? "none" : "1px solid var(--hairline)",
                     color: tone ? TONE[tone] : "var(--ink)", whiteSpace: "nowrap",
-                    fontVariantNumeric: c.align === "right" ? "tabular-nums" : "normal",
                   }}>
                     {c.render(row)}
                   </td>
@@ -119,15 +118,17 @@ export function Table({ columns, rows, empty = "No data." }) {
 
 export function SubNav({ items, active }) {
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
+    <div style={{ display: "inline-flex", gap: 3, marginBottom: 24, flexWrap: "wrap", padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
       {items.map(([href, label]) => {
         const on = href === active;
         return (
           <Link key={href} href={href} style={{
-            fontSize: 12.5, padding: "5px 12px", borderRadius: 7, textDecoration: "none",
-            border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
-            background: on ? "var(--accent-bg)" : "transparent",
-            color: on ? "var(--accent)" : "var(--muted)",
+            fontSize: 12.5, fontWeight: on ? 600 : 500, padding: "6px 13px", borderRadius: 7, textDecoration: "none",
+            background: on ? "var(--surface)" : "transparent",
+            boxShadow: on ? "var(--shadow-1)" : "none",
+            border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+            color: on ? "var(--ink)" : "var(--muted)",
+            transition: "color var(--t-fast) var(--ease), background var(--t-fast) var(--ease)",
           }}>{label}</Link>
         );
       })}
@@ -180,8 +181,10 @@ export function Bar({ value, max, tone = "accent", width = 88 }) {
   const w = max ? Math.max(0, Math.min(100, (Math.abs(Number(value)) / Math.abs(max)) * 100)) : 0;
   const color = BADGE_FG[tone] || "var(--accent)";
   return (
-    <span style={{ display: "inline-block", width, height: 8, background: "var(--raise)", borderRadius: 4, overflow: "hidden", verticalAlign: "middle" }}>
-      <span style={{ display: "block", width: `${w}%`, height: "100%", background: color, borderRadius: 4 }} />
+    <span style={{ display: "inline-block", width, height: 7, background: "var(--raise)", borderRadius: 4, overflow: "hidden", verticalAlign: "middle", boxShadow: "inset 0 1px 1px rgba(0,0,0,.18)" }}>
+      <span style={{ display: "block", width: `${w}%`, height: "100%", borderRadius: 4,
+        background: `linear-gradient(90deg, color-mix(in srgb, ${color} 62%, transparent), ${color})`,
+        transition: "width var(--t-slow) var(--ease)" }} />
     </span>
   );
 }
@@ -190,8 +193,8 @@ export function Bar({ value, max, tone = "accent", width = 88 }) {
 // Mirrors EntityScopeBanner so real and illustrative dashboards read as one family.
 export function IllustrativeBanner({ children }) {
   return (
-    <div style={{ background: "var(--amber-bg)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
-      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: ".05em", marginRight: 8 }}>Illustrative data</span>
+    <div style={{ background: "linear-gradient(135deg, var(--amber-bg), color-mix(in srgb, var(--amber-bg) 45%, var(--surface)))", border: "1px solid color-mix(in srgb, var(--amber) 30%, var(--line))", borderRadius: "var(--radius)", boxShadow: "var(--card-top)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>Illustrative data</span>
       {children}
     </div>
   );
@@ -205,8 +208,8 @@ export function EntityScopeBanner({ scope, asAt }) {
   const names = (scope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
   const empty = count === 0;
   return (
-    <div style={{ background: "var(--accent-bg)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".04em", marginRight: 8 }}>Real Xero feed</span>
+    <div style={{ background: "linear-gradient(135deg, var(--accent-bg), color-mix(in srgb, var(--accent-bg) 45%, var(--surface)))", border: "1px solid color-mix(in srgb, var(--accent-deep) 55%, var(--line))", borderRadius: "var(--radius)", boxShadow: "var(--card-top)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>Real Xero feed</span>
       {empty ? (
         <span>No Xero organisation is connected yet — connect one to populate these figures.</span>
       ) : (

@@ -12,16 +12,13 @@ import { getFreshness } from "../lib/governance";
 
 function Card({ href, title, purpose, meta, disabled }) {
   const body = (
-    <div style={{
-      background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)",
-      padding: "16px 18px", height: "100%", opacity: disabled ? 0.6 : 1,
-    }}>
+    <div className={`fos-card${href && !disabled ? " hover" : ""}`} style={{ padding: "17px 18px", height: "100%", opacity: disabled ? 0.55 : 1 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{title}</div>
-        {disabled && <span style={{ fontSize: 11, color: "var(--faint)", flex: "none" }}>Coming soon</span>}
+        <div style={{ fontSize: 15, fontWeight: 650, letterSpacing: "-.015em", color: "var(--ink)" }}>{title}</div>
+        {disabled && <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)", flex: "none" }}>Coming soon</span>}
       </div>
-      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: meta ? 10 : 0 }}>{purpose}</div>
-      {meta && <div style={{ fontSize: 12, color: "var(--faint)" }}>{meta}</div>}
+      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginBottom: meta ? 11 : 0 }}>{purpose}</div>
+      {meta && <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{meta}</div>}
     </div>
   );
   return href && !disabled
@@ -44,12 +41,12 @@ export default async function PillarHub({ pillar, title, intro, extras = [] }) {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>Finance OS · {title}</div>
-        <div style={{ fontSize: 18, fontWeight: 600 }}>{title}</div>
-        <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 6, maxWidth: 640 }}>{intro}</p>
+      <header style={{ margin: "0.5rem 0 1.9rem" }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>Finance OS · {title}</div>
+        <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em", lineHeight: 1.15 }}>{title}</div>
+        <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 8, maxWidth: 640, lineHeight: 1.6 }}>{intro}</p>
       </header>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
         {[...cards, ...visibleExtras].map((c) => <Card key={c.title} {...c} />)}
       </div>
       {freshness && pillar === "OPERATE" && (

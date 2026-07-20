@@ -98,6 +98,10 @@ The top navigation is the same on every screen.
 **Start every day at HOME.** It is exception-led: it surfaces what needs a person's
 decision and links straight to where that decision is made.
 
+**Go anywhere with ⌘K** (Ctrl K on Windows), or the **Search** button in the nav:
+the command palette reaches every dashboard, control and action — including theme
+switch and sign out — without touching the mouse.
+
 ---
 
 ## 4. The operating rhythm

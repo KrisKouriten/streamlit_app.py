@@ -31,17 +31,15 @@ const DASHBOARDS = [
 
 function Card({ d }) {
   return (
-    <Link href={d.href} style={{ textDecoration: "none", color: "inherit" }}>
-      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px", height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
-            <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--faint)" }}>{String(d.n).padStart(2, "0")}</span>
-            <span style={{ fontSize: 15.5, fontWeight: 600, color: "var(--ink)" }}>{d.title}</span>
-          </div>
-          <ProvenanceBadge kind={d.kind} />
+    <Link href={d.href} className="fos-card hover" style={{ padding: "17px 18px", height: "100%", display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
+          <span className="fos-num" style={{ fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--faint)" }}>{String(d.n).padStart(2, "0")}</span>
+          <span style={{ fontSize: 15.5, fontWeight: 650, letterSpacing: "-.015em", color: "var(--ink)" }}>{d.title}</span>
         </div>
-        <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>{d.blurb}</div>
+        <ProvenanceBadge kind={d.kind} />
       </div>
+      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>{d.blurb}</div>
     </Link>
   );
 }
@@ -54,17 +52,17 @@ export default async function Dashboards() {
 
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <header style={{ marginBottom: "1.5rem" }}>
+      <header style={{ margin: "0.5rem 0 1.9rem" }}>
         <span className="fos-eyebrow">Dashboards</span>
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginTop: 12 }}>Specialist dashboards</h1>
-        <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 6, maxWidth: 680 }}>
+        <h1 style={{ fontSize: 23, fontWeight: 650, letterSpacing: "-.022em", marginTop: 13 }}>Specialist dashboards</h1>
+        <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 8, maxWidth: 680, lineHeight: 1.6 }}>
           The finance function's specialist views, in one place. Four run on real feeds — Xero actuals,
           the uploaded plan model and the governed store feed; three carry illustrative figures until their
           feed is connected, and are badged as such. {connected} Xero {connected === 1 ? "entity is" : "entities are"} currently connected.
         </p>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 12 }}>
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 12 }}>
         {DASHBOARDS.map((d) => <Card key={d.href} d={d} />)}
       </div>
     </div>
