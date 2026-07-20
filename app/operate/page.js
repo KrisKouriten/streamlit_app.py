@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 // Month-end close moved to WORKFLOW (the team's cadence).
 export default function Operate() {
   return <PillarHub pillar={null} title="Operate"
-    intro="Operational controls at working grain. The specialist analytical views live under Dashboards; the month-end close runs on the Workflow tab."
+    intro="Operational controls at working grain. The specialist analytical views live under Dashboards; the per-entity close ticks run on the Workflow tab."
     extras={[
+      { title: "Management accounts close", href: "/operate/management-close", purpose: "Pre-close checks on the real accounts — missed nominals & accrual candidates, fixed-cost drift, sign anomalies — plus the reconciliation playbook.", meta: "Live · real Xero actuals" },
       { title: "Intercompany", href: "/operate/intercompany", purpose: "Intercompany transactions — bank cash, inventory & recharges, disbursements — with reconciliation status.", meta: "Live · CSV or manual" },
     ]} />;
 }

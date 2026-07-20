@@ -90,7 +90,7 @@ The top navigation is the same on every screen.
 | **HOME** | `/finance-os/executive` | Executive Intelligence Hub — position, what needs attention, operating health. |
 | **PLAN** | `/plan` | Strategic planning — Budget & Forecast (its home), with scenario planning to follow. |
 | **DASHBOARDS** | `/dashboards` | The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets. Each declares its data provenance (real feed vs illustrative). |
-| **OPERATE** | `/operate` | Operational controls: Intercompany. |
+| **OPERATE** | `/operate` | Operational controls: the Management accounts close (pre-close checks + reconciliation playbook) and Intercompany. |
 | **WORKFLOW** | `/perform` | The finance team's cadence — My Week, Team Schedule, Review queue, the Month-end close and the Task Library. |
 | **AI CONTROL TOWER** | `/ai` | The Finance Agent Control Centre. |
 | **GOVERN** | `/govern` | Users & roles, Entities, Action Centre, Benefits tracker, and this Handbook. |
