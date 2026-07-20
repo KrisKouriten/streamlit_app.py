@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Month-end close",
-  description: "Finance month-end close tracker across all entities",
+  title: "Miniso UK Finance OS",
+  description: "Miniso UK Finance Operating System",
 };
 
 const css = `
@@ -28,11 +28,18 @@ input{font-family:inherit}
 a{color:var(--accent)}
 `;
 
-export default function RootLayout({ children }) {
+import { getSession } from "../lib/auth";
+import TopNav from "./topnav";
+
+export default async function RootLayout({ children }) {
+  const session = await getSession();
   return (
     <html lang="en">
       <head><style dangerouslySetInnerHTML={{ __html: css }} /></head>
-      <body>{children}</body>
+      <body>
+        {session && <TopNav userName={session.name} />}
+        {children}
+      </body>
     </html>
   );
 }
