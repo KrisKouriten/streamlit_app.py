@@ -13,6 +13,7 @@ const NAV = [
   ]],
   ["Plan", [
     ["Plan hub", "/plan", "Strategic planning"],
+    ["Scenario planning", "/plan/scenarios", "Upside / base / downside on the forecast inputs"],
     ["Budget & Forecast", "/finance-os/budget-forecast", "The multi-year plan model"],
   ]],
   ["Dashboards", [
@@ -28,6 +29,7 @@ const NAV = [
     ["Fixed Assets", "/finance-os/fixed-assets", "The asset register"],
   ]],
   ["Operate", [
+    ["Forecast inputs", "/operate/forecast", "Stores · head office · franchise forecasts"],
     ["Management accounts close", "/operate/management-close", "Pre-close checks & the reconciliation playbook"],
     ["Intercompany", "/operate/intercompany", "Cash · inventory & recharges · disbursements"],
   ]],
