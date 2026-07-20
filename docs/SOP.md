@@ -90,8 +90,8 @@ The top navigation is the same on every screen.
 | **HOME** | `/finance-os/executive` | Executive Intelligence Hub — position, what needs attention, operating health. |
 | **PLAN** | `/plan` | Strategic planning — Budget & Forecast (its home), with scenario planning to follow. |
 | **DASHBOARDS** | `/dashboards` | The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets. Each declares its data provenance (real feed vs illustrative). |
-| **OPERATE** | `/operate` | Operational controls: the Month-end close and Intercompany. |
-| **WORKFLOW** | `/perform` | The finance team's cadence — My Week, Team Schedule, Review queue and the Task Library. |
+| **OPERATE** | `/operate` | Operational controls: Intercompany. |
+| **WORKFLOW** | `/perform` | The finance team's cadence — My Week, Team Schedule, Review queue, the Month-end close and the Task Library. |
 | **AI CONTROL TOWER** | `/ai` | The Finance Agent Control Centre. |
 | **GOVERN** | `/govern` | Users & roles, Entities, Action Centre, Benefits tracker, and this Handbook. |
 
@@ -129,7 +129,8 @@ switch and sign out — without touching the mouse.
 ### Monthly
 - **Management accounts** — DASHBOARDS → Management Accounts, once the month's Xero
   actuals are loaded (see §6).
-- **Month-end close** — work the monthly close tasks on the schedule.
+- **Month-end close** — WORKFLOW → Month-end close: the per-entity checklist with
+  status and sign-off, alongside the monthly close tasks on the schedule.
 - **Benefits validation** — GOVERN → Benefits: validate realised value on delivered
   actions (ADMIN/FINANCE/EXEC).
 - **Action review** — GOVERN → Action Centre: chase overdue, approve closures.

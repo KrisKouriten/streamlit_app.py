@@ -31,8 +31,8 @@ export default async function PillarHub({ pillar, title, intro, extras = [] }) {
   if (!session) redirect("/login");
 
   const [dashboards, freshness] = await Promise.all([getDashboards(), getFreshness(null)]);
-  const cards = dashboards
-    .filter((d) => d.nav_pillar === pillar)
+  // pillar=null → fixed-content hub: only the extras, no registry cards.
+  const cards = (pillar ? dashboards.filter((d) => d.nav_pillar === pillar) : [])
     .map((d) => ({
       href: d.route, title: d.dashboard_name, purpose: d.purpose,
       meta: `Owner: ${d.finance_owner} · ${d.refresh_frequency}`,

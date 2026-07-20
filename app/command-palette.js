@@ -28,13 +28,13 @@ const NAV = [
     ["Fixed Assets", "/finance-os/fixed-assets", "The asset register"],
   ]],
   ["Operate", [
-    ["Month-end close", "/operate/month-end", "Per-entity close checklist"],
     ["Intercompany", "/operate/intercompany", "Cash · inventory & recharges · disbursements"],
   ]],
   ["Workflow", [
     ["My Finance Week", "/perform/my-week", "Your tasks this week"],
     ["Team Schedule", "/perform/schedule", "Workload & allocation"],
     ["Review queue", "/perform/review", "Approve or return submitted work"],
+    ["Month-end close", "/operate/month-end", "Per-entity close checklist"],
     ["Task library", "/perform/library", "Recurring templates"],
   ]],
   ["AI Control Tower", [

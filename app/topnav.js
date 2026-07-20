@@ -9,7 +9,7 @@ const PILLARS = [
   ["PLAN", "/plan", ["/plan", "/finance-os/budget-forecast"]],
   ["DASHBOARDS", "/dashboards", ["/dashboards", "/finance-os/management-accounts", "/finance-os/cashflow", "/finance-os/store-sales", "/finance-os/inventory", "/finance-os/franchise", "/finance-os/fixed-assets"]],
   ["OPERATE", "/operate", ["/operate"]],
-  ["WORKFLOW", "/perform", ["/perform"]],
+  ["WORKFLOW", "/perform", ["/perform", "/operate/month-end"]],
   ["AI CONTROL TOWER", "/ai", ["/ai"]],
   ["GOVERN", "/govern", ["/govern", "/handbook"]],
 ];

@@ -53,8 +53,8 @@ export default async function Handbook() {
         ["HOME", "The connected sphere — position, what needs attention, operating health."],
         ["PLAN", "Strategic planning — Budget & Forecast (its home); scenario planning to follow."],
         ["DASHBOARDS", "The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets — each badged real feed or illustrative."],
-        ["OPERATE", "Operational controls: the Month-end close and Intercompany."],
-        ["WORKFLOW", "The finance team's cadence — My Week, Team Schedule, Review queue, Task Library."],
+        ["OPERATE", "Operational controls: Intercompany."],
+        ["WORKFLOW", "The finance team's cadence — My Week, Team Schedule, Review queue, Month-end close, Task Library."],
         ["AI CONTROL TOWER", "The finance agents — runs, review and controls."],
         ["GOVERN", "Users, Entities, Action Centre, Benefits, this Handbook."],
       ]} />
