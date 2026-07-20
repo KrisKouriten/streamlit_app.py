@@ -34,6 +34,17 @@ export default function ManagementCloseUI({ pre, actions, canManage, monthsCover
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState("");
 
+  if (pre.ready === false) {
+    return (
+      <div className="fos-card" style={{ padding: "18px 20px", fontSize: 13.5, lineHeight: 1.6, color: "var(--muted)" }}>
+        <div style={{ fontSize: 15, fontWeight: 650, color: "var(--ink)", marginBottom: 6 }}>One migration to run</div>
+        This screen needs migration <span style={{ fontFamily: "var(--mono)" }}>012_management_close.sql</span> in the
+        database — it creates the reference model, the close-action playbook and the exception review log
+        (idempotent, safe to re-run). Run it the same way as the earlier migrations, refresh, and the pre-close
+        checks appear here.
+      </div>
+    );
+  }
   if (!pre.period) {
     return (
       <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--faint)" }}>
