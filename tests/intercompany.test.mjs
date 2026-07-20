@@ -1,6 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCsv, mapRows, CATEGORIES } from "../lib/intercompany-rules.js";
+import { parseCsv, mapRows, CATEGORIES, toISODate } from "../lib/intercompany-rules.js";
+
+test("UK dates (DD/MM/YYYY) normalise to ISO; ISO passes through", () => {
+  assert.equal(toISODate("22/06/2026"), "2026-06-22");
+  assert.equal(toISODate("1/7/26"), "2026-07-01");
+  assert.equal(toISODate("2026-06-30"), "2026-06-30");
+  assert.equal(toISODate(""), null);
+  assert.equal(toISODate("not a date"), null);
+});
+
+test("mapRows converts a UK date to ISO on the txn", () => {
+  const csv = "Credit Entity (CF Out),Date,Currency,Amount,Payment Reference (Unique ID),Debit Entity (CF In)\nKouriten Limited,22/06/2026,GBP,100,R1,Kouriten Ealing Limited";
+  const { headers, records } = parseCsv(csv);
+  const { records: mapped } = mapRows("CASH", headers, records);
+  assert.equal(mapped[0].txn_date, "2026-06-22");
+});
 
 test("parseCsv handles quoted fields with embedded commas", () => {
   const { headers, records } = parseCsv('A,B,C\n1,"two, and a half",3\n');

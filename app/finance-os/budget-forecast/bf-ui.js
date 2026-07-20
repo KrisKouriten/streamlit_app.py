@@ -46,9 +46,11 @@ export default function BudgetForecastUI({ groupPl, stores, monthly, breakeven, 
     return (
       <div>
         <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6 }}>
-          No plan loaded yet. {canManage ? "Upload each dataset's CSV below to populate the Budget & Forecast." : "Ask ADMIN/FINANCE to upload the plan."}
+          No plan loaded yet. {canManage ? "Upload your Budget & Forecast workbook to fill every tab at once — or load individual datasets by CSV below." : "Ask ADMIN/FINANCE to upload the plan."}
         </div>
-        {canManage && <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {canManage && <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <WorkbookUpload setMsg={setMsg} setErr={setErr} />
+          <span style={{ fontSize: 12, color: "var(--faint)" }}>or per dataset:</span>
           {["group_pl", "store", "store_month", "breakeven", "kpi"].map((d) => <Upload key={d} dataset={d} label={d} setMsg={setMsg} setErr={setErr} />)}
         </div>}
         {msg && <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 10 }}>{msg}</div>}
@@ -71,8 +73,10 @@ export default function BudgetForecastUI({ groupPl, stores, monthly, breakeven, 
 
       {canManage && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+          <WorkbookUpload setMsg={setMsg} setErr={setErr} />
+          <span style={{ fontSize: 12, color: "var(--faint)" }}>or this tab:</span>
           {tab === "bekpi"
-            ? (<><Upload dataset="breakeven" label="Upload break-even CSV" setMsg={setMsg} setErr={setErr} /><Upload dataset="kpi" label="Upload KPI CSV" setMsg={setMsg} setErr={setErr} /></>)
+            ? (<><Upload dataset="breakeven" label="Break-even CSV" setMsg={setMsg} setErr={setErr} /><Upload dataset="kpi" label="KPI CSV" setMsg={setMsg} setErr={setErr} /></>)
             : <Upload dataset={TABS.find((t) => t.key === tab).dataset} label="Upload CSV (replaces this dataset)" setMsg={setMsg} setErr={setErr} />}
         </div>
       )}
@@ -188,6 +192,29 @@ function Card({ children }) {
 function Note({ children }) {
   return <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>{children}</div>;
 }
+function WorkbookUpload({ setMsg, setErr }) {
+  const router = useRouter();
+  const ref = useRef(null);
+  async function onFile(e) {
+    setErr(""); setMsg("Reading workbook…");
+    const f = e.target.files?.[0]; if (!f) return;
+    try {
+      const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(f); });
+      const d = await api({ action: "workbook", b64 });
+      const s = d.summary || {};
+      const loaded = Object.entries(s).filter(([, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(" · ");
+      setMsg(`Workbook loaded — ${loaded}.`); router.refresh();
+    } catch (er) { setErr(er.message); }
+    finally { if (ref.current) ref.current.value = ""; }
+  }
+  return (
+    <label style={{ height: 34, padding: "0 16px", background: "var(--accent)", color: "#1a1813", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center" }}>
+      Upload workbook (.xlsx) — fills all tabs
+      <input ref={ref} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFile} style={{ display: "none" }} />
+    </label>
+  );
+}
+
 function Upload({ dataset, label, setMsg, setErr }) {
   const router = useRouter();
   const ref = useRef(null);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestDataset, DATASETS } from "../../../lib/plan";
+import { ingestDataset, ingestWorkbook, DATASETS } from "../../../lib/plan";
 
 export async function POST(request) {
   const session = await getSession();
@@ -15,6 +15,15 @@ export async function POST(request) {
       if (!body.csv?.trim()) return NextResponse.json({ error: "No CSV content" }, { status: 400 });
       const r = await ingestDataset(body.dataset, body.csv, session);
       return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "workbook") {
+      if (!body.b64) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
+      const buffer = Buffer.from(body.b64, "base64");
+      const summary = await ingestWorkbook(buffer, session);
+      if (Object.values(summary).every((v) => v == null)) {
+        return NextResponse.json({ error: "No recognised sheets found in that workbook" }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, summary });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
