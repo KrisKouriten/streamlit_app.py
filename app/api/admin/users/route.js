@@ -38,6 +38,7 @@ export async function POST(request) {
       );
       if (!rows.length) return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
       await setUserRole(rows[0].id, role, session.email);
+      await query(`INSERT INTO workflow.team_capacity (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [rows[0].id]).catch(() => {});
       await audit({ actor: session, eventType: "user.create", objectType: "users", objectRef: email.trim().toLowerCase(), detail: { role } });
       return NextResponse.json({ ok: true });
     }
