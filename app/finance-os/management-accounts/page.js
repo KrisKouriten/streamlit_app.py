@@ -1,51 +1,53 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
-import { getManagementVariance } from "../../../lib/finance-os";
-import { PageHeader, StatRow, Stat, Panel, Table, money, pct, varianceTone } from "../ui";
+import { getRealPL, getRealFinanceSnapshot, getConnectedEntities } from "../../../lib/finance-os";
+import { PageHeader, StatRow, Stat, Panel, Table, EntityScopeBanner, money, pct } from "../ui";
 
 export const dynamic = "force-dynamic";
 
+// Management Accounts on the real Xero feed: the consolidated P&L (actuals) for
+// the connected entities. Budget/forecast comparatives await a real planning feed.
 export default async function ManagementAccounts() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const rows = await getManagementVariance();
-  // Favourable variance depends on whether the account is income or cost.
-  const favUp = (r) => Number(r.natural_sign) >= 0;
-  const revenue = rows.find((r) => Number(r.natural_sign) >= 0) || {};
-  const totActual = rows.reduce((s, r) => s + Number(r.actual_amount || 0), 0);
-  const totBudget = rows.reduce((s, r) => s + Number(r.budget_amount || 0), 0);
-  const opVar = totActual - totBudget;
+  const [pl, snap, scope] = await Promise.all([getRealPL(), getRealFinanceSnapshot(), getConnectedEntities()]);
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Performance management" title="Management Accounts" right="Latest actual period" />
+      <PageHeader crumb="Performance management" title="Management Accounts" right={snap ? "Xero actuals" : "Awaiting Xero feed"} />
+      <EntityScopeBanner scope={scope} asAt={snap?.asAt} />
 
-      <StatRow>
-        <Stat label="Revenue (actual)" value={money(revenue.actual_amount, { compact: true })}
-          sub={`Budget ${money(revenue.budget_amount, { compact: true })}`} />
-        <Stat label="Operating result" value={money(totActual, { compact: true })}
-          sub={`Budget ${money(totBudget, { compact: true })}`} />
-        <Stat label="Actual vs budget" value={money(opVar, { compact: true })} tone={varianceTone(opVar)}
-          sub="Operating result" />
-      </StatRow>
+      {!snap ? (
+        <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
+          No Xero actuals loaded yet. Once a Xero organisation is connected and loaded, the consolidated P&L appears here.
+        </div>
+      ) : (
+        <>
+          <StatRow>
+            <Stat label="Revenue" value={money(snap.revenue, { compact: true })} sub="Xero actuals" />
+            <Stat label="Gross profit" value={money(snap.grossProfit, { compact: true })} sub={`${pct(snap.grossMargin)} margin`} />
+            <Stat label="Operating costs" value={money(snap.opex, { compact: true })} sub="excl. cost of sales" />
+            <Stat label="Net result" value={money(snap.netResult, { compact: true })} tone={snap.netResult >= 0 ? "green" : "red"} sub="before tax" />
+          </StatRow>
 
-      <Panel title="Variance to budget" note="actual vs budget, by account">
-        <Table
-          columns={[
-            { label: "Account", render: (r) => r.account_name },
-            { label: "Actual", align: "right", render: (r) => money(r.actual_amount) },
-            { label: "Budget", align: "right", render: (r) => money(r.budget_amount) },
-            { label: "Variance", align: "right",
-              tone: (r) => varianceTone(r.actual_vs_budget, favUp(r)),
-              render: (r) => money(r.actual_vs_budget) },
-            { label: "Var %", align: "right",
-              tone: (r) => varianceTone(r.actual_vs_budget, favUp(r)),
-              render: (r) => (r.actual_vs_budget_pct == null ? "—" : pct(r.actual_vs_budget_pct)) },
-          ]}
-          rows={rows}
-        />
-      </Panel>
+          <Panel title="Profit & loss" note="real Xero actuals, by account">
+            <Table
+              columns={[
+                { label: "Account", render: (r) => r.account_name },
+                { label: "Group", render: (r) => r.account_group },
+                { label: "Amount", align: "right", tone: (r) => (Number(r.amount) >= 0 ? "green" : undefined), render: (r) => money(r.amount) },
+              ]}
+              rows={pl}
+            />
+          </Panel>
+
+          <div style={{ fontSize: 12, color: "var(--faint)", lineHeight: 1.5 }}>
+            Budget and forecast comparatives await the FY planning cycle — they are not yet loaded from a real source,
+            so no variance is shown. Figures are consolidated across connected entities only.
+          </div>
+        </>
+      )}
     </div>
   );
 }

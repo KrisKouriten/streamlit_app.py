@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
    figure is tagged real (store feed) or illustrative (awaiting the Xero feed). */
 
 const SOURCE = {
-  STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store feed" },
-  ILLUSTRATIVE: { fg: "var(--faint)", bg: "var(--line)", label: "Illustrative" },
+  STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store · all" },
+  XERO: { fg: "var(--accent)", bg: "var(--accent-bg)", label: "Xero" },
 };
 
 const RED = "#a32d2d", RED_BG = "#f7e6e3";
@@ -76,9 +76,11 @@ export default async function ExecutiveHub() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { tradingAsAt, financeAsAt, hero, forward, ragCounts, attention, health } = await getHubData();
+  const { tradingAsAt, financeAsAt, financeScope, hero, forward, ragCounts, attention, health } = await getHubData();
   const { actions, operations, agents } = health;
   const opsOutstanding = operations.total - operations.complete;
+  const connCount = financeScope?.count || 0;
+  const connNames = (financeScope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
@@ -91,12 +93,13 @@ export default async function ExecutiveHub() {
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
           <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
-          <div>Group finance as at {dateLabel(financeAsAt)}</div>
+          <div>Xero finance as at {dateLabel(financeAsAt)}</div>
         </div>
       </header>
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 22, lineHeight: 1.5 }}>
-        Revenue and gross margin are live from the store sales feed. EBITDA, cash, facility headroom and inventory
-        are illustrative demo figures pending the Xero and treasury feeds (Phase&nbsp;6).
+        Revenue and gross margin (left) are live from the store sales feed — all stores. Revenue, gross profit, net
+        result and cash (right) are real Xero actuals, consolidated across {connCount} connected {connCount === 1 ? "entity" : "entities"}
+        {connNames ? ` (${connNames})` : ""} — connect further Xero organisations for the full Miniso&nbsp;UK group view.
       </div>
 
       {/* Hero band */}

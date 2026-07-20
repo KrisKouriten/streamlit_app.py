@@ -147,3 +147,25 @@ export function varianceTone(v, favourableUp = true) {
   const good = favourableUp ? Number(v) >= 0 : Number(v) <= 0;
   return good ? "green" : "red";
 }
+
+// Consolidation-scope banner for the real Xero finance dashboards. Makes the
+// partial feed explicit: which entities are live and as at when. Shown whenever
+// a page reports real statutory finance so no one reads it as the whole group.
+export function EntityScopeBanner({ scope, asAt }) {
+  const count = scope?.count || 0;
+  const names = (scope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
+  const empty = count === 0;
+  return (
+    <div style={{ background: "var(--accent-bg)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".04em", marginRight: 8 }}>Real Xero feed</span>
+      {empty ? (
+        <span>No Xero organisation is connected yet — connect one to populate these figures.</span>
+      ) : (
+        <span>
+          Consolidated across {count} connected {count === 1 ? "entity" : "entities"}{names ? ` — ${names}` : ""}
+          {asAt ? ` · as at ${dateLabel(asAt)}` : ""}. Connect further Xero organisations to consolidate the full Miniso&nbsp;UK group.
+        </span>
+      )}
+    </div>
+  );
+}
