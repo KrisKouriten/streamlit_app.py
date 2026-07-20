@@ -7,51 +7,16 @@ import { useRouter } from "next/navigation";
    Opens on Cmd/Ctrl+K (or the nav trigger firing "fos:palette"); type to filter,
    ↑↓ to move, Enter to run, Esc to close. Glass panel over a dimmed field. */
 
-const NAV = [
-  ["Home", [
-    ["Executive Hub", "/finance-os/executive", "The connected sphere — position & attention"],
-  ]],
-  ["Plan", [
-    ["Plan hub", "/plan", "Strategic planning"],
-    ["Scenario planning", "/plan/scenarios", "Upside / base / downside on the forecast inputs"],
-    ["Budget & Forecast", "/finance-os/budget-forecast", "The multi-year plan model"],
-  ]],
-  ["Dashboards", [
-    ["All dashboards", "/dashboards", "The seven specialist views"],
-    ["Management Accounts", "/finance-os/management-accounts", "Consolidated P&L — Xero actuals"],
-    ["Cash Flow", "/finance-os/cashflow", "Cash position by entity"],
-    ["Store Sales & KPI", "/finance-os/store-sales", "Trading across every store"],
-    ["Store League", "/finance-os/store-sales/league", "Ranked by YTD net sales"],
-    ["Store Drilldown", "/finance-os/store-sales/store", "One store in depth"],
-    ["Store Break-even", "/finance-os/store-sales/break-even", "Above / below the line"],
-    ["Inventory", "/finance-os/inventory", "Stock value, ageing & cover"],
-    ["Franchise", "/finance-os/franchise", "Sales, receivables & credit"],
-    ["Fixed Assets", "/finance-os/fixed-assets", "The asset register"],
-  ]],
-  ["Operate", [
-    ["Forecast inputs", "/operate/forecast", "Stores · head office · franchise forecasts"],
-    ["Management accounts close", "/operate/management-close", "Pre-close checks & the reconciliation playbook"],
-    ["Intercompany", "/operate/intercompany", "Cash · inventory & recharges · disbursements"],
-  ]],
-  ["Workflow", [
-    ["My Finance Week", "/perform/my-week", "Your tasks this week"],
-    ["Team Schedule", "/perform/schedule", "Workload & allocation"],
-    ["Review queue", "/perform/review", "Approve or return submitted work"],
-    ["Month-end close", "/operate/month-end", "Per-entity close checklist"],
-    ["Task library", "/perform/library", "Recurring templates"],
-  ]],
-  ["AI Control Tower", [
-    ["Agent Centre", "/ai", "Governed finance agents"],
-    ["AI review queue", "/ai/review", "Outputs awaiting a person"],
-  ]],
-  ["Govern", [
-    ["Users & roles", "/govern/users", "Access control"],
-    ["Entities", "/govern/entities", "The group's legal entities"],
-    ["Action Centre", "/govern/actions", "Follow-through on decisions"],
-    ["Benefits", "/govern/benefits", "Realised value"],
-    ["Handbook", "/handbook", "The operating manual"],
-  ]],
-];
+import { NAV_SECTIONS } from "../lib/nav-registry";
+
+// Built from the navigation registry: live modules navigate to their routes;
+// planned modules open their planned page (marked "soon").
+const NAV = NAV_SECTIONS.map((s) => [
+  s.label,
+  s.items
+    .filter((it) => !it.action)
+    .map((it) => [it.slug ? `${it.label} (soon)` : it.label, it.href || `/module/${it.slug}`, it.hint]),
+]);
 
 export default function CommandPalette() {
   const router = useRouter();

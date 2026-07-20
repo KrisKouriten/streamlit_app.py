@@ -4,24 +4,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const PILLARS = [
-  ["HOME", "/finance-os/executive", ["/finance-os/executive"]],
-  ["PLAN", "/plan", ["/plan", "/finance-os/budget-forecast"]],
-  ["DASHBOARDS", "/dashboards", ["/dashboards", "/finance-os/management-accounts", "/finance-os/cashflow", "/finance-os/store-sales", "/finance-os/inventory", "/finance-os/franchise", "/finance-os/fixed-assets"]],
-  ["OPERATE", "/operate", ["/operate"]],
-  ["WORKFLOW", "/perform", ["/perform", "/operate/month-end"]],
-  ["AI CONTROL TOWER", "/ai", ["/ai"]],
-  ["GOVERN", "/govern", ["/govern", "/handbook"]],
-];
+/* Slim glass top bar. Section navigation lives in the persistent sidebar;
+   this keeps the brand, menu (narrow screens), Search ⌘K, theme and account. */
 
-function activePillar(path) {
-  let best = null, bestLen = -1;
-  for (const [name, , prefixes] of PILLARS) {
-    for (const p of prefixes) {
-      if (p !== "/" && path.startsWith(p) && p.length > bestLen) { best = name; bestLen = p.length; }
-    }
-  }
-  return best;
+function MenuButton() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 940px)");
+    const on = () => setNarrow(mq.matches);
+    on(); mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  if (!narrow) return null;
+  return (
+    <button className="fos-btn-ghost" aria-label="Open navigation" style={{ width: 34, padding: 0, justifyContent: "center", fontSize: 15 }}
+      onClick={() => window.dispatchEvent(new Event("fos:sidebar"))}>≡</button>
+  );
 }
 
 function PaletteTrigger() {
@@ -80,42 +78,20 @@ function UserChip({ name }) {
 export default function TopNav({ userName }) {
   const path = usePathname();
   if (path === "/login") return null;
-  const active = activePillar(path);
   return (
     <nav className="fos-glass" style={{ borderLeft: "none", borderRight: "none", borderTop: "none", position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 1.25rem", display: "flex", alignItems: "center", gap: 10, overflowX: "auto" }}>
-        <Link href="/finance-os/executive" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none", padding: "13px 8px 13px 0", whiteSpace: "nowrap" }}>
+      <div style={{ padding: "0 1.1rem", display: "flex", alignItems: "center", gap: 10, height: 56 }}>
+        <MenuButton />
+        <Link href="/finance-os/executive" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none", whiteSpace: "nowrap" }}>
           <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", flex: "none",
             background: "radial-gradient(circle at 35% 30%, var(--accent), var(--accent-deep))",
             boxShadow: "0 0 0 3px var(--accent-bg), 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent)" }} />
           <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: ".09em", color: "var(--ink)" }}>MINISO UK · FINANCE OS</span>
         </Link>
-        <div style={{ flex: 1, display: "flex", gap: 2, justifyContent: "flex-end" }}>
-          {PILLARS.map(([name, href]) => {
-            const on = name === active;
-            return (
-              <Link key={name} href={href} aria-current={on ? "page" : undefined} style={{
-                position: "relative", fontSize: 11.5, fontWeight: on ? 700 : 500, letterSpacing: ".05em",
-                color: on ? "var(--accent)" : "var(--muted)", textDecoration: "none",
-                padding: "15px 10px", whiteSpace: "nowrap",
-                transition: "color var(--t-fast) var(--ease)",
-              }}>
-                {name}
-                <span aria-hidden="true" style={{
-                  position: "absolute", left: 10, right: 10, bottom: 0, height: 2, borderRadius: 2,
-                  background: "var(--accent)", transformOrigin: "center",
-                  transform: on ? "scaleX(1)" : "scaleX(0)", opacity: on ? 1 : 0,
-                  transition: "transform var(--t-med) var(--ease), opacity var(--t-med) var(--ease)",
-                }} />
-              </Link>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 6 }}>
-          <PaletteTrigger />
-          <ThemeToggle />
-          {userName && <UserChip name={userName} />}
-        </div>
+        <div style={{ flex: 1 }} />
+        <PaletteTrigger />
+        <ThemeToggle />
+        {userName && <UserChip name={userName} />}
       </div>
     </nav>
   );

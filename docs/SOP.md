@@ -81,9 +81,16 @@ Everyone signed in can view all dashboards; the controls above gate *actions*, n
 
 ---
 
-## 3. The pillars
+## 3. Navigation
 
-The top navigation is the same on every screen.
+Navigation is a **persistent sidebar** on every screen — eight sections
+(HOME · DASHBOARDS · PLAN · PERFORM · OPERATE · DIGITAL FINANCE TEAM ·
+FINANCE DATA · GOVERN), every module one click away, no landing pages
+required. Modules not yet built are marked **soon** and open a planned page
+describing their purpose. The full structure, the route-preservation record
+and the documented overlaps live in `docs/navigation-migration.md`.
+
+The legacy section hubs below remain reachable at their original routes.
 
 | Pillar | Route | Purpose |
 |---|---|---|

@@ -126,6 +126,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('fos-theme');if(
 
 import { getSession } from "../lib/auth";
 import TopNav from "./topnav";
+import Sidebar from "./sidebar";
 import PageTransition from "./page-transition";
 import CommandPalette from "./command-palette";
 
@@ -138,9 +139,20 @@ export default async function RootLayout({ children }) {
         <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
       <body>
-        {session && <TopNav userName={session.name} />}
-        {session && <CommandPalette />}
-        <PageTransition>{children}</PageTransition>
+        {session ? (
+          <>
+            <TopNav userName={session.name} />
+            <CommandPalette />
+            <div style={{ display: "flex", alignItems: "stretch", minHeight: "calc(100vh - 57px)" }}>
+              <Sidebar />
+              <main style={{ flex: 1, minWidth: 0 }}>
+                <PageTransition>{children}</PageTransition>
+              </main>
+            </div>
+          </>
+        ) : (
+          <PageTransition>{children}</PageTransition>
+        )}
       </body>
     </html>
   );
