@@ -51,7 +51,7 @@ export default async function MyWeek({ searchParams }) {
           ["Overdue", stats.overdue], ["My estimated load", `${Math.round(mineMinutes / 60 * 10) / 10}h`]].map(([l, v]) => (
           <div key={l} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{l}</div>
-            <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1, color: l === "Overdue" && v > 0 ? "#a32d2d" : "var(--ink)" }}>{v}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1, color: l === "Overdue" && v > 0 ? "var(--red)" : "var(--ink)" }}>{v}</div>
           </div>
         ))}
       </div>

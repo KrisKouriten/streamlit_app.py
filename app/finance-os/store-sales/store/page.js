@@ -107,7 +107,7 @@ export default async function StoreDrilldown({ searchParams }) {
           <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{label}</div>
             <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1 }}>{value}</div>
-            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "#a32d2d" }}>{pctOrDash(t)} YoY</div>}
+            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "var(--red)" }}>{pctOrDash(t)} YoY</div>}
           </div>
         ))}
       </div>
@@ -146,7 +146,7 @@ export default async function StoreDrilldown({ searchParams }) {
           {d.profile && (
             <div style={{ marginTop: 10, fontSize: 13, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px" }}>
               Break-even (YTD): {money(d.profile.ytd_break_even)} vs actual {money(d.profile.ytd_actual)} —{" "}
-              <strong style={{ color: d.profile.ytd_status === "ABOVE" ? "var(--green)" : "#a32d2d" }}>{d.profile.ytd_status}</strong>
+              <strong style={{ color: d.profile.ytd_status === "ABOVE" ? "var(--green)" : "var(--red)" }}>{d.profile.ytd_status}</strong>
             </div>
           )}
         </Panel>

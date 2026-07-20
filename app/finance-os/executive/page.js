@@ -3,30 +3,28 @@ import Link from "next/link";
 import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
+import Orbit from "./orbit";
 
 export const dynamic = "force-dynamic";
 
-/* HOME pillar — the Executive Intelligence Hub. Exception-led: it opens with the
-   position, then the single ranked list of what needs a person's attention, then
-   the health of the three operating engines (actions, schedule, agents). Every
-   figure is tagged real (store feed) or illustrative (awaiting the Xero feed). */
+/* HOME — the connected sphere. The orbit is the hero: the control-tower core with
+   the pillars orbiting it. Below it, the exception-led detail: position, forward
+   view, the ranked "needs attention" feed, and the health of the operating engines. */
 
 const SOURCE = {
   STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store · all" },
   XERO: { fg: "var(--accent)", bg: "var(--accent-bg)", label: "Xero" },
 };
-
-const RED = "#a32d2d", RED_BG = "#f7e6e3";
 const SEV = {
-  CRITICAL: { fg: RED, bg: RED_BG, label: "Critical" },
-  RED: { fg: RED, bg: RED_BG, label: "Action" },
-  HIGH: { fg: RED, bg: RED_BG, label: "High" },
+  CRITICAL: { fg: "var(--red)", bg: "var(--red-bg)", label: "Critical" },
+  RED: { fg: "var(--red)", bg: "var(--red-bg)", label: "Action" },
+  HIGH: { fg: "var(--red)", bg: "var(--red-bg)", label: "High" },
   AMBER: { fg: "var(--amber)", bg: "var(--amber-bg)", label: "Watch" },
   MEDIUM: { fg: "var(--amber)", bg: "var(--amber-bg)", label: "Medium" },
   LOW: { fg: "var(--muted)", bg: "var(--line)", label: "Low" },
   INFO: { fg: "var(--muted)", bg: "var(--line)", label: "Info" },
 };
-const TONE = { green: "var(--green)", amber: "var(--amber)", red: RED };
+const TONE = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" };
 
 function heroValue(t) {
   if (t.value === null || t.value === undefined) return "—";
@@ -82,27 +80,39 @@ export default async function ExecutiveHub() {
   const connCount = financeScope?.count || 0;
   const connNames = (financeScope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
 
+  // Orbit model — pillars around the control-tower core, each with a live signal.
+  const nodes = [
+    { key: "PLAN", label: "PLAN", href: "/plan", signal: forward ? `${Math.round(forward.pctOfPlan * 100)}% of FY plan` : "Budget & forecast" },
+    { key: "PERFORM", label: "PERFORM", href: "/perform", signal: `${opsOutstanding} task${opsOutstanding === 1 ? "" : "s"} open`, tone: opsOutstanding > 0 ? "amber" : "green" },
+    { key: "OPERATE", label: "OPERATE", href: "/finance-os/store-sales", signal: tradingAsAt ? "Store trading live" : "Awaiting feed", tone: tradingAsAt ? "green" : "amber" },
+    { key: "AI", label: "AI CONTROL TOWER", href: "/ai", signal: `${agents.pendingReviews} to review`, tone: agents.pendingReviews > 0 ? "amber" : "green" },
+    { key: "GOVERN", label: "GOVERN", href: "/govern/actions", signal: `${actions.open} open · ${actions.overdue} overdue`, tone: actions.overdue > 0 ? "red" : actions.open > 0 ? "amber" : "green" },
+    { key: "COMMERCIAL", label: "COMMERCIAL", href: null, planned: true, signal: "New pillar · 2027" },
+  ];
+  const core = { attention: attention.length };
+
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, gap: 12, flexWrap: "wrap" }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.75rem 1.25rem 4rem" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-            <Link href="/finance-os" style={{ textDecoration: "none", color: "var(--faint)" }}>Finance OS</Link> · Home
-          </div>
-          <div style={{ fontSize: 19, fontWeight: 600 }}>Executive Intelligence Hub</div>
+          <span className="fos-eyebrow">Home · The connected sphere</span>
+          <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Executive Intelligence Hub</div>
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
           <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
           <div>Xero finance as at {dateLabel(financeAsAt)}</div>
         </div>
       </header>
-      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 22, lineHeight: 1.5 }}>
+
+      <Orbit core={core} nodes={nodes} />
+
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5, textAlign: "center", maxWidth: 760, marginInline: "auto" }}>
         Revenue and gross margin (left) are live from the store sales feed — all stores. Revenue, gross profit, net
-        result and cash (right) are real Xero actuals, consolidated across {connCount} connected {connCount === 1 ? "entity" : "entities"}
-        {connNames ? ` (${connNames})` : ""} — connect further Xero organisations for the full Miniso&nbsp;UK group view.
+        result and cash (right) are real Xero actuals across {connCount} connected {connCount === 1 ? "entity" : "entities"}
+        {connNames ? ` (${connNames})` : ""}.
       </div>
 
-      {/* Hero band */}
+      {/* Position */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(158px,1fr))", gap: 10, marginBottom: 24 }}>
         {hero.map((t) => <HeroTile key={t.key} t={t} />)}
       </div>
@@ -116,13 +126,13 @@ export default async function ExecutiveHub() {
           </div>
           <div style={{ display: "flex", gap: 26, flexWrap: "wrap", marginBottom: 14 }}>
             <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>Net sales YTD</div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.ytdNet, { compact: true })}</div></div>
-            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>vs forecast</div><div style={{ fontSize: 20, fontWeight: 600, color: forward.vsForecast >= 0 ? "var(--green)" : RED }}>{forward.vsForecast != null ? `${forward.vsForecast >= 0 ? "+" : ""}${(forward.vsForecast * 100).toFixed(1)}%` : "—"}</div></div>
+            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>vs forecast</div><div style={{ fontSize: 20, fontWeight: 600, color: forward.vsForecast >= 0 ? "var(--green)" : "var(--red)" }}>{forward.vsForecast != null ? `${forward.vsForecast >= 0 ? "+" : ""}${(forward.vsForecast * 100).toFixed(1)}%` : "—"}</div></div>
             <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>FY plan</div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.plan, { compact: true })}</div></div>
             <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>Projected FY <span style={{ color: "var(--faint)" }}>(run-rate)</span></div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.projectedFy, { compact: true })}</div></div>
           </div>
           {forward.pctOfPlan != null && (
             <div>
-              <div style={{ height: 8, background: "var(--line)", borderRadius: 5, overflow: "hidden" }}>
+              <div style={{ height: 8, background: "var(--raise)", borderRadius: 5, overflow: "hidden" }}>
                 <div style={{ width: `${Math.min(100, forward.pctOfPlan * 100).toFixed(1)}%`, height: "100%", background: "var(--accent)" }} />
               </div>
               <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 5 }}>{(forward.pctOfPlan * 100).toFixed(1)}% of full-year plan delivered · projection is a linear run-rate and does not weight H2 seasonality</div>
@@ -132,7 +142,7 @@ export default async function ExecutiveHub() {
       )}
 
       {/* Needs attention */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+      <div id="attention" style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4, flexWrap: "wrap", scrollMarginTop: 20 }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Needs attention</span>
         <span style={{ fontSize: 12.5, color: "var(--faint)" }}>
           {attention.length} item{attention.length === 1 ? "" : "s"} · KPIs {ragCounts.GREEN} on track / {ragCounts.AMBER} watch / {ragCounts.RED} action

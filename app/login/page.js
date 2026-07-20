@@ -37,9 +37,9 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: "1.75rem" }}>
-        <div style={{ fontSize: 13, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Finance</div>
-        <h1 style={{ fontSize: 21, fontWeight: 600, marginBottom: 4 }}>Month-end close</h1>
-        <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 20 }}>Sign in to update the close.</p>
+        <span className="fos-eyebrow">Miniso UK · Finance OS</span>
+        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", margin: "12px 0 4px" }}>The Connected Finance Function</h1>
+        <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 20 }}>Sign in to your finance workspace.</p>
 
         <label style={{ fontSize: 13, color: "var(--muted)", display: "block", marginBottom: 5 }}>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required
@@ -49,10 +49,10 @@ export default function LoginPage() {
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required
           style={{ width: "100%", height: 40, padding: "0 12px", border: "1px solid var(--line-strong)", borderRadius: 8, background: "var(--bg)", color: "var(--ink)", marginBottom: 16, fontSize: 15 }} />
 
-        {error && <div style={{ fontSize: 13, color: "#a32d2d", marginBottom: 12 }}>{error}</div>}
+        {error && <div style={{ fontSize: 13, color: "var(--red)", marginBottom: 12 }}>{error}</div>}
 
         <button type="submit" disabled={busy}
-          style={{ width: "100%", height: 42, border: "none", borderRadius: 8, background: "var(--accent)", color: "#fff", fontSize: 15, fontWeight: 500, opacity: busy ? 0.6 : 1 }}>
+          style={{ width: "100%", height: 42, border: "none", borderRadius: 8, background: "var(--accent)", color: "#1a1813", fontSize: 15, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

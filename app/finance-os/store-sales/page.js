@@ -49,7 +49,7 @@ function PeriodBlock({ title, range, s, fyPlan, mkt }) {
         {tiles.map(([label, value, tone]) => (
           <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{label}</div>
-            <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1, color: tone === null || tone === undefined ? "var(--ink)" : tone >= 0 ? "var(--green)" : "#a32d2d" }}>{value}</div>
+            <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1, color: tone === null || tone === undefined ? "var(--ink)" : tone >= 0 ? "var(--green)" : "var(--red)" }}>{value}</div>
           </div>
         ))}
       </div>

@@ -6,7 +6,7 @@ import { PageHeader, StatRow, Stat, Panel, Table, SubNav, STORE_SALES_NAV, money
 export const dynamic = "force-dynamic";
 
 const chip = (status) => {
-  const map = { ABOVE: ["var(--green)", "var(--green-bg)"], BELOW: ["#a32d2d", "#f7e6e3"] };
+  const map = { ABOVE: ["var(--green)", "var(--green-bg)"], BELOW: ["var(--red)", "var(--red-bg)"] };
   const [fg, bg] = map[status] || ["var(--muted)", "var(--line)"];
   return <span style={{ fontSize: 10.5, fontWeight: 600, color: fg, background: bg, padding: "2px 8px", borderRadius: 6 }}>{status || "—"}</span>;
 };

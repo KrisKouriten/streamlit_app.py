@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 
 export const LIFECYCLE_STYLE = {
   GENERATED: ["var(--muted)", "var(--line)"],
-  AUTOMATED_VALIDATION: ["#a32d2d", "#f7e6e3"],
+  AUTOMATED_VALIDATION: ["var(--red)", "var(--red-bg)"],
   PENDING_REVIEW: ["var(--amber)", "var(--amber-bg)"],
   APPROVED: ["var(--green)", "var(--green-bg)"],
   AMENDED: ["var(--green)", "var(--green-bg)"],
-  REJECTED: ["#a32d2d", "#f7e6e3"],
+  REJECTED: ["var(--red)", "var(--red-bg)"],
   ACTION_CREATED: ["var(--accent)", "var(--accent-bg)"],
   CLOSED: ["var(--faint)", "var(--line)"],
 };
@@ -81,7 +81,7 @@ export function OutputReviewPanel({ output, canReview }) {
         </label>
         <button style={btn("var(--accent)")} onClick={() => decide("approve")}>Approve</button>
         <button style={btn("var(--amber)")} onClick={() => setShowAmend(!showAmend)}>Amend…</button>
-        <button style={btn("#a32d2d")} onClick={() => comment.trim() ? decide("reject") : setErr("A comment is required when rejecting")}>Reject</button>
+        <button style={btn("var(--red)")} onClick={() => comment.trim() ? decide("reject") : setErr("A comment is required when rejecting")}>Reject</button>
       </div>
       {showAmend && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
@@ -93,7 +93,7 @@ export function OutputReviewPanel({ output, canReview }) {
           </button>
         </div>
       )}
-      {err && <div style={{ fontSize: 12, color: "#a32d2d", marginTop: 6 }}>{err}</div>}
+      {err && <div style={{ fontSize: 12, color: "var(--red)", marginTop: 6 }}>{err}</div>}
       <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>
         Approval publishes this as a governed insight{output.recommended_action ? " (and optionally an action)" : ""}; the decision is recorded permanently.
       </div>

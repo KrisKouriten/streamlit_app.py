@@ -31,7 +31,7 @@ export function dateLabel(d) {
 }
 
 const TONE = {
-  green: "var(--green)", amber: "var(--amber)", red: "#a32d2d", muted: "var(--muted)",
+  green: "var(--green)", amber: "var(--amber)", red: "var(--red)", muted: "var(--muted)",
 };
 
 export function PageHeader({ crumb, title, right }) {

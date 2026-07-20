@@ -8,7 +8,7 @@ import { AI_NAV } from "../../nav";
 
 export const dynamic = "force-dynamic";
 const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—");
-const SEV = { CRITICAL: "#a32d2d", HIGH: "#a32d2d", MEDIUM: "var(--amber)", LOW: "var(--muted)" };
+const SEV = { CRITICAL: "var(--red)", HIGH: "var(--red)", MEDIUM: "var(--amber)", LOW: "var(--muted)" };
 
 export default async function RunDetail({ params }) {
   const session = await getSession();
@@ -27,7 +27,7 @@ export default async function RunDetail({ params }) {
         </div>
         <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
           Agent run #{run.run_id}
-          <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 10, color: run.status === "FAILED" ? "#a32d2d" : run.status === "SUCCESS" ? "var(--green)" : "var(--muted)" }}>{run.status}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 10, color: run.status === "FAILED" ? "var(--red)" : run.status === "SUCCESS" ? "var(--green)" : "var(--muted)" }}>{run.status}</span>
         </div>
       </header>
       <SubNav items={AI_NAV} active="/ai" />
@@ -47,7 +47,7 @@ export default async function RunDetail({ params }) {
             <div key={s.step_id} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}>
               <span style={{ color: "var(--faint)", flex: "none" }}>{s.step_no}.</span>
               <span style={{ flex: 1 }}>{s.title}{s.detail ? ` — ${s.detail}` : ""}</span>
-              <span style={{ color: s.status === "FAILED" ? "#a32d2d" : "var(--green)", fontWeight: 600, fontSize: 11.5 }}>{s.status}</span>
+              <span style={{ color: s.status === "FAILED" ? "var(--red)" : "var(--green)", fontWeight: 600, fontSize: 11.5 }}>{s.status}</span>
             </div>
           ))}
         </div>
@@ -56,7 +56,7 @@ export default async function RunDetail({ params }) {
       {run.exceptions.length > 0 && (
         <Panel title="Exceptions">
           {run.exceptions.map((e) => (
-            <div key={e.exception_id} style={{ background: "#f7e6e3", border: "1px solid #a32d2d", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 6, fontSize: 13 }}>
+            <div key={e.exception_id} style={{ background: "var(--red-bg)", border: "1px solid var(--red)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 6, fontSize: 13 }}>
               <strong>{e.severity}</strong> · {e.message}
             </div>
           ))}
@@ -71,7 +71,7 @@ export default async function RunDetail({ params }) {
               <span style={{ fontSize: 10.5, fontWeight: 700, color: SEV[o.severity] || "var(--muted)" }}>{o.output_type}{o.severity ? ` · ${o.severity}` : ""}</span>
               <span style={{ fontSize: 14.5, fontWeight: 600, flex: 1 }}>{o.headline}</span>
               {o.financial_impact != null && (
-                <span style={{ fontSize: 13, fontWeight: 600, color: Number(o.financial_impact) < 0 ? "#a32d2d" : "var(--green)" }}>{money(o.financial_impact, { compact: true })}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: Number(o.financial_impact) < 0 ? "var(--red)" : "var(--green)" }}>{money(o.financial_impact, { compact: true })}</span>
               )}
               <LifecycleChip lifecycle={o.lifecycle} />
             </div>
