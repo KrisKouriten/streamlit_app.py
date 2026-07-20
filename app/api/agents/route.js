@@ -3,6 +3,7 @@ import { query } from "../../../lib/db";
 import { getSession, hasRole } from "../../../lib/auth";
 import { audit } from "../../../lib/governance";
 import { runAgent, reviewError, AGENT_DASHBOARD, DECISIONS } from "../../../lib/agents";
+import { createAction } from "../../../lib/actions";
 
 export async function POST(request) {
   const session = await getSession();
@@ -65,13 +66,14 @@ export async function POST(request) {
         insightId = ins[0].insight_id;
 
         if (body.createAction && output.recommended_action) {
-          const { rows: act } = await query(
-            `INSERT INTO intelligence.action_register (insight_id, action_title, action_description, owner_name, status, expected_value_gbp)
-             VALUES ($1, $2, $3, $4, 'OPEN', $5) RETURNING action_id`,
-            [insightId, headline.slice(0, 250), output.recommended_action, body.actionOwner?.trim() || session.name,
-             output.financial_impact != null ? Math.abs(Number(output.financial_impact)) : null]
-          );
-          actionId = act[0].action_id;
+          actionId = await createAction({
+            title: headline.slice(0, 250), description: output.recommended_action,
+            ownerName: body.actionOwner?.trim() || session.name, sourceType: "AI_AGENT",
+            sourceRef: `agent:${output.agent_code} run:${output.run_id}`,
+            expectedValue: output.financial_impact != null ? Math.abs(Number(output.financial_impact)) : null,
+            dashboardCode: AGENT_DASHBOARD[output.agent_code] || null,
+            agentRunId: output.run_id, insightId,
+          }, session);
           lifecycle = "ACTION_CREATED";
         }
       }
