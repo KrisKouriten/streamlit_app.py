@@ -23,8 +23,8 @@ and is exposed in the new structure per the protocol below.
 | `/finance-os/franchise` | Franchise sales/receivables/credit (illustrative-badged) | DASHBOARDS → Franchise **and** PERFORM → Franchise Performance | ✓ | ✓ |
 | `/finance-os/cashflow` | Real cash position by entity | DASHBOARDS → Cash Flow **and** PERFORM → Cash Flow | ✓ | ✓ |
 | `/finance-os/fixed-assets` | Asset register (illustrative-badged) | DASHBOARDS → Fixed Assets **and** PERFORM → Fixed Assets | ✓ | ✓ |
-| `/operate/month-end` | Per-entity close status board (ticks + sign-off) | DASHBOARDS → Month-End Close | ✓ | ✓ |
-| `/operate/management-close` | Pre-close checks + reconciliation playbook | OPERATE → Month-End Close | ✓ | ✓ |
+| `/operate/month-end` | Per-entity close tasks — finance owner, status, summary | OPERATE → Month-End Close **and** DASHBOARDS → Month-End Close | ✓ | ✓ + owners/summary added |
+| `/operate/management-close` | Pre-close checks + reconciliation playbook | OPERATE → Management Accounts Close | ✓ | ✓ |
 | `/operate/intercompany` | Three-ledger intercompany tracker | OPERATE → Intercompany (preserved; not in the target list) | ✓ | ✓ |
 | `/operate/forecast` | Forecast inputs (stores / HO / franchise) | PLAN → Forecast Builder | ✓ | ✓ |
 | `/plan/scenarios` | Scenario levers over forecast inputs | PLAN → Scenario Planning | ✓ | ✓ |
