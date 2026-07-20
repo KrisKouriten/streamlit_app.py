@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
    Opens on Cmd/Ctrl+K (or the nav trigger firing "fos:palette"); type to filter,
    ↑↓ to move, Enter to run, Esc to close. Glass panel over a dimmed field. */
 
-import { NAV_SECTIONS } from "../lib/nav-registry";
+import { NAV_SECTIONS, resolveHref } from "../lib/nav-registry";
 
 // Built from the navigation registry: live modules navigate to their routes;
 // planned modules open their planned page (marked "soon").
@@ -15,7 +15,7 @@ const NAV = NAV_SECTIONS.map((s) => [
   s.label,
   s.items
     .filter((it) => !it.action)
-    .map((it) => [it.slug ? `${it.label} (soon)` : it.label, it.href || `/module/${it.slug}`, it.hint]),
+    .map((it) => { const h = resolveHref(it); return [h.startsWith("/module/") ? `${it.label} (soon)` : it.label, h, it.hint]; }),
 ]);
 
 export default function CommandPalette() {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NAV_SECTIONS, activeHref } from "../lib/nav-registry";
+import { NAV_SECTIONS, activeHref, resolveHref } from "../lib/nav-registry";
 
 /* Persistent left navigation — every section and module, always present, so
    moving between dashboards and operational modules never routes through a
@@ -41,7 +41,7 @@ export default function Sidebar() {
   // default: section containing the active item is open; others follow saved state (default closed except home/dashboards)
   function isOpen(state, key) {
     if (key in state) return state[key];
-    if (NAV_SECTIONS.find((s) => s.key === key)?.items.some((it) => (it.href || `/module/${it.slug}`) === active)) return true;
+    if (NAV_SECTIONS.find((s) => s.key === key)?.items.some((it) => resolveHref(it) === active)) return true;
     return key === "home" || key === "dashboards";
   }
 
@@ -49,7 +49,7 @@ export default function Sidebar() {
     <nav aria-label="Primary" style={{ width: 246, flex: "none", height: "100%", overflowY: "auto", padding: "14px 10px 40px", display: "flex", flexDirection: "column", gap: 2 }}>
       {NAV_SECTIONS.map((s) => {
         const opened = isOpen(open, s.key);
-        const hasActive = s.items.some((it) => (it.href || (it.slug ? `/module/${it.slug}` : "")) === active);
+        const hasActive = s.items.some((it) => resolveHref(it) === active);
         return (
           <div key={s.key} style={{ marginBottom: 2 }}>
             <button onClick={() => flip(s.key)} aria-expanded={opened}
@@ -71,12 +71,12 @@ export default function Sidebar() {
                       </button>
                     );
                   }
-                  const href = it.href || `/module/${it.slug}`;
+                  const href = resolveHref(it);
                   const on = href === active;
                   return (
                     <Link key={it.label} href={href} aria-current={on ? "page" : undefined} style={itemStyle(on)}>
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</span>
-                      {it.slug && <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 4px", flex: "none" }}>soon</span>}
+                      {it.slug && href.startsWith("/module/") && <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 4px", flex: "none" }}>soon</span>}
                     </Link>
                   );
                 })}

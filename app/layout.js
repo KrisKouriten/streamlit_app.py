@@ -125,10 +125,8 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
 const themeScript = `(function(){try{var t=localStorage.getItem('fos-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
 
 import { getSession } from "../lib/auth";
-import TopNav from "./topnav";
-import Sidebar from "./sidebar";
+import AppShell from "./app-shell";
 import PageTransition from "./page-transition";
-import CommandPalette from "./command-palette";
 
 export default async function RootLayout({ children }) {
   const session = await getSession();
@@ -140,16 +138,7 @@ export default async function RootLayout({ children }) {
       </head>
       <body>
         {session ? (
-          <>
-            <TopNav userName={session.name} />
-            <CommandPalette />
-            <div style={{ display: "flex", alignItems: "stretch", minHeight: "calc(100vh - 57px)" }}>
-              <Sidebar />
-              <main style={{ flex: 1, minWidth: 0 }}>
-                <PageTransition>{children}</PageTransition>
-              </main>
-            </div>
-          </>
+          <AppShell userName={session.name}>{children}</AppShell>
         ) : (
           <PageTransition>{children}</PageTransition>
         )}

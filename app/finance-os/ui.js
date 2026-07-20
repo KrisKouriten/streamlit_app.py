@@ -136,6 +136,56 @@ export function SubNav({ items, active }) {
   );
 }
 
+// The standard KPI card (alias of Stat — one component, one look everywhere).
+export const KpiCard = Stat;
+
+// Reusable filter bar: a labelled row of controls above tables/dashboards.
+// Server-safe; pass links, forms or client controls as children.
+export function FilterBar({ label = "Filters", children, right }) {
+  return (
+    <div className="fos-card" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 14px", marginBottom: 18 }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", flex: "none" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>{children}</div>
+      {right && <div style={{ flex: "none", fontSize: 12, color: "var(--faint)" }}>{right}</div>}
+    </div>
+  );
+}
+
+// Reusable empty state — for screens whose feed/inputs are not loaded yet.
+export function EmptyState({ title = "Nothing here yet", children, action }) {
+  return (
+    <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center" }}>
+      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, maxWidth: 480, margin: "0 auto" }}>{children}</div>
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
+}
+
+// Reusable error state — honest, with the next step.
+export function ErrorState({ title = "Something went wrong", detail, action }) {
+  return (
+    <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center", borderColor: "color-mix(in srgb, var(--red) 35%, var(--line))" }}>
+      <div style={{ fontSize: 15, fontWeight: 650, color: "var(--red)", marginBottom: 6 }}>{title}</div>
+      {detail && <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520, margin: "0 auto" }}>{detail}</div>}
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
+}
+
+// Reusable loading skeleton — shimmer rows in a card (used by app/loading.js).
+export function LoadingSkeleton({ rows = 5 }) {
+  return (
+    <div className="fos-card" style={{ padding: "18px 20px" }}>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes fosShimmer{0%{opacity:.35}50%{opacity:.7}100%{opacity:.35}}` }} />
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} aria-hidden="true" style={{ height: 13, borderRadius: 6, background: "var(--raise)", margin: "13px 0", width: `${88 - (i % 3) * 14}%`, animation: `fosShimmer 1.6s ease-in-out ${i * 0.12}s infinite` }} />
+      ))}
+      <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading…</span>
+    </div>
+  );
+}
+
 export const STORE_SALES_NAV = [
   ["/finance-os/store-sales", "Executive view"],
   ["/finance-os/store-sales/league", "Store league"],

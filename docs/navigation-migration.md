@@ -79,3 +79,25 @@ and is exposed in the new structure per the protocol below.
 (direct URL, breadcrumb roots). The sidebar makes them optional rather than
 the only path — users move module-to-module without returning to a landing
 page, per the target behaviour.
+
+## Step 8 — foundation app shell (implemented)
+
+- **AppShell** (`app/app-shell.js`): glass top bar + persistent sidebar
+  (drawer under 940px) + ⌘K palette + page-transition content column. Pure
+  chrome — no data access or dashboard calculations in navigation components;
+  links resolve only through the registry.
+- **Shared components** (`app/finance-os/ui.js`): `PageHeader` (title +
+  breadcrumb), `Badge`/`ProvenanceBadge` (standard status badges),
+  `Stat`/`KpiCard` (the KPI card), `FilterBar`, `Table` (container),
+  `EmptyState`, `ErrorState`, `LoadingSkeleton`; route-level `app/loading.js`
+  and `app/error.js` (no raw stack traces, migration-aware message).
+- **Feature flags** (`MODULE_FLAGS` in `lib/nav-registry.js`): mapping a
+  planned slug to a route flips it live across sidebar, palette and pages —
+  the safe mechanism for incomplete modules. Until flipped, planned modules
+  render professional placeholders (name · purpose · module kind · planned
+  milestone · current status · dependencies) — no broken links anywhere.
+- **Module kinds** (`MODULE_KINDS`): every module is classified — dashboard
+  view (reporting & analysis), planning (data entry & forecasting),
+  performance (detailed analysis), operating (finance processes), plus
+  master data / governance / digital-finance-team — shown on placeholders
+  and derived from section, never from calculations in the nav.
