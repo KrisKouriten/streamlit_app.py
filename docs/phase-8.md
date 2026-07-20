@@ -5,11 +5,12 @@ PLAN / PERFORM / OPERATE tabs into a single **DASHBOARDS** section, in the order
 Kris set.
 
 ## Navigation
-Top nav is now: **HOME · DASHBOARDS · OPERATE · WORKFLOW · AI CONTROL TOWER · GOVERN**.
+Top nav is now: **HOME · PLAN · DASHBOARDS · OPERATE · WORKFLOW · AI CONTROL TOWER · GOVERN**.
+- **PLAN** (`/plan`) — kept as its own tab after HOME, hosting Budget & Forecast
+  (its home for nav-highlight); Budget & Forecast is also cross-linked from the
+  DASHBOARDS hub. (Migration 011 assigns it to the PLAN pillar.)
 - **DASHBOARDS** (`/dashboards`) — new hub listing the seven in order, each card
   carrying a data-provenance badge so "is this real?" is legible before you click in.
-- **PLAN** folded in — Budget & Forecast now lives under DASHBOARDS. `/plan` redirects
-  to `/dashboards` so old links resolve.
 - **PERFORM → WORKFLOW** — renamed to reflect what it is: the finance team's cadence
   (My Week, Schedule, Review, Library). Routes unchanged.
 - **OPERATE** — now just the operational controls (Month-end close, Intercompany).

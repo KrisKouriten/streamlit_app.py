@@ -22,7 +22,7 @@ DASHBOARDS section).
 ## Contents
 1. Purpose & what the FOS is
 2. Access, roles & permissions
-3. The six pillars
+3. The pillars
 4. The operating rhythm (daily / weekly / monthly / quarterly)
 5. Module procedures
 6. Data feeds & refresh
@@ -81,13 +81,14 @@ Everyone signed in can view all dashboards; the controls above gate *actions*, n
 
 ---
 
-## 3. The six pillars
+## 3. The pillars
 
 The top navigation is the same on every screen.
 
 | Pillar | Route | Purpose |
 |---|---|---|
 | **HOME** | `/finance-os/executive` | Executive Intelligence Hub — position, what needs attention, operating health. |
+| **PLAN** | `/plan` | Strategic planning — Budget & Forecast (its home), with scenario planning to follow. |
 | **DASHBOARDS** | `/dashboards` | The seven specialist dashboards: Management Accounts, Budget & Forecast, Cash Flow, Store Sales & KPI, Inventory, Franchise, Fixed Assets. Each declares its data provenance (real feed vs illustrative). |
 | **OPERATE** | `/operate` | Operational controls: the Month-end close and Intercompany. |
 | **WORKFLOW** | `/perform` | The finance team's cadence — My Week, Team Schedule, Review queue and the Task Library. |
