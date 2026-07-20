@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "../../../lib/db";
 import { getSession } from "../../../lib/auth";
+import { audit } from "../../../lib/governance";
 
 export async function GET(request) {
   const session = await getSession();
@@ -46,6 +47,8 @@ export async function POST(request) {
         [period, taskKey]
       );
     }
+    await audit({ actor: session, eventType: "task.toggle", objectType: "task_state",
+      objectRef: `${period}|${taskKey}`, detail: { done } });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: "Could not save" }, { status: 500 });
