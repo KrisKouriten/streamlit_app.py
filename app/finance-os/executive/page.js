@@ -1,131 +1,186 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "../../../lib/auth";
-import { getExecutiveKpis, getInsights, getLatestReportDate, formatKpi } from "../../../lib/finance-os";
+import { getHubData } from "../../../lib/hub";
+import { money, pct, num, dateLabel } from "../ui";
 
 export const dynamic = "force-dynamic";
 
-const RAG = {
-  GREEN: { fg: "var(--green)", bg: "var(--green-bg)", label: "On track" },
+/* HOME pillar — the Executive Intelligence Hub. Exception-led: it opens with the
+   position, then the single ranked list of what needs a person's attention, then
+   the health of the three operating engines (actions, schedule, agents). Every
+   figure is tagged real (store feed) or illustrative (awaiting the Xero feed). */
+
+const SOURCE = {
+  STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store feed" },
+  ILLUSTRATIVE: { fg: "var(--faint)", bg: "var(--line)", label: "Illustrative" },
+};
+
+const RED = "#a32d2d", RED_BG = "#f7e6e3";
+const SEV = {
+  CRITICAL: { fg: RED, bg: RED_BG, label: "Critical" },
+  RED: { fg: RED, bg: RED_BG, label: "Action" },
+  HIGH: { fg: RED, bg: RED_BG, label: "High" },
   AMBER: { fg: "var(--amber)", bg: "var(--amber-bg)", label: "Watch" },
-  RED: { fg: "#a32d2d", bg: "#f7e6e3", label: "Action" },
+  MEDIUM: { fg: "var(--amber)", bg: "var(--amber-bg)", label: "Medium" },
+  LOW: { fg: "var(--muted)", bg: "var(--line)", label: "Low" },
   INFO: { fg: "var(--muted)", bg: "var(--line)", label: "Info" },
 };
+const TONE = { green: "var(--green)", amber: "var(--amber)", red: RED };
 
-const SEV = {
-  CRITICAL: "#a32d2d", HIGH: "#a32d2d", MEDIUM: "var(--amber)", LOW: "var(--muted)",
-};
+function heroValue(t) {
+  if (t.value === null || t.value === undefined) return "—";
+  if (t.unit === "PCT") return pct(t.value);
+  if (t.unit === "GBP") return money(t.value, { compact: true });
+  return num(t.value);
+}
 
-function fmtGbp(n) {
-  if (n === null || n === undefined) return "—";
-  const v = Number(n);
-  const sign = v < 0 ? "−" : "";
-  const abs = Math.abs(v);
-  if (abs >= 1_000_000) return `${sign}£${(abs / 1_000_000).toFixed(1)}m`;
-  if (abs >= 1_000) return `${sign}£${Math.round(abs / 1000).toLocaleString("en-GB")}k`;
-  return `${sign}£${Math.round(abs).toLocaleString("en-GB")}`;
+function HeroTile({ t }) {
+  const src = SOURCE[t.source];
+  return (
+    <Link href={t.href} style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px", height: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6, marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{t.label}</span>
+          <span style={{ fontSize: 9.5, fontWeight: 600, color: src.fg, background: src.bg, padding: "2px 6px", borderRadius: 5, whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: ".03em" }}>{src.label}</span>
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1, color: t.tone ? TONE[t.tone] : "var(--ink)" }}>{heroValue(t)}</div>
+        <div style={{ fontSize: 11.5, marginTop: 6, color: t.subTone ? TONE[t.subTone] : "var(--faint)" }}>{t.sub}</div>
+      </div>
+    </Link>
+  );
+}
+
+function HealthPanel({ title, href, cta, children }) {
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{title}</span>
+        <Link href={href} style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}>{cta} →</Link>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>{children}</div>
+    </div>
+  );
+}
+
+function Line({ label, value, tone }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+      <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone ? TONE[tone] : "var(--ink)" }}>{value}</span>
+    </div>
+  );
 }
 
 export default async function ExecutiveHub() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [kpis, insights, reportDate] = await Promise.all([
-    getExecutiveKpis(),
-    getInsights(),
-    getLatestReportDate(),
-  ]);
-
-  const counts = { GREEN: 0, AMBER: 0, RED: 0, INFO: 0 };
-  for (const k of kpis) counts[k.status || "INFO"]++;
-  const dateLabel = reportDate
-    ? new Date(reportDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-    : "—";
+  const { tradingAsAt, financeAsAt, hero, forward, ragCounts, attention, health } = await getHubData();
+  const { actions, operations, agents } = health;
+  const opsOutstanding = operations.total - operations.complete;
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-            <Link href="/finance-os" style={{ textDecoration: "none", color: "var(--faint)" }}>Finance OS</Link> · Executive intelligence
+            <Link href="/finance-os" style={{ textDecoration: "none", color: "var(--faint)" }}>Finance OS</Link> · Home
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>Executive Intelligence Hub</div>
+          <div style={{ fontSize: 19, fontWeight: 600 }}>Executive Intelligence Hub</div>
         </div>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>As at {dateLabel}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
+          <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
+          <div>Group finance as at {dateLabel(financeAsAt)}</div>
+        </div>
       </header>
-
-      {/* RAG summary */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 26, flexWrap: "wrap" }}>
-        {[["GREEN", "On track"], ["AMBER", "Watch"], ["RED", "Action needed"]].map(([s, lbl]) => (
-          <div key={s} style={{ flex: "1 1 160px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: RAG[s].fg }} />
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{lbl}</span>
-            </div>
-            <div style={{ fontSize: 30, fontWeight: 600, marginTop: 6, lineHeight: 1 }}>{counts[s]}</div>
-            <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 3 }}>KPIs</div>
-          </div>
-        ))}
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 22, lineHeight: 1.5 }}>
+        Revenue and gross margin are live from the store sales feed. EBITDA, cash, facility headroom and inventory
+        are illustrative demo figures pending the Xero and treasury feeds (Phase&nbsp;6).
       </div>
 
-      {/* KPI grid */}
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Key metrics</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12, marginBottom: 30 }}>
-        {kpis.map((k) => {
-          const rag = RAG[k.status || "INFO"];
-          const arrow = k.trend === "UP" ? "▲" : k.trend === "DOWN" ? "▼" : "▬";
-          return (
-            <div key={k.kpi_code} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{k.kpi_name}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: rag.fg, background: rag.bg, padding: "2px 7px", borderRadius: 6 }}>{rag.label}</span>
+      {/* Hero band */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(158px,1fr))", gap: 10, marginBottom: 24 }}>
+        {hero.map((t) => <HeroTile key={t.key} t={t} />)}
+      </div>
+
+      {/* Forward view */}
+      {forward && (
+        <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px", marginBottom: 26 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Year to date vs full-year plan</span>
+            <Link href="/finance-os/store-sales" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>Store sales →</Link>
+          </div>
+          <div style={{ display: "flex", gap: 26, flexWrap: "wrap", marginBottom: 14 }}>
+            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>Net sales YTD</div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.ytdNet, { compact: true })}</div></div>
+            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>vs forecast</div><div style={{ fontSize: 20, fontWeight: 600, color: forward.vsForecast >= 0 ? "var(--green)" : RED }}>{forward.vsForecast != null ? `${forward.vsForecast >= 0 ? "+" : ""}${(forward.vsForecast * 100).toFixed(1)}%` : "—"}</div></div>
+            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>FY plan</div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.plan, { compact: true })}</div></div>
+            <div><div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 3 }}>Projected FY <span style={{ color: "var(--faint)" }}>(run-rate)</span></div><div style={{ fontSize: 20, fontWeight: 600 }}>{money(forward.projectedFy, { compact: true })}</div></div>
+          </div>
+          {forward.pctOfPlan != null && (
+            <div>
+              <div style={{ height: 8, background: "var(--line)", borderRadius: 5, overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, forward.pctOfPlan * 100).toFixed(1)}%`, height: "100%", background: "var(--accent)" }} />
               </div>
-              <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1 }}>{formatKpi(k.actual_value, k.unit_of_measure)}</div>
-              <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 6 }}>
-                Target {formatKpi(k.target_value, k.unit_of_measure)} · <span style={{ color: rag.fg }}>{arrow}</span>
-              </div>
+              <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 5 }}>{(forward.pctOfPlan * 100).toFixed(1)}% of full-year plan delivered · projection is a linear run-rate and does not weight H2 seasonality</div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Needs attention */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>Needs attention</span>
+        <span style={{ fontSize: 12.5, color: "var(--faint)" }}>
+          {attention.length} item{attention.length === 1 ? "" : "s"} · KPIs {ragCounts.GREEN} on track / {ragCounts.AMBER} watch / {ragCounts.RED} action
+        </span>
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12 }}>Ranked by severity. Nothing here is auto-actioned — each item is a link to where a person decides.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 30 }}>
+        {attention.length === 0 && (
+          <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
+            Nothing needs attention right now. KPIs are within tolerance, no agent outputs are awaiting sign-off and no actions are overdue.
+          </div>
+        )}
+        {attention.map((a, i) => {
+          const s = SEV[a.severity] || SEV.INFO;
+          return (
+            <Link key={i} href={a.href} style={{ textDecoration: "none", color: "inherit" }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--surface)", border: "1px solid var(--line)", borderLeft: `3px solid ${s.fg}`, borderRadius: "var(--radius)", padding: "11px 14px" }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: s.fg, background: s.bg, padding: "3px 7px", borderRadius: 5, whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: ".03em", marginTop: 1, minWidth: 58, textAlign: "center" }}>{s.label}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>{a.headline}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{a.detail}</div>
+                </div>
+                <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>{a.tag}</span>
+              </div>
+            </Link>
           );
         })}
       </div>
 
-      {/* AI insights */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>AI insights</div>
-        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· awaiting human review</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {insights.length === 0 && (
-          <div style={{ fontSize: 13.5, color: "var(--faint)", padding: "12px 0" }}>No insights to review.</div>
-        )}
-        {insights.map((i) => (
-          <div key={i.insight_id} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", color: SEV[i.severity] || "var(--muted)" }}>
-                  {i.insight_type}
-                </span>
-                <span style={{ fontSize: 14.5, fontWeight: 600 }}>{i.headline}</span>
-              </div>
-              {i.financial_impact != null && (
-                <span style={{ fontSize: 13, fontWeight: 600, color: Number(i.financial_impact) < 0 ? "#a32d2d" : "var(--green)", flex: "none" }}>
-                  {fmtGbp(i.financial_impact)}
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, marginBottom: 8 }}>{i.narrative}</div>
-            {i.recommended_action && (
-              <div style={{ fontSize: 13, color: "var(--ink)", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
-                <span style={{ color: "var(--faint)" }}>Recommended: </span>{i.recommended_action}
-              </div>
-            )}
-            <div style={{ fontSize: 11.5, color: "var(--faint)", display: "flex", gap: 14, flexWrap: "wrap" }}>
-              <span>{i.digital_colleague}</span>
-              <span>Confidence {i.confidence_pct != null ? `${Math.round(Number(i.confidence_pct) * 100)}%` : "—"}</span>
-              <span>Status: {i.human_review_status}</span>
-            </div>
-          </div>
-        ))}
+      {/* Operating health */}
+      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Operating health</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+        <HealthPanel title="Actions & benefits" href="/govern/actions" cta="Action Centre">
+          <Line label="Open actions" value={num(actions.open)} tone={actions.open > 0 ? "amber" : "green"} />
+          <Line label="Overdue" value={num(actions.overdue)} tone={actions.overdue > 0 ? "red" : "green"} />
+          <Line label="Awaiting closure" value={num(actions.awaitingClosure)} tone={actions.awaitingClosure > 0 ? "amber" : undefined} />
+          <Line label="Open value" value={money(actions.openValue, { compact: true })} />
+        </HealthPanel>
+
+        <HealthPanel title="This week's schedule" href="/perform/schedule" cta="Schedule">
+          <Line label="Tasks this week" value={num(operations.total)} />
+          <Line label="Complete" value={num(operations.complete)} tone={operations.complete === operations.total && operations.total > 0 ? "green" : undefined} />
+          <Line label="Outstanding" value={num(opsOutstanding)} tone={opsOutstanding > 0 ? "amber" : "green"} />
+          <Line label="Overdue / blocked" value={num(operations.overdue + operations.blocked)} tone={operations.overdue + operations.blocked > 0 ? "red" : "green"} />
+        </HealthPanel>
+
+        <HealthPanel title="AI agents" href="/ai" cta="Control Tower">
+          <Line label="Outputs awaiting review" value={num(agents.pendingReviews)} tone={agents.pendingReviews > 0 ? "amber" : "green"} />
+          <Line label="Material (need sign-off)" value={num(agents.pendingMaterial)} tone={agents.pendingMaterial > 0 ? "amber" : undefined} />
+          <Line label="Open exceptions" value={num(agents.openExceptions)} tone={agents.openExceptions > 0 ? "red" : "green"} />
+        </HealthPanel>
       </div>
     </div>
   );
