@@ -52,13 +52,18 @@ export default function Sidebar() {
         const hasActive = s.items.some((it) => resolveHref(it) === active);
         return (
           <div key={s.key} style={{ marginBottom: 2 }}>
-            <button onClick={() => flip(s.key)} aria-expanded={opened}
-              style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", textAlign: "left", padding: "7px 10px", borderRadius: 8, border: "none", background: "transparent",
-                fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase",
-                color: hasActive ? "var(--accent)" : "var(--faint)", transition: "color var(--t-fast) var(--ease)" }}>
-              <span aria-hidden="true" style={{ display: "inline-block", transform: opened ? "rotate(90deg)" : "none", transition: "transform var(--t-fast) var(--ease)", fontSize: 9 }}>▶</span>
-              {s.label}
-            </button>
+            <div style={{ display: "flex", alignItems: "stretch", borderRadius: 8, overflow: "hidden" }}>
+              <button onClick={() => flip(s.key)} aria-expanded={opened} aria-label={`${opened ? "Collapse" : "Expand"} ${s.label}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, flex: "none", border: "none", background: "transparent", color: hasActive ? "var(--accent)" : "var(--faint)" }}>
+                <span aria-hidden="true" style={{ display: "inline-block", transform: opened ? "rotate(90deg)" : "none", transition: "transform var(--t-fast) var(--ease)", fontSize: 9 }}>▶</span>
+              </button>
+              <Link href={`/section/${s.key}`} aria-current={active === `/section/${s.key}` ? "page" : undefined}
+                style={{ flex: 1, display: "flex", alignItems: "center", padding: "7px 10px 7px 2px", textDecoration: "none",
+                  fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase",
+                  color: hasActive ? "var(--accent)" : "var(--faint)", transition: "color var(--t-fast) var(--ease)" }}>
+                {s.label}
+              </Link>
+            </div>
             {opened && (
               <div>
                 {s.items.map((it) => {

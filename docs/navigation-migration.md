@@ -101,3 +101,22 @@ page, per the target behaviour.
   performance (detailed analysis), operating (finance processes), plus
   master data / governance / digital-finance-team — shown on placeholders
   and derived from section, never from calculations in the nav.
+
+## Phase 14 — section hubs + Procurement + SKU Analysis
+
+- **Clickable section headers.** Each sidebar section header is now a link to
+  `/section/<key>` — a mini exec hub listing every subsection as a Live/Planned
+  card. The chevron still toggles the group; the label navigates.
+- **OPERATE → Procurement** (`/operate/procurement`, migration 016): two
+  sections — Miniso purchases and Local purchases. Supplier payment terms set
+  the cash-out month (order month-end + terms), so committed spend is bucketed
+  by cash-out month against a per-month cash budget the merch team edit inline.
+  Pure engine unit-tested; CSV upload; illustrative seed until a real extract
+  loads. *Overlaps:* the planned "Purchase Order Tracker" (OPERATE) and
+  "Purchase Order & Procurement Dashboard" (DASHBOARDS) — recommend Procurement
+  is the operating home; the PO tracker becomes PO raise/approve/match, the
+  dashboard a read-only spend view over the same data. Not merged.
+- **DASHBOARDS → SKU Analysis** (`/finance-os/sku-analysis`, migration 017):
+  three lenses — 80/20 sellers (Pareto A/B/C by TTM revenue), new-SKU
+  performance (launched ≤ 6 months), dormant SKUs (no sale ≥ 6 months, stock at
+  risk). Pure engine unit-tested; CSV upload; illustrative seed.
