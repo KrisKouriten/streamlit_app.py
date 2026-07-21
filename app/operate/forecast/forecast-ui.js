@@ -84,6 +84,7 @@ export default function ForecastUI({ data, ready, canManage }) {
           </label>
         )}
         {selected && <button className="fos-btn-ghost" onClick={() => selectStore("")}>Clear</button>}
+        <a className="fos-btn-ghost" href="/api/forecast/export" style={{ marginLeft: "auto", textDecoration: "none" }}>Download Excel</a>
       </div>
 
       <PnlTable pnl={pnl} heading={heading} />
