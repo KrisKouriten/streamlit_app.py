@@ -22,6 +22,7 @@ export default async function OperateForecast() {
     byScope: Object.fromEntries(Object.entries(fc.base.byScope).map(([k, v]) => [k, { months: v.months, totals: v.totals }])),
     group: fc.base.group,
     storeSales: fc.storeSales,
+    byEntity: fc.byEntity,
     counts: fc.counts,
   } : null;
 

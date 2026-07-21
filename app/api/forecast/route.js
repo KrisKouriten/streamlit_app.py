@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestForecastCsv, setForecastLine, saveScenario } from "../../../lib/forecast";
+import { ingestForecastCsv, ingestForecastWorkbook, setForecastLine, saveScenario } from "../../../lib/forecast";
 import { SCOPES } from "../../../lib/forecast-rules.js";
 
 export async function POST(request) {
@@ -15,6 +15,12 @@ export async function POST(request) {
     if (body.action === "upload") {
       if (!body.csv?.trim()) return NextResponse.json({ error: "No CSV content" }, { status: 400 });
       const r = await ingestForecastCsv(body.csv, actor);
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "workbook") {
+      if (!body.file) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
+      const buffer = Buffer.from(body.file, "base64");
+      const r = await ingestForecastWorkbook(buffer, actor);
       return NextResponse.json({ ok: true, ...r });
     }
     if (body.action === "set") {

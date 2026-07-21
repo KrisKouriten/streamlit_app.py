@@ -120,3 +120,22 @@ page, per the target behaviour.
   three lenses — 80/20 sellers (Pareto A/B/C by TTM revenue), new-SKU
   performance (launched ≤ 6 months), dormant SKUs (no sale ≥ 6 months, stock at
   risk). Pure engine unit-tested; CSV upload; illustrative seed.
+
+## Phase 15 — Forecast Builder: 3-tab store workbook upload
+
+- **PLAN → Forecast Builder** (`/operate/forecast`, migration 018) now ingests a
+  3-tab store forecast workbook — **Sales Forecast** (store → entity + monthly
+  sales), **Cost Assumptions** (fixed £ with start dates, variable % of sales,
+  monthly COGS %), **Labour Seasonality** (Jan–Dec labour % of sales) — and
+  builds fixed costs, variable costs and sales into the forecast at **store
+  level, rolled up to entity and group**.
+- **Amend + add (upsert).** Records upsert on `scope · unit · line · type ·
+  month`, so stores/months present are updated, new ones added, and everything
+  else left untouched — partial uploads are welcome. The CSV single-line path
+  stays for spot edits.
+- Migration 018 adds `finance.forecast_line.entity` (store → legal entity). The
+  parser is pure (`parseForecastWorkbook` in `lib/forecast-rules.js`) and
+  unit-tested; fixed costs expand monthly honouring per-store start dates,
+  monthly COGS maps each dated row to its exact month, and labour seasonality
+  spreads its Jan–Dec pattern across the horizon.
+- *Fast-follow (agreed):* in-grid cell editing on the Forecast Builder.

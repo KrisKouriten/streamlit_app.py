@@ -33,7 +33,8 @@ export default function ForecastUI({ data, ready, canManage }) {
   if (!data) {
     return <div>
       <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--faint)", marginBottom: 14 }}>
-        No forecast inputs loaded yet — upload the forecast CSV (from the store and head-office/franchise models) and the workings appear here.
+        No forecast inputs loaded yet — upload the 3-tab store forecast workbook (Sales Forecast · Cost Assumptions · Labour Seasonality)
+        and the store-level workings, rolled up to entity and group, appear here. Fixed costs, variable costs and sales all build from it.
       </div>
       {canManage && <Upload onDone={() => router.refresh()} />}
     </div>;
@@ -83,20 +84,47 @@ export default function ForecastUI({ data, ready, canManage }) {
         </table>
       </div>
 
+      {tab === "STORES" && data.byEntity?.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 14.5, fontWeight: 650 }}>Forecast sales by entity</span>
+            <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· stores roll up to {data.byEntity.length} entities below group</span>
+          </div>
+          <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <tbody>
+                {data.byEntity.map((e) => {
+                  const max = data.byEntity[0]?.sales || 1;
+                  return (
+                    <tr key={e.entity}>
+                      <td style={td({})}>{e.entity}<span style={{ color: "var(--faint)", marginLeft: 8, fontSize: 11.5 }}>{e.stores} store{e.stores === 1 ? "" : "s"}</span></td>
+                      <td className="fos-num" style={td({ right: true })}>{money(e.sales)}</td>
+                      <td style={{ ...td({}), width: "38%" }}>
+                        <span style={{ display: "block", height: 7, borderRadius: 4, width: `${(e.sales / max) * 100}%`, background: "linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent))" }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {tab === "STORES" && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 14.5, fontWeight: 650 }}>Forecast sales by store — FY26</span>
+            <span style={{ fontSize: 14.5, fontWeight: 650 }}>Forecast sales by store</span>
             <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {data.storeSales.length} stores from the model</span>
           </div>
           <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <tbody>
-                {data.storeSales.map((s, i) => {
+                {data.storeSales.map((s) => {
                   const max = data.storeSales[0]?.sales || 1;
                   return (
                     <tr key={s.store}>
-                      <td style={td({})}>{s.store}</td>
+                      <td style={td({})}>{s.store}{s.entity && <span style={{ color: "var(--faint)", marginLeft: 8, fontSize: 11.5 }}>{s.entity}</span>}</td>
                       <td className="fos-num" style={td({ right: true })}>{money(s.sales)}</td>
                       <td style={{ ...td({}), width: "40%" }}>
                         <span style={{ display: "block", height: 7, borderRadius: 4, width: `${(s.sales / max) * 100}%`, background: "linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent))" }} />
@@ -146,6 +174,7 @@ function Tile({ label, value, sub, tone }) {
 
 function Upload({ onDone }) {
   const fileRef = useRef(null);
+  const wbRef = useRef(null);
   const [state, setState] = useState("");
   async function onFile(e) {
     const f = e.target.files?.[0];
@@ -159,13 +188,35 @@ function Upload({ onDone }) {
     } catch (x) { setState(x.message); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
+  async function onWorkbook(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setState("Reading workbook…");
+    try {
+      const buf = await f.arrayBuffer();
+      let bin = ""; const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const file = btoa(bin);
+      const r = await post({ action: "workbook", file });
+      setState(`Loaded ${r.loaded} lines · ${r.stores} stores · ${r.entities} entities · ${r.months} months${r.warnings?.length ? ` · ${r.warnings.length} warning(s)` : ""}.`);
+      onDone();
+    } catch (x) { setState(x.message); }
+    finally { if (wbRef.current) wbRef.current.value = ""; }
+  }
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
-      <button className="fos-btn-ghost" onClick={() => fileRef.current?.click()}>Upload forecast (CSV)</button>
-      <a className="fos-btn-ghost" style={{ textDecoration: "none" }} href={`data:text/csv;charset=utf-8,${encodeURIComponent(CSV_TEMPLATE)}`} download="forecast-template.csv">Template</a>
-      <span>Upserts on scope · unit · line · type · month — re-upload to revise.</span>
-      {state && <span style={{ color: "var(--muted)" }}>{state}</span>}
-      <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: "none" }} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
+        <button className="fos-btn" onClick={() => wbRef.current?.click()}>Upload forecast workbook (3 tabs)</button>
+        <span>Sales Forecast · Cost Assumptions · Labour Seasonality — store-level, rolled up to entity. Amends & adds; partial uploads welcome.</span>
+        <input ref={wbRef} type="file" accept=".xlsx,.xlsb,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onWorkbook} style={{ display: "none" }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
+        <button className="fos-btn-ghost" onClick={() => fileRef.current?.click()}>Upload forecast (CSV)</button>
+        <a className="fos-btn-ghost" style={{ textDecoration: "none" }} href={`data:text/csv;charset=utf-8,${encodeURIComponent(CSV_TEMPLATE)}`} download="forecast-template.csv">Template</a>
+        <span>Single-line upserts on scope · unit · line · type · month.</span>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: "none" }} />
+      </div>
+      {state && <span style={{ color: "var(--muted)", fontSize: 12.5 }}>{state}</span>}
     </div>
   );
 }
