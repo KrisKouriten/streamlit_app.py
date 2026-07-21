@@ -24,7 +24,7 @@ export default function ForecastUI({ data, ready, canManage }) {
   const router = useRouter();
   const [tab, setTab] = useState("STORES");
   const [view, setView] = useState("monthly"); // "monthly" | "annual"
-  const [year, setYear] = useState(""); // "" = all years (monthly view)
+  const [year, setYear] = useState(null); // null → default to first forecast year; "ALL" = whole horizon
 
   if (!ready) {
     return <div className="fos-card" style={{ padding: "18px 20px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -45,8 +45,16 @@ export default function ForecastUI({ data, ready, canManage }) {
 
   const onStores = tab === "STORES";
   const selected = onStores ? data.selectedStore : null;
-  const storeTotals = data.scopeTotals?.STORES || data.group.totals; // headline = company stores only (HO & franchise reported separately)
   const years = [...new Set(data.months.map((m) => m.slice(0, 4)))].sort();
+  const activeYear = year ?? years[0]; // headline defaults to the first forecast year; "ALL" = whole horizon
+  // Headline tiles = company stores only (HO & franchise reported separately),
+  // for the selected year (or the full horizon when "ALL").
+  const storesTot = data.nominalByScope?.STORES?.totals;
+  const tileVal = (key) => {
+    const b = storesTot?.[key];
+    if (!b) return (data.scopeTotals?.STORES || data.group.totals)[key];
+    return activeYear === "ALL" ? b.total : Object.keys(b.months).filter((m) => m.startsWith(activeYear)).reduce((t, m) => t + (b.months[m] || 0), 0);
+  };
   // On the STORES tab with a store selected, show that store's own P&L;
   // otherwise the scope aggregate.
   const pnl = selected && data.storePnl ? data.storePnl : data.nominalByScope[tab];
@@ -60,10 +68,10 @@ export default function ForecastUI({ data, ready, canManage }) {
   return (
     <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 26 }}>
-        <Tile label="Store sales FY" value={k(storeTotals.sales)} sub="company stores" />
-        <Tile label="Variable costs" value={k(storeTotals.variable)} sub="rate × forecast sales" />
-        <Tile label="Fixed costs" value={k(storeTotals.fixed)} sub="schedules + labour" />
-        <Tile label="Store EBITDA" value={k(storeTotals.ebitda)} tone={storeTotals.ebitda >= 0 ? "var(--green)" : "var(--red)"} sub="franchise reported separately" />
+        <Tile label={activeYear === "ALL" ? "Store sales FY" : `Store sales ${activeYear}`} value={k(tileVal("sales"))} sub="company stores" />
+        <Tile label="Variable costs" value={k(tileVal("variable"))} sub="rate × forecast sales" />
+        <Tile label="Fixed costs" value={k(tileVal("fixed"))} sub="schedules + labour" />
+        <Tile label={activeYear === "ALL" ? "Store EBITDA FY" : `Store EBITDA ${activeYear}`} value={k(tileVal("ebitda"))} tone={tileVal("ebitda") >= 0 ? "var(--green)" : "var(--red)"} sub="franchise reported separately" />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
@@ -92,9 +100,9 @@ export default function ForecastUI({ data, ready, canManage }) {
         {view === "monthly" && (
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginLeft: "auto", fontSize: 12.5, color: "var(--faint)" }}>
             Year
-            <select className="fos-input" value={year} onChange={(e) => setYear(e.target.value)} style={{ fontSize: 12.5, padding: "6px 10px" }}>
-              <option value="">All years</option>
+            <select className="fos-input" value={activeYear} onChange={(e) => setYear(e.target.value)} style={{ fontSize: 12.5, padding: "6px 10px" }}>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              <option value="ALL">All years</option>
             </select>
           </label>
         )}
@@ -111,7 +119,7 @@ export default function ForecastUI({ data, ready, canManage }) {
 
       {view === "annual"
         ? <AnnualTable pnl={pnl} heading={heading} />
-        : <PnlTable pnl={pnl} heading={heading} months={year ? pnl.months.filter((m) => m.startsWith(year)) : pnl.months} />}
+        : <PnlTable pnl={pnl} heading={heading} months={activeYear === "ALL" ? pnl.months : pnl.months.filter((m) => m.startsWith(activeYear))} />}
 
       <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 20, marginBottom: 18, lineHeight: 1.5 }}>
         Workings: variable costs are each store's rates × its forecast sales; head office and franchise carry the
