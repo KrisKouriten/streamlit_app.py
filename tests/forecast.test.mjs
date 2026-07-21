@@ -132,11 +132,12 @@ test("parseForecastWorkbook: sales carry entity; fixed expand from start; season
 
   assert.equal(warnings.length, 0);
 
-  // End-to-end: the parsed records compute a coherent P&L
+  // End-to-end: the parsed records compute a coherent P&L. Variable now includes
+  // basic pay AND its derived on-costs (holiday 12.07%, pension 3% on basic+holiday).
   const { byScope } = computeForecast(records);
   const janM = byScope.STORES.months["2026-01"];
-  // variable = COGS(0.40) + distribution(0.02) + labour(0.11) = 0.53 × 100000
-  assert.ok(Math.abs(janM.variable - 100000 * (0.40 + 0.02 + 0.11)) < 0.01);
+  const basic = 0.11, hol = basic * 0.1207, pen = (basic + hol) * 0.03;
+  assert.ok(Math.abs(janM.variable - 100000 * (0.40 + 0.02 + basic + hol + pen)) < 0.5);
   assert.equal(janM.fixed, 0); // rent hasn't started in Jan
   const febM = byScope.STORES.months["2026-02"];
   assert.equal(febM.fixed, 10000); // rent starts Feb
@@ -184,4 +185,30 @@ test("computeNominalPnl: scope aggregate sums each store's variable on its own s
   const fc = computeForecast(lines);
   assert.equal(pnl.totals.variable.months["2026-01"], fc.byScope.STORES.months["2026-01"].variable);
   assert.equal(pnl.totals.ebitda.total, fc.byScope.STORES.totals.ebitda);
+});
+
+test("computeNominalPnl: labour on-costs derived from basic pay, grouped, NI nil", () => {
+  const lines = [
+    L("STORES", "Camden", "ST: Sales", "SALES", "2026-01", 100000),
+    L("STORES", "Camden", "ST: Cost of Goods Sold", "VARIABLE_RATE", null, 0.40),
+    L("STORES", "Camden", "ST: Salaries - Basic Pay", "VARIABLE_RATE", null, 0.10),
+  ];
+  const pnl = computeNominalPnl(lines, { scope: "STORES", unit: "Camden" });
+  const row = (l) => pnl.rows.find((r) => r.line_label === l);
+  const basic = 100000 * 0.10;
+  const holiday = basic * 0.1207;
+  const pension = (basic + holiday) * 0.03;
+  assert.ok(Math.abs(row("ST: Salaries - Basic Pay").months["2026-01"] - basic) < 0.01);
+  assert.ok(Math.abs(row("ST: Salaries - Holiday Pay").months["2026-01"] - holiday) < 0.01);
+  assert.ok(Math.abs(row("ST: Salaries - Pension").months["2026-01"] - pension) < 0.01);
+  // NI is nil but still reported
+  const ni = row("ST: Salaries - Employer's NI");
+  assert.ok(ni, "NI line present even though nil");
+  assert.equal(ni.months["2026-01"] || 0, 0);
+  // the four are contiguous and in canonical order at the end of the variable block
+  const varLabels = pnl.rows.filter((r) => r.kind === "VARIABLE").map((r) => r.line_label);
+  assert.deepEqual(varLabels.slice(-4), ["ST: Salaries - Basic Pay", "ST: Salaries - Holiday Pay", "ST: Salaries - Pension", "ST: Salaries - Employer's NI"]);
+  // employment subtotal = basic + holiday + pension (+ 0 NI)
+  assert.ok(Math.abs(pnl.totals.employment.total - (basic + holiday + pension)) < 0.01);
+  assert.equal(pnl.hasLabour, true);
 });

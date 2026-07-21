@@ -151,6 +151,7 @@ function PnlTable({ pnl, heading }) {
 
           <SectionHead label="Variable costs" span={months.length + 2} />
           {variable.map((r) => <LineRow key={r.line_label} r={r} months={months} />)}
+          {pnl.hasLabour && <TotalRow label="Employment costs" t={pnl.totals.employment} months={months} sub />}
           <TotalRow label="Total variable costs" t={pnl.totals.variable} months={months} />
 
           <SectionHead label="Fixed costs" span={months.length + 2} />
@@ -176,16 +177,17 @@ function LineRow({ r, months }) {
     </tr>
   );
 }
-function TotalRow({ label, t, months, ebitda }) {
-  const tone = ebitda ? (t.total >= 0 ? "var(--green)" : "var(--red)") : undefined;
+function TotalRow({ label, t, months, ebitda, sub }) {
+  const tone = ebitda ? (t.total >= 0 ? "var(--green)" : "var(--red)") : (sub ? "var(--muted)" : undefined);
+  const top = !sub;
   return (
     <tr>
-      <td style={td({ sticky: true, strong: true, top: true })}>{label}</td>
+      <td style={{ ...td({ sticky: true, strong: !sub, top }), fontStyle: sub ? "italic" : undefined, color: sub ? "var(--muted)" : undefined, paddingLeft: sub ? 22 : undefined }}>{label}</td>
       {months.map((m) => {
         const v = t.months[m] || 0;
-        return <td key={m} className="fos-num" style={td({ right: true, strong: true, top: true, tone: ebitda ? (v >= 0 ? "var(--green)" : "var(--red)") : undefined })}>{cell(v)}</td>;
+        return <td key={m} className="fos-num" style={td({ right: true, strong: !sub, top, tone: ebitda ? (v >= 0 ? "var(--green)" : "var(--red)") : (sub ? "var(--muted)" : undefined) })}>{cell(v)}</td>;
       })}
-      <td className="fos-num" style={td({ right: true, strong: true, top: true, tone })}>{cell(t.total)}</td>
+      <td className="fos-num" style={td({ right: true, strong: true, top, tone })}>{cell(t.total)}</td>
     </tr>
   );
 }
