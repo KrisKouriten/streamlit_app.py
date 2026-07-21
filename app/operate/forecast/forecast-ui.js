@@ -89,35 +89,7 @@ export default function ForecastUI({ data, ready, canManage }) {
 
       <PnlTable pnl={pnl} heading={heading} />
 
-      {onStores && (
-        <div style={{ marginTop: 24, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 14.5, fontWeight: 650 }}>Forecast sales by store</span>
-            <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {data.storeSales.length} stores — select one to see its full forecast</span>
-          </div>
-          <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <tbody>
-                {data.storeSales.map((s) => {
-                  const max = data.storeSales[0]?.sales || 1;
-                  const active = s.store === selected;
-                  return (
-                    <tr key={s.store} onClick={() => selectStore(active ? "" : s.store)} style={{ cursor: "pointer", background: active ? "var(--accent-bg)" : undefined }}>
-                      <td style={{ ...td({}), fontWeight: active ? 650 : 400, color: active ? "var(--accent-deep)" : "var(--ink)" }}>{s.store}</td>
-                      <td className="fos-num" style={td({ right: true })}>{money(s.sales)}</td>
-                      <td style={{ ...td({}), width: "40%" }}>
-                        <span style={{ display: "block", height: 7, borderRadius: 4, width: `${(s.sales / max) * 100}%`, background: "linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent))" }} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 20, marginBottom: 18, lineHeight: 1.5 }}>
         Workings: variable costs are each store's rates × its forecast sales; head office and franchise carry the
         modelled monthly lines. Scenario planning on the <a href="/plan/scenarios" style={{ color: "var(--accent)" }}>Plan tab</a> flexes
         these inputs. {Object.entries(data.counts).map(([s, n]) => `${s.toLowerCase().replace("_", " ")} ${n}`).join(" · ")} input lines.
