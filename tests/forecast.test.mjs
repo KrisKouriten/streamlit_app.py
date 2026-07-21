@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeForecast, parseForecastCsv, parseForecastWorkbook } from "../lib/forecast-rules.js";
+import { computeForecast, computeNominalPnl, parseForecastCsv, parseForecastWorkbook } from "../lib/forecast-rules.js";
 
 const L = (scope, unit, line, type, ym, value) => ({ scope, unit, line_label: line, cost_type: type, ym, value });
 const LINES = [
@@ -140,4 +140,48 @@ test("parseForecastWorkbook: sales carry entity; fixed expand from start; season
   assert.equal(janM.fixed, 0); // rent hasn't started in Jan
   const febM = byScope.STORES.months["2026-02"];
   assert.equal(febM.fixed, 10000); // rent starts Feb
+});
+
+test("computeNominalPnl: single store — full line build from sales to EBITDA", () => {
+  const lines = [
+    L("STORES", "Camden", "ST: Sales", "SALES", "2026-01", 100000),
+    L("STORES", "Camden", "ST: Sales", "SALES", "2026-02", 120000),
+    L("STORES", "Camden", "ST: Cost of Goods Sold", "VARIABLE_RATE", null, 0.40),
+    L("STORES", "Camden", "ST: Advertising & Marketing", "VARIABLE_RATE", null, 0.02),
+    L("STORES", "Camden", "ST: Clearance Provision", "VARIABLE_RATE", null, 0), // zero-only → dropped
+    L("STORES", "Camden", "ST: Rent", "FIXED", "2026-01", 10000),
+    L("STORES", "Camden", "ST: Rent", "FIXED", "2026-02", 10000),
+    L("STORES", "Ealing", "ST: Sales", "SALES", "2026-01", 50000), // other store — excluded when unit filtered
+  ];
+  const pnl = computeNominalPnl(lines, { scope: "STORES", unit: "Camden" });
+  assert.deepEqual(pnl.months, ["2026-01", "2026-02"]);
+  // zero-only line dropped; sales + 2 variable + fixed = 4 rows
+  assert.equal(pnl.rows.length, 4);
+  assert.ok(!pnl.rows.some((r) => r.line_label === "ST: Clearance Provision"));
+  // ordering: SALES first, then VARIABLE, then FIXED
+  assert.deepEqual(pnl.rows.map((r) => r.kind), ["SALES", "VARIABLE", "VARIABLE", "FIXED"]);
+  // Jan totals
+  assert.equal(pnl.totals.sales.months["2026-01"], 100000);
+  assert.equal(pnl.totals.variable.months["2026-01"], 100000 * 0.42);
+  assert.equal(pnl.totals.fixed.months["2026-01"], 10000);
+  assert.equal(pnl.totals.ebitda.months["2026-01"], 100000 - 42000 - 10000);
+  // FY EBITDA ties out
+  assert.equal(pnl.totals.ebitda.total, (100000 + 120000) - (220000 * 0.42) - 20000);
+});
+
+test("computeNominalPnl: scope aggregate sums each store's variable on its own sales", () => {
+  const lines = [
+    L("STORES", "Camden", "ST: Sales", "SALES", "2026-01", 100000),
+    L("STORES", "Camden", "ST: Cost of Goods Sold", "VARIABLE_RATE", null, 0.40),
+    L("STORES", "Ealing", "ST: Sales", "SALES", "2026-01", 50000),
+    L("STORES", "Ealing", "ST: Cost of Goods Sold", "VARIABLE_RATE", null, 0.50),
+  ];
+  const pnl = computeNominalPnl(lines, { scope: "STORES" }); // no unit → all
+  assert.equal(pnl.totals.sales.months["2026-01"], 150000);
+  // Camden 100k*.4 + Ealing 50k*.5, not 150k*(blended)
+  assert.equal(pnl.totals.variable.months["2026-01"], 100000 * 0.4 + 50000 * 0.5);
+  // ties to computeForecast's scope variable
+  const fc = computeForecast(lines);
+  assert.equal(pnl.totals.variable.months["2026-01"], fc.byScope.STORES.months["2026-01"].variable);
+  assert.equal(pnl.totals.ebitda.total, fc.byScope.STORES.totals.ebitda);
 });
