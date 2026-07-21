@@ -1,19 +1,24 @@
 import { redirect } from "next/navigation";
-import { getSession } from "../../../lib/auth";
+import { getSession, hasRole } from "../../../lib/auth";
 import { getRealPL, getRealFinanceSnapshot, getConnectedEntities } from "../../../lib/finance-os";
+import { getManagementAccounts } from "../../../lib/management-accounts";
 import { PageHeader, StatRow, Stat, Panel, Table, EntityScopeBanner, Bar, money, pct } from "../ui";
+import MaUI from "./ma-ui";
 
 export const dynamic = "force-dynamic";
 
-// Management Accounts on the real Xero feed: the consolidated P&L (actuals) for
-// the connected entities, shown as a structured P&L with % of revenue and a
-// composition bar, then the full by-account detail. Budget/forecast comparatives
-// await a real planning feed, so no variance is shown yet.
+// Management Accounts — store-level P&L from the uploaded actuals workbook,
+// blended with the forecast (actuals lead each month they cover, forecast carries
+// forward, budget = frozen forecast). The consolidated entity feed (Xero today,
+// Joiin to follow) is shown below as a secondary view.
 export default async function ManagementAccounts() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const canManage = hasRole(session, "ADMIN", "FINANCE");
 
-  const [pl, snap, scope] = await Promise.all([getRealPL(), getRealFinanceSnapshot(), getConnectedEntities()]);
+  const [ma, pl, snap, scope] = await Promise.all([
+    getManagementAccounts(), getRealPL(), getRealFinanceSnapshot(), getConnectedEntities(),
+  ]);
 
   // Headline P&L structure, derived from the reconciled snapshot. COGS/opex are
   // held negative in the ledger; show magnitudes and keep gross profit / net bold.
@@ -27,8 +32,18 @@ export default async function ManagementAccounts() {
   ] : [];
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Financial reporting" title="Management Accounts" right={snap ? "Xero actuals" : "Awaiting Xero feed"} />
+    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+      <PageHeader crumb="Financial reporting" title="Management Accounts"
+        right={ma.loaded ? "Store actuals + forecast" : "Awaiting actuals"} />
+
+      <MaUI data={ma} canManage={canManage} />
+
+      <div style={{ margin: "34px 0 14px", borderTop: "1px solid var(--line)", paddingTop: 20 }}>
+        <div className="fos-eyebrow">Consolidated entity feed</div>
+        <div style={{ fontSize: 13, color: "var(--faint)", marginTop: 4, marginBottom: 12 }}>
+          Entity-level consolidated P&L — currently the Xero feed; the Joiin connection replaces it next.
+        </div>
+      </div>
       <EntityScopeBanner scope={scope} asAt={snap?.asAt} />
 
       {!snap ? (
