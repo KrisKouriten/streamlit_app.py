@@ -23,6 +23,7 @@ const k = (v) => money(v, { compact: true });
 export default function ForecastUI({ data, ready, canManage }) {
   const router = useRouter();
   const [tab, setTab] = useState("STORES");
+  const [view, setView] = useState("monthly"); // "monthly" | "annual"
 
   if (!ready) {
     return <div className="fos-card" style={{ padding: "18px 20px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -84,10 +85,19 @@ export default function ForecastUI({ data, ready, canManage }) {
           </label>
         )}
         {selected && <button className="fos-btn-ghost" onClick={() => selectStore("")}>Clear</button>}
-        <a className="fos-btn-ghost" href="/api/forecast/export" style={{ marginLeft: "auto", textDecoration: "none" }}>Download Excel</a>
+
+        <div style={{ display: "inline-flex", gap: 3, marginLeft: "auto", padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
+          {[["monthly", "Monthly"], ["annual", "By year (YoY)"]].map(([key, label]) => (
+            <button key={key} onClick={() => setView(key)} style={{
+              fontSize: 12, fontWeight: view === key ? 600 : 500, padding: "6px 12px", borderRadius: 7, border: `1px solid ${view === key ? "var(--line-strong)" : "transparent"}`,
+              background: view === key ? "var(--surface)" : "transparent", boxShadow: view === key ? "var(--shadow-1)" : "none", color: view === key ? "var(--ink)" : "var(--muted)",
+            }}>{label}</button>
+          ))}
+        </div>
+        <a className="fos-btn-ghost" href="/api/forecast/export" style={{ textDecoration: "none" }}>Download Excel</a>
       </div>
 
-      <PnlTable pnl={pnl} heading={heading} />
+      {view === "annual" ? <AnnualTable pnl={pnl} heading={heading} /> : <PnlTable pnl={pnl} heading={heading} />}
 
       <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 20, marginBottom: 18, lineHeight: 1.5 }}>
         Workings: variable costs are each store's rates × its forecast sales; head office and franchise carry the
@@ -131,6 +141,60 @@ function PnlTable({ pnl, heading }) {
           <TotalRow label="Total fixed costs" t={pnl.totals.fixed} months={months} />
 
           <TotalRow label="EBITDA" t={pnl.totals.ebitda} months={months} ebitda />
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* Multi-year view: forecast years side by side (FY2026/27/28) with year-on-year
+   growth between them, sales → EBITDA by nominal. Prior-year actuals will slot
+   in as a leading column once that data is loaded. */
+function AnnualTable({ pnl, heading }) {
+  const years = [...new Set(pnl.months.map((m) => m.slice(0, 4)))].sort();
+  const sumY = (mmap, y) => pnl.months.filter((m) => m.startsWith(y)).reduce((t, m) => t + (mmap[m] || 0), 0);
+  const byYear = (mmap) => years.map((y) => sumY(mmap, y));
+  const sales = pnl.rows.filter((r) => r.kind === "SALES");
+  const variable = pnl.rows.filter((r) => r.kind === "VARIABLE");
+  const fixed = pnl.rows.filter((r) => r.kind === "FIXED");
+  const nCols = 1 + years.length + Math.max(0, years.length - 1);
+
+  const Row = ({ label, vals, strong, sub, ebitda, top }) => (
+    <tr>
+      <td style={{ ...td({ sticky: true, strong: strong && !sub, top }), fontStyle: sub ? "italic" : undefined, color: sub ? "var(--muted)" : undefined, paddingLeft: sub ? 22 : undefined }}>{label}</td>
+      {years.map((y, i) => {
+        const v = vals[i], prev = vals[i - 1];
+        const growth = i > 0 && prev ? v / prev - 1 : null;
+        return [
+          <td key={y} className="fos-num" style={td({ right: true, strong: strong && !sub, top, tone: ebitda ? (v >= 0 ? "var(--green)" : "var(--red)") : (sub ? "var(--muted)" : undefined) })}>{cell(v)}</td>,
+          i > 0 ? <td key={y + "g"} className="fos-num" style={td({ right: true, top, tone: ebitda ? (growth >= 0 ? "var(--green)" : "var(--red)") : "var(--faint)" })}>{growth == null ? "·" : `${growth >= 0 ? "+" : ""}${(growth * 100).toFixed(1)}%`}</td> : null,
+        ];
+      })}
+    </tr>
+  );
+
+  return (
+    <div className="fos-card fos-tbl" style={{ overflowX: "auto", marginBottom: 8 }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
+        <thead><tr>
+          <th style={th({ sticky: true })}>{heading}</th>
+          {years.map((y, i) => [
+            <th key={y} style={th({ right: true, strong: true })}>FY{y}</th>,
+            i > 0 ? <th key={y + "g"} style={th({ right: true })}>YoY</th> : null,
+          ])}
+        </tr></thead>
+        <tbody>
+          <SectionHead label="Sales" span={nCols} />
+          {sales.map((r) => <Row key={r.line_label} label={r.line_label} vals={byYear(r.months)} />)}
+          <Row label="Total sales" vals={byYear(pnl.totals.sales.months)} strong top />
+          <SectionHead label="Variable costs" span={nCols} />
+          {variable.map((r) => <Row key={r.line_label} label={r.line_label} vals={byYear(r.months)} />)}
+          {pnl.hasLabour && <Row label="Employment costs" vals={byYear(pnl.totals.employment.months)} strong sub />}
+          <Row label="Total variable costs" vals={byYear(pnl.totals.variable.months)} strong top />
+          <SectionHead label="Fixed costs" span={nCols} />
+          {fixed.map((r) => <Row key={r.line_label} label={r.line_label} vals={byYear(r.months)} />)}
+          <Row label="Total fixed costs" vals={byYear(pnl.totals.fixed.months)} strong top />
+          <Row label="EBITDA" vals={byYear(pnl.totals.ebitda.months)} strong top ebitda />
         </tbody>
       </table>
     </div>
