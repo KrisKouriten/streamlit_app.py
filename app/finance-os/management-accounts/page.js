@@ -14,6 +14,33 @@ const SCOPE_NOTE = {
   consolidated: "All group nominals consolidated, per the Consolidated format. Toggle the year.",
 };
 const TAB_LABEL = { store: "Store", head_office: "Head Office", franchise: "Franchise", consolidated: "Consolidated" };
+const PERIODS = ["current", "trailing", "ytd"];
+
+const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+mo]} ${y.slice(2)}`; };
+
+// Reshape the board-pack rows for the chosen reporting period. The data is
+// monthly, so: "current" shows just the latest month; "trailing" shows every
+// loaded month of the year with a summing Total; "ytd" collapses the year into
+// one cumulative column. Money rows sum; % rows blank on any aggregate column
+// (a summed margin would be meaningless) — same rule the Total column already used.
+function applyPeriod({ months, rows, year }, period) {
+  const sorted = [...months].sort();
+  const sumMoney = (r, keys) => (r.isPct ? null : keys.reduce((t, m) => t + (r.values[m] || 0), 0));
+
+  if (period === "current") {
+    const m = sorted[sorted.length - 1];
+    const cols = m ? [{ key: m, label: monthLabel(m) }] : [];
+    return { cols, showTotal: false, rows: rows.map((r) => ({ ...r, total: null })) };
+  }
+  if (period === "ytd") {
+    const K = "__ytd__";
+    const cols = [{ key: K, label: `YTD ${year}` }];
+    return { cols, showTotal: false, rows: rows.map((r) => ({ ...r, values: { [K]: sumMoney(r, sorted) }, total: null })) };
+  }
+  // trailing (default multi-month view)
+  const cols = sorted.map((m) => ({ key: m, label: monthLabel(m) }));
+  return { cols, showTotal: true, rows: rows.map((r) => ({ ...r, total: sumMoney(r, sorted) })) };
+}
 
 // Resolve a tab's data. Board-pack tabs (and the store consolidation) render
 // Joiin's own custom-report board pack — Joiin does the arithmetic and the
@@ -52,15 +79,17 @@ export default async function ManagementAccounts({ searchParams }) {
   if (!session) redirect("/login");
   const sp = await searchParams;
   const tab = ["store", "head_office", "franchise", "consolidated"].includes(sp?.tab) ? sp.tab : "store";
+  const period = PERIODS.includes(sp?.period) ? sp.period : "current";
 
   const data = await resolveTab(tab, sp?.store, sp?.year);
+  const view = data.loaded ? applyPeriod(data, period) : null;
 
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
       <PageHeader crumb="Perform · Financial reporting" title="Management Accounts"
         right={data.loaded ? `${TAB_LABEL[tab]} · actuals` : "Awaiting Joiin actuals"} />
 
-      <McControls tab={tab} years={data.years || []} year={data.year} storeList={data.storeList} store={data.selected} />
+      <McControls tab={tab} years={data.years || []} year={data.year} period={period} storeList={data.storeList} store={data.selected} />
 
       {!data.ready ? (
         <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
@@ -78,19 +107,19 @@ export default async function ManagementAccounts({ searchParams }) {
             {data.source === "generic" && <span style={{ color: "var(--amber, #b8860b)" }}> — showing a detailed nominal layout; refresh the {TAB_LABEL[tab]} board pack from Joiin for the laid-out view.</span>}
             {" "}Internal management reporting — review before any external use.
           </div>
-          <BoardPackPnl entity={{ months: data.months, rows: data.rows, label: data.label }} />
+          <BoardPackPnl cols={view.cols} rows={view.rows} label={data.label} showTotal={view.showTotal} />
         </>
       )}
     </div>
   );
 }
 
-// Server-rendered board-pack P&L for the selected entity. Months across + total.
-function BoardPackPnl({ entity }) {
-  const { months, rows, label } = entity;
-  const fmtMonth = (m) => { const [y, mo] = m.split("-"); return `${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+mo]} ${y.slice(2)}`; };
+// Server-rendered board-pack P&L. Columns are the chosen period's periods
+// (one for current/ytd, several for trailing); Total appears only when showTotal.
+function BoardPackPnl({ cols, rows, label, showTotal }) {
   const cellMoney = (v) => (v == null || Math.round(v) === 0 ? "·" : money(v, { compact: true }));
   const cellPct = (v) => (v ? `${(v * 100).toFixed(1)}%` : "·");
+  const span = cols.length + 1 + (showTotal ? 1 : 0);
   const th = (r, strong) => ({ textAlign: r ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: strong ? 700 : 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap", ...(r ? {} : { position: "sticky", left: 0, background: "var(--surface)", paddingLeft: 18 }) });
 
   return (
@@ -98,28 +127,28 @@ function BoardPackPnl({ entity }) {
       <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 720 }}>
         <thead><tr>
           <th style={th(false)}>{label}</th>
-          {months.map((m) => <th key={m} style={th(true)}>{fmtMonth(m)}</th>)}
-          <th style={th(true, true)}>Total</th>
+          {cols.map((c) => <th key={c.key} style={th(true)}>{c.label}</th>)}
+          {showTotal && <th style={th(true, true)}>Total</th>}
         </tr></thead>
         <tbody>
           {rows.map((row, i) => {
             if (row.kind === "section") return (
-              <tr key={i}><td colSpan={months.length + 2} style={{ padding: "12px 12px 4px 18px", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)", position: "sticky", left: 0, background: "var(--surface)" }}>{row.label}</td></tr>
+              <tr key={i}><td colSpan={span} style={{ padding: "12px 12px 4px 18px", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)", position: "sticky", left: 0, background: "var(--surface)" }}>{row.label}</td></tr>
             );
             if (row.kind === "sub") return (
-              <tr key={i}><td colSpan={months.length + 2} style={{ padding: "7px 12px 3px 26px", fontSize: 11.5, fontStyle: "italic", color: "var(--muted)", position: "sticky", left: 0, background: "var(--surface)" }}>{row.label}</td></tr>
+              <tr key={i}><td colSpan={span} style={{ padding: "7px 12px 3px 26px", fontSize: 11.5, fontStyle: "italic", color: "var(--muted)", position: "sticky", left: 0, background: "var(--surface)" }}>{row.label}</td></tr>
             );
             const isTotal = row.kind === "total" || row.kind === "calc";
             const strong = row.strong || isTotal;
             const tone = row.tone && ((row.total || 0) >= 0 ? "var(--green)" : "var(--red)");
             const top = row.kind === "calc" || row.strong;
-            const td = (r, opts = {}) => ({ textAlign: r ? "right" : "left", padding: "6px 12px", whiteSpace: "nowrap", borderBottom: "1px solid var(--hairline)", borderTop: top ? "1px solid var(--line)" : undefined, fontWeight: strong ? 650 : 400, color: opts.tone || (row.isPct ? "var(--muted)" : row.kind === "line" ? "var(--ink)" : "var(--ink)"), ...(r ? {} : { position: "sticky", left: 0, background: "var(--surface)", paddingLeft: row.kind === "line" ? 26 : 18 }) });
+            const td = (r, opts = {}) => ({ textAlign: r ? "right" : "left", padding: "6px 12px", whiteSpace: "nowrap", borderBottom: "1px solid var(--hairline)", borderTop: top ? "1px solid var(--line)" : undefined, fontWeight: strong ? 650 : 400, color: opts.tone || (row.isPct ? "var(--muted)" : "var(--ink)"), ...(r ? {} : { position: "sticky", left: 0, background: "var(--surface)", paddingLeft: row.kind === "line" ? 26 : 18 }) });
             const fmt = row.isPct ? cellPct : cellMoney;
             return (
               <tr key={i}>
                 <td style={td(false)}>{row.label}</td>
-                {months.map((m) => <td key={m} style={td(true, { tone: row.tone && ((row.values[m] || 0) >= 0 ? "var(--green)" : "var(--red)") })}>{fmt(row.values[m])}</td>)}
-                <td style={td(true, { tone })}>{fmt(row.total)}</td>
+                {cols.map((c) => <td key={c.key} style={td(true, { tone: row.tone && ((row.values[c.key] || 0) >= 0 ? "var(--green)" : "var(--red)") })}>{fmt(row.values[c.key])}</td>)}
+                {showTotal && <td style={td(true, { tone })}>{fmt(row.total)}</td>}
               </tr>
             );
           })}

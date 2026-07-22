@@ -11,7 +11,13 @@ const TABS = [
   { key: "consolidated", label: "Consolidated" },
 ];
 
-export default function McControls({ tab, years, year, storeList, store }) {
+const PERIOD_OPTS = [
+  { key: "current", label: "Current month" },
+  { key: "trailing", label: "Trailing months" },
+  { key: "ytd", label: "YTD" },
+];
+
+export default function McControls({ tab, years, year, period, storeList, store }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -42,10 +48,16 @@ export default function McControls({ tab, years, year, storeList, store }) {
         {TABS.map((t) => <button key={t.key} style={tabBtn(t.key === tab)} onClick={() => go({ tab: t.key, store: null })}>{t.label}</button>)}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="fos-eyebrow" style={{ margin: 0 }}>Year</span>
-          {years.length ? years.map((y) => <button key={y} style={pill(y === year)} onClick={() => go({ year: y })}>{y}</button>)
-            : <span style={{ fontSize: 12, color: "var(--faint)" }}>no data</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="fos-eyebrow" style={{ margin: 0 }}>Period</span>
+            {PERIOD_OPTS.map((p) => <button key={p.key} style={pill(p.key === period)} onClick={() => go({ period: p.key })}>{p.label}</button>)}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="fos-eyebrow" style={{ margin: 0 }}>Year</span>
+            {years.length ? years.map((y) => <button key={y} style={pill(y === year)} onClick={() => go({ year: y })}>{y}</button>)
+              : <span style={{ fontSize: 12, color: "var(--faint)" }}>no data</span>}
+          </div>
         </div>
         {tab === "store" && storeList && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -11,12 +11,15 @@ import { audit } from "../../../lib/governance";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Default target months: current calendar month + the prior one (YYYY-MM).
+// Default target months: the current calendar year to date (Jan → current
+// month, YYYY-MM). This keeps the whole year loaded so the Management Accounts
+// YTD view is complete; the monthly cron re-pulls it so every month stays fresh.
 function defaultMonths() {
   const now = new Date();
-  const ym = (d) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  return [ym(prev), ym(now)];
+  const year = now.getUTCFullYear();
+  const months = [];
+  for (let m = 1; m <= now.getUTCMonth() + 1; m++) months.push(`${year}-${String(m).padStart(2, "0")}`);
+  return months;
 }
 
 async function refresh(months) {
