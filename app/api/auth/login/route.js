@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyPassword, createSessionToken, setSessionCookie } from "../../../../lib/auth";
+import { verifyPassword, startSession, setSessionCookie } from "../../../../lib/auth";
 import { getUserRoles, audit } from "../../../../lib/governance";
 
 export async function POST(request) {
@@ -20,7 +20,9 @@ export async function POST(request) {
       return NextResponse.json({ error: "This account has been deactivated" }, { status: 403 });
     }
     const roles = await getUserRoles(user.id);
-    const token = await createSessionToken(user, roles.length ? roles : ["FINANCE"]);
+    const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+    const userAgent = request.headers.get("user-agent") || null;
+    const token = await startSession(user, roles.length ? roles : ["FINANCE"], { ip, userAgent });
     await setSessionCookie(token);
     await audit({ actor: user, eventType: "auth.login", objectType: "users", objectRef: String(user.id) });
     return NextResponse.json({ id: user.id, name: user.name, email: user.email });
