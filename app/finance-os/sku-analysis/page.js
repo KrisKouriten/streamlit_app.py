@@ -15,7 +15,7 @@ export default async function SkuAnalysis() {
   const data = await getSkuAnalysis();
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Dashboards" title="SKU Analysis"
+      <PageHeader crumb="Dashboards" title="SKU Analysis Dashboard"
         right={data.loaded ? `As at ${data.asOf} · ${data.count} SKUs` : "Awaiting SKU data"} />
       <SkuUI data={data} canManage={canManage} />
     </div>
