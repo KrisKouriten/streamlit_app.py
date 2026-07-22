@@ -94,7 +94,9 @@ async function handle(request, actor) {
     // Nothing landed and both phases errored → report it as a failure so the UI
     // shows Joiin's actual message rather than a silent "0 rows".
     if (r.entityRows === 0 && bp.packs === 0) {
-      const why = [...(r.entityErrors || []), ...(bp.errors || [])][0] || "no data returned";
+      const eErr = (r.entityErrors || [])[0];
+      const bErr = (bp.errors || [])[0];
+      const why = [eErr && `P&L → ${eErr}`, bErr && `board pack → ${bErr}`].filter(Boolean).join(" · ") || "no data returned";
       return NextResponse.json({ error: `Joiin refresh returned nothing — ${why}`, ...r, boardPacks: bp }, { status: 502 });
     }
     return NextResponse.json({ ok: true, ...r, boardPacks: bp });
