@@ -29,12 +29,12 @@ export default async function MaDashboard({ searchParams }) {
 
       {!d.ready ? (
         <div style={box}>
-          Run migrations <span style={{ fontFamily: "var(--mono)" }}>018</span> and <span style={{ fontFamily: "var(--mono)" }}>023</span>, then load the board packs and a forecast.
+          Run migrations <span style={{ fontFamily: "var(--mono)" }}>018</span> and <span style={{ fontFamily: "var(--mono)" }}>021</span>, then load the per-entity P&L (Perform) and a forecast (Plan).
           {d.diag && <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>{d.diag}</div>}
         </div>
       ) : !d.loaded ? (
         <div style={box}>
-          No board-pack actuals loaded yet — pull them under <strong>Perform → Management Accounts</strong> (Refresh from Joiin).
+          No actuals loaded yet — refresh the per-entity P&L under <strong>Perform → Management Accounts</strong> (Refresh from Joiin).
           {!d.forecastLoaded && <> The forecast is also empty — upload it under <strong>Plan → Forecast Builder</strong>.</>}
           {d.diag && <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>{d.diag}</div>}
         </div>
@@ -59,10 +59,11 @@ export default async function MaDashboard({ searchParams }) {
           <Trend trend={d.trend} />
 
           <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 16, maxWidth: "82ch", lineHeight: 1.6 }}>
-            Actuals from the Perform board packs (Joiin); forecast from the Plan Forecast Builder. Group is the sum of
-            Store, Head Office and Franchise on the same basis as the forecast — the consolidated board pack in Perform
-            carries the intercompany wholesale elimination and remains the authoritative group P&L. Internal management
-            reporting — review before any external use.
+            Actuals from the per-entity Joiin P&L behind Perform → Management Accounts; forecast from the Plan Forecast
+            Builder. EBITDA is on an operating basis (before depreciation, interest and finance/exceptional items), to
+            match the forecast. Group is the sum of Store, Head Office and Franchise on a standalone basis — the
+            consolidated board pack in Perform carries the intercompany wholesale elimination and remains the
+            authoritative group P&L. Internal management reporting — review before any external use.
           </div>
         </>
       )}
