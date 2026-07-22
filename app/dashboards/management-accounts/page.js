@@ -11,6 +11,14 @@ const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${["", "Jan", 
 const pct1 = (v) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
 const gbp = (v) => (v == null ? "—" : money(v, { compact: true }));
 
+// The comparison bases the Overview can measure actuals against.
+const BASES = [
+  { key: "forecast", label: "Forecast", short: "fcst" },
+  { key: "budget", label: "Budget", short: "budget" },
+  { key: "priorYear", label: "Prior year", short: "PY" },
+];
+const basisOf = (k) => BASES.find((b) => b.key === k) || BASES[0];
+
 const VIEWS = [
   { key: "overview", label: "Overview" },
   { key: "store-sales", label: "Store Sales" },
@@ -31,20 +39,21 @@ export default async function MaDashboard({ searchParams }) {
   const sp = await searchParams;
   const period = sp?.period === "ytd" ? "ytd" : "current";
   const view = VIEWS.some((v) => v.key === sp?.view) ? sp.view : "overview";
+  const compare = BASES.some((b) => b.key === sp?.compare) ? sp.compare : "forecast";
+  const basis = basisOf(compare);
 
   const d = view === "overview"
-    ? await getMaDashboard({ period, year: sp?.year })
+    ? await getMaDashboard({ period, year: sp?.year, compare })
     : await getMaTabs({ period, year: sp?.year });
 
   const box = { fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" };
-  const tab = d.loaded ? (view === "overview" ? d.tabs?.[view] : d.tabs?.[view]) : null;
 
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
       <PageHeader crumb="Dashboards · Financial reporting" title="Management Accounts Dashboard"
-        right={d.loaded ? (period === "ytd" ? "Actual vs forecast · YTD" : "Actual vs forecast · current month") : "Awaiting data"} />
+        right={d.loaded ? `Actual vs ${basis.label.toLowerCase()} · ${period === "ytd" ? "YTD" : "current month"}` : "Awaiting data"} />
 
-      <Controls view={view} period={period} year={d.year} years={d.years} />
+      <Controls view={view} period={period} year={d.year} years={d.years} compare={compare} budgetMeta={d.budgetMeta} />
 
       {!d.ready ? (
         <div style={box}>
@@ -57,7 +66,7 @@ export default async function MaDashboard({ searchParams }) {
           {d.diag && <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>{d.diag}</div>}
         </div>
       ) : view === "overview" ? (
-        <Overview d={d} />
+        <Overview d={d} basis={basis} />
       ) : (
         <TabView tab={d.tabs[view]} forecastLoaded={d.forecastLoaded} />
       )}
@@ -73,10 +82,10 @@ export default async function MaDashboard({ searchParams }) {
   );
 }
 
-function Controls({ view, period, year, years }) {
+function Controls({ view, period, year, years, compare, budgetMeta }) {
   const pill = (active) => ({ padding: "4px 12px", fontSize: 12.5, fontWeight: active ? 700 : 500, borderRadius: 20, border: "1px solid " + (active ? "var(--accent)" : "var(--line)"), background: active ? "var(--accent-bg, rgba(180,150,60,.12))" : "transparent", color: active ? "var(--ink)" : "var(--muted)", textDecoration: "none" });
   const tabBtn = (active) => ({ padding: "8px 14px", fontSize: 13, fontWeight: active ? 700 : 500, color: active ? "var(--ink)" : "var(--faint)", borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent", marginBottom: -1, textDecoration: "none", whiteSpace: "nowrap" });
-  const href = (patch) => { const p = new URLSearchParams({ view, period, ...(year ? { year } : {}), ...patch }); return `?${p.toString()}`; };
+  const href = (patch) => { const p = new URLSearchParams({ view, period, compare, ...(year ? { year } : {}), ...patch }); return `?${p.toString()}`; };
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--line)", marginBottom: 14, flexWrap: "wrap", overflowX: "auto" }}>
@@ -94,7 +103,25 @@ function Controls({ view, period, year, years }) {
             {years.map((y) => <Link key={y} href={href({ year: y })} style={pill(y === year)}>{y}</Link>)}
           </div>
         )}
+        {view === "overview" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="fos-eyebrow" style={{ margin: 0 }}>Compare vs</span>
+            {BASES.map((b) => (
+              <Link key={b.key} href={href({ compare: b.key })} style={pill(b.key === compare)}
+                title={b.key === "budget" && !budgetMeta ? "No approved budget version yet — snapshot one under Finance Data → Budget Versions" : undefined}>
+                {b.label}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
+      {view === "overview" && compare === "budget" && (
+        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8 }}>
+          {budgetMeta
+            ? <>Budget: <strong style={{ color: "var(--muted)" }}>{budgetMeta.label}</strong>{budgetMeta.status !== "APPROVED" ? ` (${budgetMeta.status.toLowerCase()})` : ""} · <Link href="/data/versions?kind=BUDGET" style={{ color: "var(--accent)" }}>manage versions</Link></>
+            : <>No approved budget version yet — snapshot one under <Link href="/data/versions?kind=BUDGET" style={{ color: "var(--accent)" }}>Finance Data → Budget Versions</Link>.</>}
+        </div>
+      )}
     </div>
   );
 }
@@ -111,53 +138,60 @@ function VarChip({ v }) {
 }
 
 /* ---------------- Overview ---------------- */
-function Overview({ d }) {
+function Overview({ d, basis }) {
+  const missingBudget = basis.key === "budget" && !d.budgetLoaded;
   return (
     <>
-      {!d.forecastLoaded && (
+      {basis.key === "forecast" && !d.forecastLoaded && (
         <div style={{ fontSize: 13, color: "var(--amber, #b8860b)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 16 }}>
           No forecast loaded — showing actuals only. Upload it under <strong>Plan → Forecast Builder</strong> for variances.
         </div>
       )}
+      {missingBudget && (
+        <div style={{ fontSize: 13, color: "var(--amber, #b8860b)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 16 }}>
+          No approved budget version — showing actuals only. Snapshot one under <strong>Finance Data → Budget Versions</strong>.
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginBottom: 22 }}>
-        <KpiHero title="Group revenue" v={d.group.revenue} />
-        <KpiHero title="Group EBITDA" v={d.group.ebitda} />
-        <MarginHero title="EBITDA margin" m={d.group.margin} />
+        <KpiHero title="Group revenue" v={d.group.revenue} basis={basis} />
+        <KpiHero title="Group EBITDA" v={d.group.ebitda} basis={basis} />
+        <MarginHero title="EBITDA margin" m={d.group.margin} basis={basis} />
       </div>
-      <ScopeTable scopes={d.scopes} group={d.group} />
-      <Trend trend={d.trend} />
+      <ScopeTable scopes={d.scopes} group={d.group} basis={basis} />
+      <Trend trend={d.trend} basis={basis} />
     </>
   );
 }
 
-function KpiHero({ title, v }) {
+function KpiHero({ title, v, basis = BASES[0] }) {
   return (
     <div className="fos-card" style={{ padding: "16px 18px" }}>
       <div className="fos-eyebrow" style={{ margin: 0 }}>{title}</div>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{gbp(v.actual)}</div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>Forecast {gbp(v.forecast)}</div>
-      <div style={{ fontSize: 13, marginTop: 8 }}><VarChip v={v} /> <span style={{ color: "var(--faint)", fontSize: 11.5 }}>vs forecast</span></div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{basis.label} {gbp(v.forecast)}</div>
+      <div style={{ fontSize: 13, marginTop: 8 }}><VarChip v={v} /> <span style={{ color: "var(--faint)", fontSize: 11.5 }}>vs {basis.label.toLowerCase()}</span></div>
     </div>
   );
 }
 
-function MarginHero({ title, m }) {
-  const delta = m.actual != null && m.forecast != null ? m.actual - m.forecast : null;
+function MarginHero({ title, m, basis = BASES[0] }) {
+  const ref = m[basis.key];
+  const delta = m.actual != null && ref != null ? m.actual - ref : null;
   const c = delta == null ? "var(--faint)" : delta >= 0 ? "var(--green)" : "var(--red)";
   return (
     <div className="fos-card" style={{ padding: "16px 18px" }}>
       <div className="fos-eyebrow" style={{ margin: 0 }}>{title}</div>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{pct1(m.actual)}</div>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>Forecast {pct1(m.forecast)}</div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4 }}>{basis.label} {pct1(ref)}</div>
       <div style={{ fontSize: 13, marginTop: 8, color: c, fontWeight: 650 }}>
         {delta == null ? "—" : `${delta >= 0 ? "+" : "−"}${Math.abs(delta * 100).toFixed(1)} pts`}
-        <span style={{ color: "var(--faint)", fontSize: 11.5, fontWeight: 400 }}> vs forecast</span>
+        <span style={{ color: "var(--faint)", fontSize: 11.5, fontWeight: 400 }}> vs {basis.label.toLowerCase()}</span>
       </div>
     </div>
   );
 }
 
-function ScopeTable({ scopes, group }) {
+function ScopeTable({ scopes, group, basis = BASES[0] }) {
   const rows = [...scopes, group];
   const th = (r) => ({ textAlign: r ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" });
   const td = (r, strong) => ({ textAlign: r ? "right" : "left", padding: "9px 12px", borderBottom: "1px solid var(--hairline)", fontWeight: strong ? 700 : 400, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
@@ -165,8 +199,8 @@ function ScopeTable({ scopes, group }) {
     <div className="fos-card fos-tbl" style={{ overflowX: "auto", marginBottom: 22 }}>
       <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 760, width: "100%" }}>
         <thead><tr>
-          <th style={th(false)}>Scope</th><th style={th(true)}>Revenue actual</th><th style={th(true)}>Revenue fcst</th><th style={th(true)}>Var</th>
-          <th style={th(true)}>EBITDA actual</th><th style={th(true)}>EBITDA fcst</th><th style={th(true)}>Var</th><th style={th(true)}>Margin</th>
+          <th style={th(false)}>Scope</th><th style={th(true)}>Revenue actual</th><th style={th(true)}>Revenue {basis.short}</th><th style={th(true)}>Var</th>
+          <th style={th(true)}>EBITDA actual</th><th style={th(true)}>EBITDA {basis.short}</th><th style={th(true)}>Var</th><th style={th(true)}>Margin</th>
         </tr></thead>
         <tbody>
           {rows.map((s, i) => {
@@ -190,29 +224,30 @@ function ScopeTable({ scopes, group }) {
   );
 }
 
-function Trend({ trend }) {
+function Trend({ trend, basis = BASES[0] }) {
   if (!trend?.length) return null;
-  const max = Math.max(1, ...trend.flatMap((t) => [Math.abs(t.actual), Math.abs(t.forecast)]));
+  const refOf = (t) => t[basis.key];
+  const max = Math.max(1, ...trend.flatMap((t) => [Math.abs(t.actual), Math.abs(refOf(t) || 0)]));
   const bar = (v, color) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{ width: 90, textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 12, color }}>{gbp(v)}</div>
       <div style={{ flex: 1, height: 8, background: "var(--hairline)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ width: `${(Math.abs(v) / max) * 100}%`, height: "100%", background: color, opacity: 0.55 }} />
+        <div style={{ width: `${(Math.abs(v || 0) / max) * 100}%`, height: "100%", background: color, opacity: 0.55 }} />
       </div>
     </div>
   );
   return (
     <div className="fos-card" style={{ padding: "16px 18px" }}>
-      <div className="fos-eyebrow" style={{ margin: 0, marginBottom: 4 }}>Group EBITDA — actual vs forecast by month</div>
+      <div className="fos-eyebrow" style={{ margin: 0, marginBottom: 4 }}>Group EBITDA — actual vs {basis.label.toLowerCase()} by month</div>
       <div style={{ display: "flex", gap: 14, fontSize: 11.5, color: "var(--faint)", marginBottom: 10 }}>
         <span><span style={{ color: "var(--accent)" }}>■</span> Actual</span>
-        <span><span style={{ color: "var(--muted)" }}>■</span> Forecast</span>
+        <span><span style={{ color: "var(--muted)" }}>■</span> {basis.label}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 14px", alignItems: "center" }}>
         {trend.map((t) => (
           <div key={t.ym} style={{ display: "contents" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", fontFamily: "var(--mono)" }}>{monthLabel(t.ym)}</div>
-            <div style={{ display: "grid", gap: 3 }}>{bar(t.actual, "var(--accent)")}{bar(t.forecast, "var(--muted)")}</div>
+            <div style={{ display: "grid", gap: 3 }}>{bar(t.actual, "var(--accent)")}{bar(refOf(t), "var(--muted)")}</div>
           </div>
         ))}
       </div>

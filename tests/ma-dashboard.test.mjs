@@ -56,4 +56,42 @@ test("assembleDashboard: group sums scopes; current vs ytd; year filter; trend",
   assert.equal(ytd.scopes[0].revenue.actual, 2200);           // store revenue 1000+1200
   assert.equal(ytd.trend.length, 2);
   assert.equal(ytd.trend[0].actual, -100 + -300 + 100);       // Jun group EBITDA -300
+  // Backward-compat: default carries compare="forecast" and the forecast bases.
+  assert.equal(cur.compare, "forecast");
+  assert.equal(cur.group.revenueBases.forecast, 1100 + 900 + 110);
+});
+
+test("assembleDashboard: budget comparison drives the headline variance when selected", () => {
+  const actualByScope = {
+    store: { months: ["2026-07"], years: ["2026"], byMonth: { "2026-07": { revenue: 1000, ebitda: -100 } } },
+    head_office: { months: ["2026-07"], years: ["2026"], byMonth: { "2026-07": { revenue: 500, ebitda: -200 } } },
+    franchise: { months: ["2026-07"], years: ["2026"], byMonth: { "2026-07": { revenue: 100, ebitda: 50 } } },
+  };
+  const forecast = { byScope: { STORES: { months: { "2026-07": { sales: 1100, ebitda: -80 } } } } };
+  const budget = { byScope: { STORES: { months: { "2026-07": { sales: 900, ebitda: -120 } } } } };
+
+  const b = assembleDashboard(actualByScope, forecast, "current", null, { budget, compare: "budget" });
+  assert.equal(b.compare, "budget");
+  // Store headline variance now measures actual vs budget (revenue 1000 vs 900).
+  assert.equal(b.scopes[0].revenue.forecast, 900);   // "forecast" field holds the chosen basis value
+  assert.equal(b.scopes[0].revenue.delta, 100);
+  // Both bases are still exposed for the UI.
+  assert.equal(b.scopes[0].revenueBases.forecast, 1100);
+  assert.equal(b.scopes[0].revenueBases.budget, 900);
+});
+
+test("assembleDashboard: prior-year is derived from actuals shifted a year", () => {
+  const actualByScope = {
+    store: { months: ["2025-07", "2026-07"], years: ["2025", "2026"], byMonth: {
+      "2025-07": { revenue: 800, ebitda: -150 }, "2026-07": { revenue: 1000, ebitda: -100 } } },
+    head_office: { months: ["2026-07"], years: ["2026"], byMonth: { "2026-07": { revenue: 500, ebitda: -200 } } },
+    franchise: { months: ["2026-07"], years: ["2026"], byMonth: { "2026-07": { revenue: 100, ebitda: 50 } } },
+  };
+  const py = assembleDashboard(actualByScope, null, "current", "2026", { compare: "priorYear" });
+  // Store prior-year revenue = July 2025 actual = 800; variance = 1000 - 800.
+  assert.equal(py.scopes[0].revenueBases.priorYear, 800);
+  assert.equal(py.scopes[0].revenue.forecast, 800);
+  assert.equal(py.scopes[0].revenue.delta, 200);
+  // Head office has no 2025 actual → prior-year null, no false comparison.
+  assert.equal(py.scopes[1].revenueBases.priorYear, null);
 });
