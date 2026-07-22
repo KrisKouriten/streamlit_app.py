@@ -21,31 +21,40 @@ function defaultMonths() {
 
 async function refresh(months) {
   // Per-entity standalone P&L: one call per company per month → joiin_pl_entity.
+  // Resilient: a company that errors is recorded and skipped, so one bad call
+  // doesn't lose the whole refresh (or the board packs that run after it).
   const names = Object.keys(ENTITY_ID);
   let entityRows = 0;
+  const errors = [];
   for (const ym of months) {
     const upserts = [];
+    let ok = 0;
     for (const name of names) {
       let json;
       try { json = await profitAndLoss({ companies: [name], startDate: ym, endDate: ym, currency: "GBP" }); }
-      catch (e) { throw new Error(`Joiin P&L for ${name} ${ym}: ${e.message}`); }
+      catch (e) { if (errors.length < 12) errors.push(`P&L ${name} ${ym}: ${e.message}`); continue; }
+      ok++;
       for (const r of mapReportRows(json)) {
         if (!r.value) continue;
         upserts.push([ENTITY_ID[name], name, r.section, r.account, ym, r.value]);
       }
     }
-    await query(`DELETE FROM finance.joiin_pl_entity WHERE ym = $1`, [ym]);
-    for (const u of upserts) {
-      await query(
-        `INSERT INTO finance.joiin_pl_entity (entity_id, entity_name, section, account, ym, value, updated_by)
-         VALUES ($1,$2,$3,$4,$5,$6,'joiin-api')
-         ON CONFLICT (entity_id, section, account, ym) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP, updated_by = EXCLUDED.updated_by`,
-        u
-      );
-      entityRows++;
+    // Only clear the month if at least one company returned — never wipe good
+    // data because every call failed (bad key, endpoint down).
+    if (ok > 0) {
+      await query(`DELETE FROM finance.joiin_pl_entity WHERE ym = $1`, [ym]);
+      for (const u of upserts) {
+        await query(
+          `INSERT INTO finance.joiin_pl_entity (entity_id, entity_name, section, account, ym, value, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,'joiin-api')
+           ON CONFLICT (entity_id, section, account, ym) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP, updated_by = EXCLUDED.updated_by`,
+          u
+        );
+        entityRows++;
+      }
     }
   }
-  return { months, entityRows };
+  return { months, entityRows, entityErrors: errors };
 }
 
 // Pull the four Joiin board packs (Store / Head Office / Franchise /
@@ -78,10 +87,20 @@ async function handle(request, actor) {
   }
   const body = await request.json().catch(() => ({}));
   const months = Array.isArray(body.months) && body.months.length ? body.months : defaultMonths();
-  const r = await refresh(months);
-  const bp = await refreshBoardPacks(months, actor);
-  await audit({ actor, eventType: "joiin_api.refresh", objectType: "joiin_pl_entity", objectRef: months.join(","), detail: { ...r, boardPacks: bp } });
-  return NextResponse.json({ ok: true, ...r, boardPacks: bp });
+  try {
+    const r = await refresh(months);
+    const bp = await refreshBoardPacks(months, actor);
+    await audit({ actor, eventType: "joiin_api.refresh", objectType: "joiin_pl_entity", objectRef: months.join(","), detail: { ...r, boardPacks: bp } });
+    // Nothing landed and both phases errored → report it as a failure so the UI
+    // shows Joiin's actual message rather than a silent "0 rows".
+    if (r.entityRows === 0 && bp.packs === 0) {
+      const why = [...(r.entityErrors || []), ...(bp.errors || [])][0] || "no data returned";
+      return NextResponse.json({ error: `Joiin refresh returned nothing — ${why}`, ...r, boardPacks: bp }, { status: 502 });
+    }
+    return NextResponse.json({ ok: true, ...r, boardPacks: bp });
+  } catch (e) {
+    return NextResponse.json({ error: `Joiin refresh failed: ${e.message}` }, { status: 502 });
+  }
 }
 
 // Manual refresh (ADMIN/FINANCE) or Vercel Cron (Authorization: Bearer CRON_SECRET).
@@ -105,8 +124,12 @@ export async function GET(request) {
   }
   if (!joiinConfigured()) return NextResponse.json({ error: "JOIIN_API_KEY not set" }, { status: 400 });
   const months = defaultMonths();
-  const r = await refresh(months);
-  const bp = await refreshBoardPacks(months, "joiin-cron");
-  await audit({ actor: "joiin-cron", eventType: "joiin_api.refresh", objectType: "joiin_pl_entity", objectRef: r.months.join(","), detail: { ...r, boardPacks: bp } });
-  return NextResponse.json({ ok: true, ...r, boardPacks: bp });
+  try {
+    const r = await refresh(months);
+    const bp = await refreshBoardPacks(months, "joiin-cron");
+    await audit({ actor: "joiin-cron", eventType: "joiin_api.refresh", objectType: "joiin_pl_entity", objectRef: r.months.join(","), detail: { ...r, boardPacks: bp } });
+    return NextResponse.json({ ok: true, ...r, boardPacks: bp });
+  } catch (e) {
+    return NextResponse.json({ error: `Joiin refresh failed: ${e.message}` }, { status: 502 });
+  }
 }

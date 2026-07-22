@@ -28,9 +28,13 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
     setRefreshing(true); setUpMsg(null); setErr(null);
     try {
       const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Refresh failed");
-      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} rows across ${(j.months || []).join(", ")}.`);
+      const text = await res.text();
+      let j = {};
+      try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Refresh failed (HTTP ${res.status}) — the server didn't return JSON. ${text.slice(0, 160)}`); }
+      if (!res.ok) throw new Error(j.error || `Refresh failed (HTTP ${res.status})`);
+      const packs = j.boardPacks?.packs ?? 0;
+      const notes = [...(j.entityErrors || []), ...(j.boardPacks?.errors || [])];
+      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} per-entity rows and ${packs} board pack(s) across ${(j.months || []).join(", ")}.${notes.length ? ` ${notes.length} warning(s): ${notes.slice(0, 3).join("; ")}${notes.length > 3 ? "…" : ""}` : ""}`);
       router.refresh();
     } catch (e) { setErr(e.message); } finally { setRefreshing(false); }
   }
