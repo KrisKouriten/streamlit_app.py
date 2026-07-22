@@ -24,7 +24,7 @@ export default async function MaDashboard({ searchParams }) {
 
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Dashboards · Financial reporting" title="Management Accounts dashboard"
+      <PageHeader crumb="Dashboards · Financial reporting" title="Management Accounts Dashboard"
         right={d.loaded ? (period === "ytd" ? "Actual vs forecast · YTD" : "Actual vs forecast · current month") : "Awaiting data"} />
 
       {!d.ready ? (

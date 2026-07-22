@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * before you click in. Real feeds first (1–4), illustrative (awaiting a feed) last.
  */
 const DASHBOARDS = [
-  { n: 1, title: "Management Accounts dashboard", href: "/dashboards/management-accounts", kind: "feed",
+  { n: 1, title: "Management Accounts Dashboard", href: "/dashboards/management-accounts", kind: "feed",
     blurb: "Actual vs forecast — Revenue and EBITDA by scope (Store, Head Office, Franchise) and Group, from the Perform board packs and the Plan Forecast Builder." },
   { n: 2, title: "Budget & Forecast", href: "/finance-os/budget-forecast", kind: "model",
     blurb: "The multi-year plan model — Group P&L, stores, monthly EBITDA and break-even, with connected actuals alongside." },
