@@ -33,3 +33,26 @@ load Neon, with no manual upload.
 
 Client id and entity map live in `lib/entity-map.js`. Parsers in
 `lib/joiin-rules.js`. Loader in `scripts/refresh-load.mjs`.
+
+## Board packs (Management Accounts — four tabs)
+
+The four-tab Management Accounts view (Store · Head Office · Franchise ·
+Consolidated) renders Joiin's own **Custom Report board packs** — each pack is
+laid out and consolidated by Joiin (wholesale intercompany sales eliminated),
+so the app stores it verbatim in `finance.joiin_boardpack` (migration 023) and
+renders it row for row. Scope → `customReportId` is in `lib/joiin-reports.js`.
+
+Refresh paths:
+- **App-side Joiin API** (`POST /api/joiin-refresh`, ADMIN/FINANCE, or Vercel
+  Cron with `CRON_SECRET`): after the per-entity P&L it also pulls each board
+  pack via `report/custom-report` and upserts `finance.joiin_boardpack`. The
+  response's `boardPacks` field reports how many packs loaded and any errors
+  (best-effort — a failing pack does not fail the per-entity refresh). The exact
+  custom-report JSON field names should be confirmed on the first live run and
+  `mapBoardPackRows` (in `lib/joiin-api-map.js`) adjusted if needed.
+- **Seed** (`db/seeds/joiin_boardpack_2026-06.sql`): the June 2026 packs pulled
+  via the connector, so the view has data before the API refresh runs. Idempotent.
+
+The per-store scroller on the Store tab reads the per-entity standalone P&L
+(`finance.joiin_pl_entity`); "All stores — consolidated" and the other three
+tabs read the board pack.

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { numFrom, mapReportRows, mapCompanies } from "../lib/joiin-api-map.js";
+import { numFrom, mapReportRows, mapCompanies, mapBoardPackRows } from "../lib/joiin-api-map.js";
 
 test("numFrom coerces number, string, and nested-array shapes", () => {
   assert.equal(numFrom(1234.5), 1234.5);
@@ -32,4 +32,27 @@ test("mapReportRows handles a flat accounts fallback", () => {
 
 test("mapCompanies normalises id/name", () => {
   assert.deepEqual(mapCompanies({ companies: [{ id: "abc", name: "Kouriten Limited" }] }), [{ id: "abc", name: "Kouriten Limited" }]);
+});
+
+test("mapBoardPackRows preserves order and classifies section/line/total/computed/pct", () => {
+  const json = {
+    sections: [
+      { name: "Store Sales", accounts: [{ displayName: "ST: Sales", value: [["1687139"]] }], total: [["1687139"]] },
+      { name: "Store Gross Profit", value: [["1012607"]] },      // computed (no accounts)
+      { name: "Gross Margin %", value: 60 },                      // ratio → fraction
+    ],
+  };
+  const { months, rows } = mapBoardPackRows(json, "2026-06");
+  assert.deepEqual(months, ["2026-06"]);
+  assert.deepEqual(rows.map((r) => [r.kind, r.label]), [
+    ["section", "Store Sales"],
+    ["line", "ST: Sales"],
+    ["total", "Total Store Sales"],
+    ["computed", "Store Gross Profit"],
+    ["pct", "Gross Margin %"],
+  ]);
+  assert.equal(rows[1].values["2026-06"], 1687139);
+  assert.equal(rows[2].values["2026-06"], 1687139);
+  assert.equal(rows[3].values["2026-06"], 1012607);
+  assert.equal(rows[4].values["2026-06"], 0.6); // % stored as fraction
 });
