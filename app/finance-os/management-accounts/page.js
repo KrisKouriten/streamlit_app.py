@@ -25,7 +25,8 @@ const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${["", "Jan", 
 // (a summed margin would be meaningless) — same rule the Total column already used.
 function applyPeriod({ months, rows, year }, period) {
   const sorted = [...months].sort();
-  const sumMoney = (r, keys) => (r.isPct ? null : keys.reduce((t, m) => t + (r.values[m] || 0), 0));
+  // Section/heading rows can carry no values object — guard every read.
+  const sumMoney = (r, keys) => (r.isPct ? null : keys.reduce((t, m) => t + (r.values?.[m] || 0), 0));
 
   if (period === "current") {
     const m = sorted[sorted.length - 1];
@@ -147,7 +148,7 @@ function BoardPackPnl({ cols, rows, label, showTotal }) {
             return (
               <tr key={i}>
                 <td style={td(false)}>{row.label}</td>
-                {cols.map((c) => <td key={c.key} style={td(true, { tone: row.tone && ((row.values[c.key] || 0) >= 0 ? "var(--green)" : "var(--red)") })}>{fmt(row.values[c.key])}</td>)}
+                {cols.map((c) => <td key={c.key} style={td(true, { tone: row.tone && ((row.values?.[c.key] || 0) >= 0 ? "var(--green)" : "var(--red)") })}>{fmt(row.values?.[c.key])}</td>)}
                 {showTotal && <td style={td(true, { tone })}>{fmt(row.total)}</td>}
               </tr>
             );
