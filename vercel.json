@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/joiin-refresh", "schedule": "0 6 5 * *" }
+  ]
+}

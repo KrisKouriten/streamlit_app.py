@@ -23,6 +23,18 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
     return btoa(bin);
   }
 
+  const [refreshing, setRefreshing] = useState(false);
+  async function refreshFromJoiin() {
+    setRefreshing(true); setUpMsg(null); setErr(null);
+    try {
+      const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Refresh failed");
+      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} rows across ${(j.months || []).join(", ")}.`);
+      router.refresh();
+    } catch (e) { setErr(e.message); } finally { setRefreshing(false); }
+  }
+
   async function uploadFormat(file) {
     if (!file) return;
     setFmtBusy(true); setFmtMsg(null); setErr(null);
@@ -102,11 +114,16 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
             </div>
             {upMsg && <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 6 }}>{upMsg}</div>}
           </div>
-          <label className="fos-btn" style={{ cursor: uploading ? "wait" : "pointer", whiteSpace: "nowrap" }}>
-            {uploading ? "Loading…" : "Upload workbook"}
-            <input type="file" accept=".xlsx,.xls" hidden disabled={uploading}
-              onChange={(e) => uploadWorkbook(e.target.files?.[0])} />
-          </label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="fos-btn fos-btn-ghost" onClick={refreshFromJoiin} disabled={refreshing} style={{ cursor: refreshing ? "wait" : "pointer", whiteSpace: "nowrap" }}>
+              {refreshing ? "Refreshing…" : "Refresh from Joiin"}
+            </button>
+            <label className="fos-btn" style={{ cursor: uploading ? "wait" : "pointer", whiteSpace: "nowrap" }}>
+              {uploading ? "Loading…" : "Upload workbook"}
+              <input type="file" accept=".xlsx,.xls" hidden disabled={uploading}
+                onChange={(e) => uploadWorkbook(e.target.files?.[0])} />
+            </label>
+          </div>
         </div>
       )}
       {err && <div style={{ fontSize: 13, color: "var(--red)", background: "var(--red-bg)", border: "1px solid var(--red)", borderRadius: 8, padding: "8px 12px" }}>{err}</div>}
