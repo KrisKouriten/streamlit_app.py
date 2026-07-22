@@ -28,11 +28,15 @@ export default async function MaDashboard({ searchParams }) {
         right={d.loaded ? (period === "ytd" ? "Actual vs forecast · YTD" : "Actual vs forecast · current month") : "Awaiting data"} />
 
       {!d.ready ? (
-        <div style={box}>Run migrations <span style={{ fontFamily: "var(--mono)" }}>018</span> and <span style={{ fontFamily: "var(--mono)" }}>023</span>, then load the board packs and a forecast.</div>
+        <div style={box}>
+          Run migrations <span style={{ fontFamily: "var(--mono)" }}>018</span> and <span style={{ fontFamily: "var(--mono)" }}>023</span>, then load the board packs and a forecast.
+          {d.diag && <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>{d.diag}</div>}
+        </div>
       ) : !d.loaded ? (
         <div style={box}>
           No board-pack actuals loaded yet — pull them under <strong>Perform → Management Accounts</strong> (Refresh from Joiin).
           {!d.forecastLoaded && <> The forecast is also empty — upload it under <strong>Plan → Forecast Builder</strong>.</>}
+          {d.diag && <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>{d.diag}</div>}
         </div>
       ) : (
         <>
