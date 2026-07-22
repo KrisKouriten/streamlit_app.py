@@ -1,23 +1,25 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
-import { getSkuAnalysis } from "../../../lib/sku";
+import { getSkuReport } from "../../../lib/sku-report";
 import { PageHeader } from "../ui";
-import SkuUI from "./sku-ui";
+import SkuReportUI from "./sku-report-ui";
 
 export const dynamic = "force-dynamic";
 
-// SKU analysis — three lenses: 80/20 sellers (Pareto), new-SKU performance,
-// dormant SKUs. Runs on a per-SKU metrics table; CSV-uploadable.
-export default async function SkuAnalysis() {
+// SKU Analysis Dashboard — renders the distributed analyses (Top 80 / Bottom 20
+// now; Dormant once its summary is uploaded), ingested from the workbooks.
+export default async function SkuAnalysis({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
   const canManage = hasRole(session, "ADMIN", "FINANCE");
-  const data = await getSkuAnalysis();
+  const sp = await searchParams;
+  const tab = sp?.tab === "dormant" ? "dormant" : "top80";
+  const top80 = await getSkuReport("top80");
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Dashboards" title="SKU Analysis Dashboard"
-        right={data.loaded ? `As at ${data.asOf} · ${data.count} SKUs` : "Awaiting SKU data"} />
-      <SkuUI data={data} canManage={canManage} />
+    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+      <PageHeader crumb="Dashboards · Merchandising" title="SKU Analysis Dashboard"
+        right={top80.loaded ? (top80.period || "Top 80 / Bottom 20") : "Awaiting SKU data"} />
+      <SkuReportUI tab={tab} top80={top80} canManage={canManage} />
     </div>
   );
 }
