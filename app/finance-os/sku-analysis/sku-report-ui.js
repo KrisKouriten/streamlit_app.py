@@ -23,7 +23,7 @@ function classifyMetric(label, value) {
 }
 const fmtMetric = (label, value) => { const t = classifyMetric(label, value); return t === "pct" ? pct(value) : t === "money" ? gbp(value) : num(value); };
 
-export default function SkuReportUI({ tab, top80, canManage }) {
+export default function SkuReportUI({ tab, top80, newsku, canManage }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -41,14 +41,20 @@ export default function SkuReportUI({ tab, top80, canManage }) {
       // the raw .xlsb can be several MB and would exceed the request-body limit.
       const XLSX = await import("xlsx");
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
-      const NEEDED = ["Executive Summary", "Top 80% Store", "Bottom 20% Store", "Licence Analysis", "Zero Sellers"];
+      const NEEDED = action === "newsku"
+        ? ["New SKU Performance"]
+        : ["Executive Summary", "Top 80% Store", "Bottom 20% Store", "Licence Analysis", "Zero Sellers"];
       const sheets = {};
       for (const n of NEEDED) if (wb.Sheets[n]) sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: null });
+      // New SKU workbook may name its single sheet differently — fall back to the first sheet.
+      if (!Object.keys(sheets).length && action === "newsku" && wb.SheetNames[0]) sheets[wb.SheetNames[0]] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false, defval: null });
       if (!Object.keys(sheets).length) throw new Error(`No recognised sheets found. Expected: ${NEEDED.join(", ")}.`);
       const res = await fetch("/api/sku-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sheets }) });
       const text = await res.text(); let j = {}; try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Upload failed (HTTP ${res.status})`); }
       if (!res.ok) throw new Error(j.error || "Upload failed");
-      setMsg(`Loaded ${j.storeCount} stores, ${j.licenceCount} brands, ${j.zeroCount?.toLocaleString?.() ?? j.zeroCount} zero-sellers.`);
+      setMsg(action === "newsku"
+        ? `Loaded ${j.skus} new SKUs — ${j.stars} stars, ${j.slow} slow, ${j.zero} zero, across ${j.stores} stores.`
+        : `Loaded ${j.storeCount} stores, ${j.licenceCount} brands, ${j.zeroCount?.toLocaleString?.() ?? j.zeroCount} zero-sellers.`);
       router.refresh();
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -59,13 +65,16 @@ export default function SkuReportUI({ tab, top80, canManage }) {
     <div>
       <div style={{ display: "flex", gap: 2, borderBottom: "1px solid var(--line)", marginBottom: 16, flexWrap: "wrap" }}>
         <button style={tabBtn(tab === "top80")} onClick={() => go("top80")}>Top 80 / Bottom 20</button>
+        <button style={tabBtn(tab === "newsku")} onClick={() => go("newsku")}>New SKU</button>
         <button style={tabBtn(tab === "dormant")} onClick={() => go("dormant")}>Dormant Stock</button>
       </div>
 
       {msg && <div style={{ fontSize: 12.5, color: "var(--green)", marginBottom: 12 }}>{msg}</div>}
       {err && <div className="fos-card" style={{ borderColor: "var(--red)", color: "var(--red)", padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>{err}</div>}
 
-      {tab === "top80" ? <Top80 data={top80} canManage={canManage} busy={busy} upload={upload} /> : <Dormant />}
+      {tab === "top80" ? <Top80 data={top80} canManage={canManage} busy={busy} upload={upload} />
+        : tab === "newsku" ? <NewSku data={newsku} canManage={canManage} busy={busy} upload={upload} />
+          : <Dormant />}
     </div>
   );
 }
@@ -135,6 +144,68 @@ function Top80({ data, canManage, busy, upload }) {
           <Table rows={data.zeroSellers} cols={[
             { k: "SKU", t: "text" }, { k: "Description", t: "text" }, { k: "Category", t: "text" }, { k: "Retail", t: "money" },
             { k: "Stores Stocked", t: "num" }, { k: "SOH Units", t: "num" }, { k: "SOH Cost", t: "money" }, { k: "Warehouse Units", t: "num" },
+          ]} />
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function NewSku({ data, canManage, busy, upload }) {
+  const uploadBtn = canManage ? <UploadBtn label="Upload New SKU workbook" action="newsku" accept=".xlsx,.xlsb,.xls" upload={upload} busy={busy} /> : null;
+  if (!data?.ready) return <Notice>Run migration <Mono>025</Mono>, then upload the New SKU Performance workbook.{uploadBtn && <div style={{ marginTop: 12 }}>{uploadBtn}</div>}</Notice>;
+  if (!data.loaded) return <Notice>No New SKU data loaded yet — upload the New SKU Performance workbook (.xlsx).{uploadBtn && <div style={{ marginTop: 12 }}>{uploadBtn}</div>}</Notice>;
+
+  const fmtKpi = (m) => (m.pct ? pct(m.value) : m.money ? gbp(m.value) : num(m.value));
+  return (
+    <div style={{ display: "grid", gap: 22 }}>
+      {canManage && <div><UploadBtn label="Re-upload workbook" action="newsku" accept=".xlsx,.xlsb,.xls" upload={upload} busy={busy} /></div>}
+
+      {data.bigPicture.length > 0 && (
+        <section>
+          <Eyebrow>The big picture</Eyebrow>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+            {data.bigPicture.map((m, i) => (
+              <div key={i} className="fos-card" style={{ padding: "12px 14px" }}>
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{m.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{fmtKpi(m)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {data.stars.length > 0 && (
+        <Section title={`Stars — best new products (${data.stars.length})`} caption="Sell-through ≥ 15%. Keep visible and replenished.">
+          <Table rows={data.stars} cols={[
+            { k: "Product", t: "text" }, { k: "Price", t: "money" }, { k: "Units Rcvd", t: "num" }, { k: "Units Sold", t: "num" },
+            { k: "L4W Sales", t: "money" }, { k: "Sell-Through", t: "pct", tone: (v) => (v >= 0.15 ? "green" : "amber") }, { k: "Stores Selling", t: "num" },
+          ]} />
+        </Section>
+      )}
+
+      {data.slow.length > 0 && (
+        <Section title={`Needs attention — slow movers (${data.slow.length})`} caption="Sold something, but under 15% sell-through. Reposition, check display and pricing.">
+          <Table rows={data.slow} cols={[
+            { k: "Product", t: "text" }, { k: "Category", t: "text" }, { k: "Price", t: "money" }, { k: "SOH Retail", t: "money" },
+            { k: "Sell-Through", t: "pct", tone: (v) => (v < 0.05 ? "red" : "amber") }, { k: "L4W Sales", t: "money" }, { k: "Stores Selling", t: "num" },
+          ]} />
+        </Section>
+      )}
+
+      {data.zero.length > 0 && (
+        <Section title={`Zero sellers (${data.zero.length})`} caption="New products with no sales at all in the period.">
+          <Table rows={data.zero} cols={[
+            { k: "Product", t: "text" }, { k: "Category", t: "text" }, { k: "Price", t: "money" }, { k: "SOH Retail", t: "money" }, { k: "Stores Stocked", t: "num" },
+          ]} />
+        </Section>
+      )}
+
+      {data.storeScorecard.length > 0 && (
+        <Section title="Store scorecard — new SKU launch" caption="How well each store converts new stock. Ranked by L4W sales. (Per-store unit sell-through isn't in this extract; hit rate = SKUs selling ÷ stocked.)">
+          <Table rows={data.storeScorecard} cols={[
+            { k: "Store", t: "text" }, { k: "New SKUs", t: "num" }, { k: "SKUs Selling", t: "num" },
+            { k: "Hit Rate", t: "pct", tone: (v) => (v >= 0.6 ? "green" : v >= 0.4 ? "amber" : "red") }, { k: "L4W Sales", t: "money" }, { k: "Zero Sellers", t: "num" },
           ]} />
         </Section>
       )}

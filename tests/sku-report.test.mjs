@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapSheet, parseTop80, toStorageRows, sanitize } from "../lib/sku-report-rules.js";
+import { mapSheet, parseTop80, toStorageRows, sanitize, parseNewSku } from "../lib/sku-report-rules.js";
 
 test("sanitize rewrites Kouriten → Miniso UK in display text", () => {
   assert.equal(sanitize("Kouriten Stores"), "Miniso UK Stores");
@@ -38,6 +38,32 @@ test("parseTop80 extracts exec metrics, scorecards, licence and top-200 zero sel
   assert.equal(p.zeroCount, 250);
   assert.equal(p.zeroSellers.length, 200);                    // capped
   assert.equal(p.zeroSellers[0]["SOH Cost"], 249);            // sorted desc by SOH Cost
+});
+
+test("parseNewSku: big picture, stars/slow/zero split, and store scorecard", () => {
+  // SKU-level cols 0-12, then a 4-col block per store (Sales, SOH, First Rcvd, ST%).
+  const H = ["SKU", "Description", "Category", "Price", "First Received", "GR Qty", "Units Sold", "Sell-Through %", "Net Sales", "Total SOH", "SOH Retail", "Stores Stocked", "Stores Selling", "Wembley", null, null, null, "Camden", null, null, null];
+  const sub = [null, null, null, null, null, null, null, null, null, null, null, null, null, "Sales", "SOH", "First Rcvd", "ST%", "Sales", "SOH", "First Rcvd", "ST%"];
+  const star = ["A1", "Pokemon Pack", "Toys", 18, "26 Mar", 100, 90, 0.9, 1200, 10, 200, 5, 4, 700, null, "26 Mar", 1, 500, null, "26 Mar", 1];
+  const slow = ["A2", "Kitty Box", "Trendy Toy", 16, "26 Mar", 100, 5, 0.05, 80, 95, 1500, 8, 2, 80, 40, "26 Mar", 0.05, null, 20, "26 Mar", 0];
+  const zero = ["A3", "Dud Item", "Home", 10, "26 Mar", 50, 0, 0, 0, 50, 500, 3, 0, null, 25, "26 Mar", 0, null, null, null, null];
+  const p = parseNewSku([H, sub, star, slow, zero]);
+
+  const kpi = (l) => p.bigPicture.find((m) => m.label === l).value;
+  assert.equal(kpi("New SKUs received"), 3);
+  assert.ok(Math.abs(kpi("Hit rate") - 2 / 3) < 1e-9);       // 2 of 3 sold
+  assert.equal(kpi("Total sales (L4W)"), 1280);              // 1200 + 80
+  assert.equal(kpi("Zero sellers"), 1);
+  assert.ok(Math.abs(kpi("Estate sell-through") - 95 / 250) < 1e-9); // (90+5+0)/(100+100+50)
+  assert.equal(kpi("SOH at risk (<15% ST)"), 2000);          // slow 1500 + zero 500
+
+  assert.equal(p.stars.length, 1); assert.equal(p.stars[0].Product, "Pokemon Pack");
+  assert.equal(p.slow.length, 1); assert.equal(p.slow[0].Product, "Kitty Box");
+  assert.equal(p.zero.length, 1); assert.equal(p.zero[0].Product, "Dud Item");
+
+  const wembley = p.storeScorecard.find((s) => s.Store === "Wembley");
+  assert.ok(wembley); assert.equal(wembley["New SKUs"], 3);  // stocked at Wembley in all three rows
+  assert.equal(wembley["SKUs Selling"], 2);                  // 700 and 80 sales; zero row has no sales
 });
 
 test("toStorageRows flattens with a meta row carrying the period", () => {
