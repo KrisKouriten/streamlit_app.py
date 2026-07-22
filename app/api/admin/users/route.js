@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
+import { clearMfaForUser } from "../../../../lib/mfa";
 import { audit, setUserRole, listUsersWithRoles } from "../../../../lib/governance";
 
 const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
@@ -81,6 +82,17 @@ export async function POST(request) {
       // Deactivating an account tears down its live sessions immediately.
       if (!isActive) await endAllSessions(userId, session.email);
       await audit({ actor: session, eventType: "user.set-active", objectType: "users", objectRef: String(userId), detail: { isActive } });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "clear-mfa") {
+      const { userId } = body;
+      if (!Number.isInteger(userId)) return NextResponse.json({ error: "Invalid user" }, { status: 400 });
+      // Escape hatch for a user who lost their device and recovery codes. Ends
+      // their live sessions too, so the next sign-in re-enrols cleanly.
+      await clearMfaForUser(userId, session);
+      await endAllSessions(userId, session.email);
+      await audit({ actor: session, eventType: "user.clear-mfa", objectType: "users", objectRef: String(userId) });
       return NextResponse.json({ ok: true });
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyPassword, startSession, setSessionCookie } from "../../../../lib/auth";
+import { verifyPassword, startSession, setSessionCookie, setMfaPendingCookie } from "../../../../lib/auth";
+import { hasEnabledMfa } from "../../../../lib/mfa";
 import { getUserRoles, audit } from "../../../../lib/governance";
 
 export async function POST(request) {
@@ -19,6 +20,14 @@ export async function POST(request) {
     if (user.is_active === false) {
       return NextResponse.json({ error: "This account has been deactivated" }, { status: 403 });
     }
+    // Password is correct. If the user has two-step on, don't sign them in yet —
+    // hand out a short-lived pending ticket and ask for the second factor.
+    if (await hasEnabledMfa(user.id)) {
+      await setMfaPendingCookie(user);
+      await audit({ actor: user, eventType: "auth.login.mfa_challenge", objectType: "users", objectRef: String(user.id) });
+      return NextResponse.json({ mfaRequired: true });
+    }
+
     const roles = await getUserRoles(user.id);
     const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
     const userAgent = request.headers.get("user-agent") || null;

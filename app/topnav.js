@@ -63,11 +63,11 @@ function UserChip({ name }) {
   }
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span aria-hidden="true" title={name} style={{
+      <Link href="/account/security" title={`${name} · Account & security`} aria-label="Account and security" style={{
         width: 28, height: 28, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: "var(--accent)",
+        fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: "var(--accent)", textDecoration: "none",
         background: "var(--accent-bg)", border: "1px solid var(--accent-deep)", flex: "none",
-      }}>{initials}</span>
+      }}>{initials}</Link>
       <button onClick={signOut} disabled={busy} title="Sign out" className="fos-btn-ghost" style={{ opacity: busy ? 0.6 : 1 }}>
         {busy ? "Signing out…" : "Sign out"}
       </button>
