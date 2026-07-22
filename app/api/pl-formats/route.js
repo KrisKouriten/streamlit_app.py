@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { assignAccountToLine } from "../../../lib/pl-format-store.js";
+import { assignAccountToLine, upsertFormat, SCOPE_KINDS } from "../../../lib/pl-format-store.js";
 import { ingestByCompanyWorkbook } from "../../../lib/joiin-entity.js";
+import { parseFormatWorkbook } from "../../../lib/pl-format-import.js";
 import { audit } from "../../../lib/governance.js";
 
 export async function POST(request) {
@@ -25,6 +26,17 @@ export async function POST(request) {
       const r = await ingestByCompanyWorkbook(Buffer.from(body.file, "base64"), actor);
       await audit({ actor, eventType: "joiin_entity.upload", objectType: "joiin_pl_entity", objectRef: r.months?.join(","), detail: r });
       return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "formatWorkbook") {
+      if (!body.file) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
+      const parsed = parseFormatWorkbook(Buffer.from(body.file, "base64"));
+      if (parsed.scopeKind === "custom" || !SCOPE_KINDS.some((s) => s.kind === parsed.scopeKind)) {
+        return NextResponse.json({ error: "Couldn't tell which P&L this is from the title. Expected Store, Head Office, Franchise or Consolidated." }, { status: 400 });
+      }
+      if (!parsed.spec.length) return NextResponse.json({ error: "No layout rows found in the workbook." }, { status: 400 });
+      await upsertFormat(parsed.scopeKind, parsed.name, parsed.spec, actor);
+      await audit({ actor, eventType: "pl_format.upload", objectType: "pl_format", objectRef: parsed.scopeKind, detail: { lines: parsed.spec.length, warnings: parsed.warnings.length, needMap: parsed.needMap } });
+      return NextResponse.json({ ok: true, scopeKind: parsed.scopeKind, name: parsed.name, lines: parsed.spec.length, warnings: parsed.warnings, needMap: parsed.needMap });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {

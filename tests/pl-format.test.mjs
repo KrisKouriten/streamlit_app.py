@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as XLSX from "xlsx";
 import { STORE_FORMAT, FRANCHISE_FORMAT, renderFormat, buildGenericFormat, classifyEntity } from "../lib/pl-format.js";
 import { parseJoiinByCompany } from "../lib/joiin-rules.js";
+import { parseFormatWorkbook } from "../lib/pl-format-import.js";
 
 const cols = ["2026-01"];
 const av = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { "2026-01": v }]));
@@ -58,6 +60,36 @@ test("classifyEntity routes store / franchise / generic", () => {
   assert.equal(classifyEntity("Kouriten West London Limited", ["ST: Sales", "ST: Rent"]), "store");
   assert.equal(classifyEntity("Kouriten Franchise Limited", ["FR: Franchise Fee - Royalties"]), "franchise");
   assert.equal(classifyEntity("Kouriten Limited", ["HO: Freight"]), "generic");
+});
+
+test("parseFormatWorkbook: infers sections, lines, subtotal, derived line and margin", () => {
+  const aoa = [
+    ["Board Pack - Store Detailed Consolidated"],
+    ["Account Name", "Jan 26", "Feb 26", "Total"],
+    ["Store Sales", 1000, 1200, 2200],
+    ["Store Cost of Sales", "", "", ""],
+    ["ST: Cost of Goods Sold", 400, 480, 880],
+    ["Total Store Cost of Sales", 400, 480, 880],
+    ["Store Gross Profit", 600, 720, 1320],
+    ["Gross Margin %", 0.6, 0.6, 0.6],
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Sheet1");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  const { scopeKind, spec } = parseFormatWorkbook(buf);
+  assert.equal(scopeKind, "store");
+  const byLabel = Object.fromEntries(spec.map((e) => [e.label, e]));
+  assert.equal(byLabel["Store Cost of Sales"].kind, "section");
+  assert.deepEqual(byLabel["ST: Cost of Goods Sold"].accounts, ["ST: Cost of Goods Sold"]);
+  assert.equal(byLabel["Total Store Cost of Sales"].kind, "total");
+  assert.deepEqual(byLabel["Total Store Cost of Sales"].of, ["ST: Cost of Goods Sold"]);
+  assert.equal(byLabel["Store Gross Profit"].kind, "calc");
+  assert.deepEqual(byLabel["Store Gross Profit"].add, ["Store Sales"]);
+  assert.deepEqual(byLabel["Store Gross Profit"].sub, ["Total Store Cost of Sales"]);
+  assert.equal(byLabel["Gross Margin %"].kind, "pct");
+  assert.equal(byLabel["Gross Margin %"].den, "Store Sales");
+  // "Store Sales" is a friendly leaf → flagged for mapping
+  assert.deepEqual(byLabel["Store Sales"].accounts, []);
 });
 
 test("parseJoiinByCompany: entities as columns, drops Total column and computed lines", () => {

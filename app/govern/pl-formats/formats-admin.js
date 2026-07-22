@@ -13,7 +13,33 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
 
   const [upMsg, setUpMsg] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [fmtMsg, setFmtMsg] = useState(null);
+  const [fmtBusy, setFmtBusy] = useState(false);
   const money = (v) => "£" + Math.round(Math.abs(v)).toLocaleString();
+
+  async function toB64(file) {
+    const buf = await file.arrayBuffer(); const bytes = new Uint8Array(buf);
+    let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  async function uploadFormat(file) {
+    if (!file) return;
+    setFmtBusy(true); setFmtMsg(null); setErr(null);
+    try {
+      const res = await fetch("/api/pl-formats", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "formatWorkbook", file: await toB64(file) }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Import failed");
+      const bits = [`Imported the ${j.name} layout (${j.lines} lines).`];
+      if (j.needMap?.length) bits.push(`${j.needMap.length} line(s) need a nominal mapped: ${j.needMap.join(", ")}.`);
+      if (j.warnings?.length) bits.push(`${j.warnings.length} row(s) couldn't be auto-derived — check them.`);
+      setFmtMsg({ text: bits.join(" "), warn: (j.needMap?.length || 0) + (j.warnings?.length || 0) > 0 });
+      router.refresh();
+    } catch (e) { setErr(e.message); } finally { setFmtBusy(false); }
+  }
 
   async function uploadWorkbook(file) {
     if (!file) return;
@@ -49,6 +75,24 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
+      {canManage && (
+        <div className="fos-card" style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontWeight: 650, fontSize: 13.5 }}>Upload a P&L format template</div>
+            <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 3, maxWidth: "58ch" }}>
+              Upload a board-pack P&L template (Store, Head Office, Franchise or Consolidated). The layout — sections,
+              subtotals and derived lines (Gross Profit, EBITDA, margins) — is read from the sheet and becomes the
+              governed format. Nominal lines map by name; any friendly-named line is flagged to map below.
+            </div>
+            {fmtMsg && <div style={{ fontSize: 12.5, color: fmtMsg.warn ? "var(--amber, #b8860b)" : "var(--green)", marginTop: 6, maxWidth: "62ch" }}>{fmtMsg.text}</div>}
+          </div>
+          <label className="fos-btn" style={{ cursor: fmtBusy ? "wait" : "pointer", whiteSpace: "nowrap" }}>
+            {fmtBusy ? "Reading…" : "Upload format"}
+            <input type="file" accept=".xlsx,.xls" hidden disabled={fmtBusy}
+              onChange={(e) => uploadFormat(e.target.files?.[0])} />
+          </label>
+        </div>
+      )}
       {canManage && (
         <div className="fos-card" style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div>
