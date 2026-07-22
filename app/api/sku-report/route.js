@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestTop80, ingestTop80Workbook, ingestNewSku } from "../../../lib/sku-report";
+import { ingestTop80, ingestTop80Workbook, ingestNewSku, ingestDormant } from "../../../lib/sku-report";
 import { audit } from "../../../lib/governance";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,12 @@ export async function POST(request) {
       if (!body.sheets) return NextResponse.json({ error: "No workbook provided" }, { status: 400 });
       const r = await ingestNewSku(body.sheets, actor);
       await audit({ actor, eventType: "sku.upload", objectType: "sku_analysis", objectRef: "newsku", detail: r });
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "dormant") {
+      if (!body.sheets) return NextResponse.json({ error: "No workbook provided" }, { status: 400 });
+      const r = await ingestDormant(body.sheets, actor);
+      await audit({ actor, eventType: "sku.upload", objectType: "sku_analysis", objectRef: "dormant", detail: r });
       return NextResponse.json({ ok: true, ...r });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

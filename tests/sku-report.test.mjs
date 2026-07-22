@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapSheet, parseTop80, toStorageRows, sanitize, parseNewSku } from "../lib/sku-report-rules.js";
+import { mapSheet, parseTop80, toStorageRows, sanitize, parseNewSku, parseDormant } from "../lib/sku-report-rules.js";
 
 test("sanitize rewrites Kouriten → Miniso UK in display text", () => {
   assert.equal(sanitize("Kouriten Stores"), "Miniso UK Stores");
@@ -64,6 +64,33 @@ test("parseNewSku: big picture, stars/slow/zero split, and store scorecard", () 
   const wembley = p.storeScorecard.find((s) => s.Store === "Wembley");
   assert.ok(wembley); assert.equal(wembley["New SKUs"], 3);  // stocked at Wembley in all three rows
   assert.equal(wembley["SKUs Selling"], 2);                  // 700 and 80 sales; zero row has no sales
+});
+
+test("parseDormant: SKU×store matrix → KPIs, by-store units, aging, top SKUs", () => {
+  const aoa = [
+    ["Dormant SKU Detail — Kouriten Stores (L4W to 2026-05-03, SOH 2026-05-03)"],
+    ["6,636 dormant SKUs across 30 stores"],
+    ["SKU Code", "Description", "Bond Street", null, "Camden", null],
+    ["", "", "Units", "Last GR", "Units", "Last GR"],
+    ["SKU1", "Item A", 10, 46000, null, null],
+    ["SKU2", "Item B", 5, 45000, 3, 46100],
+    ["TOTAL", null, 15, null, 3, null],   // trailing total row, must be skipped
+  ];
+  const p = parseDormant(aoa);
+  assert.equal(p.asOf, "2026-05-03");
+  const kpi = (l) => p.kpis.find((m) => m.label === l).value;
+  assert.equal(kpi("Dormant SKUs"), 2);              // TOTAL row excluded
+  assert.equal(kpi("Dormant units on hand"), 18);    // 10 + 5 + 3
+  assert.equal(kpi("Stores"), 2);
+  assert.equal(kpi("SKU × store lines"), 3);          // Bond×2 + Camden×1
+
+  const bond = p.store.find((s) => s.Store === "Bond Street");
+  assert.equal(bond["Dormant Units"], 15);            // 10 + 5
+  assert.equal(bond["Dormant SKUs"], 2);
+  assert.equal(p.topSkus[0].SKU, "SKU1");             // 10 units, biggest
+  assert.equal(p.topSkus[0]["Units on Hand"], 10);
+  assert.equal(p.topSkus.find((s) => s.SKU === "SKU2")["Stores Holding"], 2);
+  assert.equal(p.aging.reduce((t, a) => t + a.Units, 0), 18); // all units bucketed
 });
 
 test("toStorageRows flattens with a meta row carrying the period", () => {

@@ -23,7 +23,7 @@ function classifyMetric(label, value) {
 }
 const fmtMetric = (label, value) => { const t = classifyMetric(label, value); return t === "pct" ? pct(value) : t === "money" ? gbp(value) : num(value); };
 
-export default function SkuReportUI({ tab, top80, newsku, canManage }) {
+export default function SkuReportUI({ tab, top80, newsku, dormant, canManage }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -41,20 +41,22 @@ export default function SkuReportUI({ tab, top80, newsku, canManage }) {
       // the raw .xlsb can be several MB and would exceed the request-body limit.
       const XLSX = await import("xlsx");
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
-      const NEEDED = action === "newsku"
-        ? ["New SKU Performance"]
-        : ["Executive Summary", "Top 80% Store", "Bottom 20% Store", "Licence Analysis", "Zero Sellers"];
+      const NEEDED = action === "newsku" ? ["New SKU Performance"]
+        : action === "dormant" ? ["Dormant SKU Detail"]
+          : ["Executive Summary", "Top 80% Store", "Bottom 20% Store", "Licence Analysis", "Zero Sellers"];
       const sheets = {};
       for (const n of NEEDED) if (wb.Sheets[n]) sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: null });
-      // New SKU workbook may name its single sheet differently — fall back to the first sheet.
-      if (!Object.keys(sheets).length && action === "newsku" && wb.SheetNames[0]) sheets[wb.SheetNames[0]] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false, defval: null });
+      // Single-sheet workbooks may name the sheet differently — fall back to the first sheet.
+      if (!Object.keys(sheets).length && (action === "newsku" || action === "dormant") && wb.SheetNames[0]) sheets[wb.SheetNames[0]] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false, defval: null });
       if (!Object.keys(sheets).length) throw new Error(`No recognised sheets found. Expected: ${NEEDED.join(", ")}.`);
       const res = await fetch("/api/sku-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sheets }) });
       const text = await res.text(); let j = {}; try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Upload failed (HTTP ${res.status})`); }
       if (!res.ok) throw new Error(j.error || "Upload failed");
       setMsg(action === "newsku"
         ? `Loaded ${j.skus} new SKUs — ${j.stars} stars, ${j.slow} slow, ${j.zero} zero, across ${j.stores} stores.`
-        : `Loaded ${j.storeCount} stores, ${j.licenceCount} brands, ${j.zeroCount?.toLocaleString?.() ?? j.zeroCount} zero-sellers.`);
+        : action === "dormant"
+          ? `Loaded ${j.skus?.toLocaleString?.() ?? j.skus} dormant SKUs across ${j.stores} stores.`
+          : `Loaded ${j.storeCount} stores, ${j.licenceCount} brands, ${j.zeroCount?.toLocaleString?.() ?? j.zeroCount} zero-sellers.`);
       router.refresh();
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
@@ -74,7 +76,7 @@ export default function SkuReportUI({ tab, top80, newsku, canManage }) {
 
       {tab === "top80" ? <Top80 data={top80} canManage={canManage} busy={busy} upload={upload} />
         : tab === "newsku" ? <NewSku data={newsku} canManage={canManage} busy={busy} upload={upload} />
-          : <Dormant />}
+          : <Dormant data={dormant} canManage={canManage} busy={busy} upload={upload} />}
     </div>
   );
 }
@@ -213,8 +215,53 @@ function NewSku({ data, canManage, busy, upload }) {
   );
 }
 
-function Dormant() {
-  return <Notice>The Dormant Stock view awaits the computed dormant summary workbook (store scorecard with quadrants, category ranking and aging buckets). Once that&rsquo;s shared it&rsquo;ll render here, mirroring the dormant deck.</Notice>;
+function Dormant({ data, canManage, busy, upload }) {
+  const uploadBtn = canManage ? <UploadBtn label="Upload Dormant SKU workbook" action="dormant" accept=".xlsx,.xlsb,.xls" upload={upload} busy={busy} /> : null;
+  if (!data?.ready) return <Notice>Run migration <Mono>025</Mono>, then upload the Dormant SKU Detail workbook.{uploadBtn && <div style={{ marginTop: 12 }}>{uploadBtn}</div>}</Notice>;
+  if (!data.loaded) return <Notice>No dormant data loaded yet — upload the Dormant SKU Detail workbook (.xlsx).{uploadBtn && <div style={{ marginTop: 12 }}>{uploadBtn}</div>}</Notice>;
+
+  const num0 = (v) => { const n = Number(v); return isFinite(n) ? Math.round(n).toLocaleString() : (v ?? "—"); };
+  return (
+    <div style={{ display: "grid", gap: 22 }}>
+      {canManage && <div><UploadBtn label="Re-upload workbook" action="dormant" accept=".xlsx,.xlsb,.xls" upload={upload} busy={busy} /></div>}
+
+      <div style={{ fontSize: 12.5, color: "var(--amber, #b8860b)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px", maxWidth: "82ch", lineHeight: 1.55 }}>
+        Units-based view from the dormant detail extract{data.asOf ? ` (as at ${data.asOf})` : ""}. Retail value (£), category and sell-through aren&rsquo;t in this file, so the deck&rsquo;s £-value, category and store-quadrant slides need the priced/categorised summary — share that and I&rsquo;ll add them here.
+      </div>
+
+      {data.kpis.length > 0 && (
+        <section>
+          <Eyebrow>The problem — dormant stock</Eyebrow>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+            {data.kpis.map((m, i) => (
+              <div key={i} className="fos-card" style={{ padding: "12px 14px" }}>
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{m.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{num0(m.value)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {data.aging.length > 0 && (
+        <Section title="How long has it been sitting there?" caption="Dormant units by how recently that store last received the SKU (from Last GR date).">
+          <Table rows={data.aging} cols={[{ k: "Bucket", t: "text" }, { k: "Units", t: "num" }, { k: "% of Units", t: "pct" }]} />
+        </Section>
+      )}
+
+      {data.store.length > 0 && (
+        <Section title="Which stores hold the most dormant stock?" caption="Ranked by dormant units on hand.">
+          <Table rows={data.store} cols={[{ k: "Store", t: "text" }, { k: "Dormant SKUs", t: "num" }, { k: "Dormant Units", t: "num" }]} />
+        </Section>
+      )}
+
+      {data.topSkus.length > 0 && (
+        <Section title="Biggest dormant SKUs" caption={`By units on hand across stores. Top ${data.topSkus.length}.`}>
+          <Table rows={data.topSkus} cols={[{ k: "SKU", t: "text" }, { k: "Description", t: "text" }, { k: "Stores Holding", t: "num" }, { k: "Units on Hand", t: "num" }]} />
+        </Section>
+      )}
+    </div>
+  );
 }
 
 /* ---- primitives ---- */
