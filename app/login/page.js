@@ -12,6 +12,17 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Honour ?next= set by the auth middleware, but only same-origin paths — a
+  // leading single "/" and never "//" (which would be a protocol-relative
+  // off-site redirect). Anything else falls back to the home hub.
+  function safeNext() {
+    try {
+      const n = new URLSearchParams(window.location.search).get("next");
+      if (n && n.startsWith("/") && !n.startsWith("//")) return n;
+    } catch {}
+    return "/";
+  }
+
   async function submit(e) {
     e.preventDefault();
     setError("");
@@ -23,7 +34,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        router.push("/");
+        router.push(safeNext());
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
