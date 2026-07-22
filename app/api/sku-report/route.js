@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestTop80Workbook } from "../../../lib/sku-report";
+import { ingestTop80, ingestTop80Workbook } from "../../../lib/sku-report";
 import { audit } from "../../../lib/governance";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,14 @@ export async function POST(request) {
   if (!hasRole(session, "ADMIN", "FINANCE")) return NextResponse.json({ error: "Uploading requires ADMIN or FINANCE" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  if (!body.file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
-  const buffer = Buffer.from(body.file, "base64");
   const actor = session.email || session.name;
   try {
     if (body.action === "top80") {
-      const r = await ingestTop80Workbook(buffer, actor);
+      // Preferred: browser-parsed sheet map (small). Fallback: raw base64 file.
+      const r = body.sheets ? await ingestTop80(body.sheets, actor)
+        : body.file ? await ingestTop80Workbook(Buffer.from(body.file, "base64"), actor)
+          : null;
+      if (!r) return NextResponse.json({ error: "No workbook provided" }, { status: 400 });
       await audit({ actor, eventType: "sku.upload", objectType: "sku_analysis", objectRef: "top80", detail: r });
       return NextResponse.json({ ok: true, ...r });
     }

@@ -37,9 +37,15 @@ export default function SkuReportUI({ tab, top80, canManage }) {
     if (!file) return;
     setBusy(true); setMsg(null); setErr(null);
     try {
-      const buf = await file.arrayBuffer(); const bytes = new Uint8Array(buf);
-      let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const res = await fetch("/api/sku-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, file: btoa(bin) }) });
+      // Parse the workbook in the browser and send only the extracted sheets —
+      // the raw .xlsb can be several MB and would exceed the request-body limit.
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+      const NEEDED = ["Executive Summary", "Top 80% Store", "Bottom 20% Store", "Licence Analysis", "Zero Sellers"];
+      const sheets = {};
+      for (const n of NEEDED) if (wb.Sheets[n]) sheets[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: null });
+      if (!Object.keys(sheets).length) throw new Error(`No recognised sheets found. Expected: ${NEEDED.join(", ")}.`);
+      const res = await fetch("/api/sku-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sheets }) });
       const text = await res.text(); let j = {}; try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Upload failed (HTTP ${res.status})`); }
       if (!res.ok) throw new Error(j.error || "Upload failed");
       setMsg(`Loaded ${j.storeCount} stores, ${j.licenceCount} brands, ${j.zeroCount?.toLocaleString?.() ?? j.zeroCount} zero-sellers.`);
