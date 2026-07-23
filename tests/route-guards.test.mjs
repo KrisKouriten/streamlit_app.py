@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPublicPath, requiredRolesForPath, isAllowed, restrictedRoutes, ENFORCE_ROLE_GATES } from "../lib/route-guards.js";
+import { isPublicPath, requiredRolesForPath, isAllowed, restrictedRoutes, ENFORCE_ROLE_GATES, originAllowed } from "../lib/route-guards.js";
 
 test("auth handshake, health and the self-guarding cron are public", () => {
   for (const p of ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/health", "/api/joiin-refresh"]) {
@@ -31,6 +31,17 @@ test("restricted routes are derived from the nav registry and finance-gated", ()
   assert.deepEqual(scenarios.roles, ["ADMIN", "FINANCE"]);
   // A placeholder item contributes its /module/<slug> route.
   assert.ok(routes.some((r) => r.path === "/module/budget-builder"));
+});
+
+test("originAllowed: same-origin passes, cross-origin fails, no-origin allowed", () => {
+  const host = "finance.miniso.example";
+  assert.equal(originAllowed(`https://${host}`, host), true); // same origin
+  assert.equal(originAllowed(`https://${host}:443`.replace(":443", ""), host), true);
+  assert.equal(originAllowed("https://evil.example", host), false); // cross-site
+  assert.equal(originAllowed(null, host), true); // non-browser client (cron/server)
+  assert.equal(originAllowed("", host), true); // absent
+  assert.equal(originAllowed("not-a-url", host), false); // malformed → refuse
+  assert.equal(originAllowed(`https://${host}`, "other.example"), false); // host mismatch
 });
 
 test("requiredRolesForPath respects the enforcement flag", () => {

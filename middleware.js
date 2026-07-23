@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-import { isPublicPath, requiredRolesForPath, isAllowed } from "./lib/route-guards";
+import { isPublicPath, requiredRolesForPath, isAllowed, originAllowed } from "./lib/route-guards";
+
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /*
  * Root middleware — the front door. It runs on the Edge runtime, so it cannot
@@ -65,6 +67,12 @@ export async function middleware(req) {
   const dev = process.env.NODE_ENV !== "production";
   const { pathname, search } = req.nextUrl;
   const isApi = pathname.startsWith("/api/");
+
+  // CSRF: refuse cross-origin state-changing requests up front — before the
+  // public-path check, so it also covers /api/auth/login and mfa-verify.
+  if (MUTATING.has(req.method) && !originAllowed(req.headers.get("origin"), req.headers.get("host"))) {
+    return withSecurityHeaders(NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 }), dev);
+  }
 
   // Public routes skip the auth gate but still get the headers.
   if (isPublicPath(pathname)) {
