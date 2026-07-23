@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { joiinConfigured, profitAndLoss, customReport } from "../../../lib/joiin-api";
 import { mapReportRows, mapBoardPackRows } from "../../../lib/joiin-api-map";
-import { ENTITY_ID } from "../../../lib/entity-map";
+import { getEntityMap } from "../../../lib/joiin-entity-map";
 import { BOARDPACK_REPORTS } from "../../../lib/joiin-reports";
 import { upsertBoardPack } from "../../../lib/joiin-boardpack";
 import { query } from "../../../lib/db";
@@ -26,7 +26,8 @@ async function refresh(months) {
   // Per-entity standalone P&L: one call per company per month → joiin_pl_entity.
   // Resilient: a company that errors is recorded and skipped, so one bad call
   // doesn't lose the whole refresh (or the board packs that run after it).
-  const names = Object.keys(ENTITY_ID);
+  const entityMap = await getEntityMap();
+  const names = Object.keys(entityMap);
   let entityRows = 0;
   const errors = [];
   for (const ym of months) {
@@ -39,7 +40,7 @@ async function refresh(months) {
       ok++;
       for (const r of mapReportRows(json)) {
         if (!r.value) continue;
-        upserts.push([ENTITY_ID[name], name, r.section, r.account, ym, r.value]);
+        upserts.push([entityMap[name], name, r.section, r.account, ym, r.value]);
       }
     }
     // Only clear the month if at least one company returned — never wipe good
@@ -66,7 +67,7 @@ async function refresh(months) {
 // output verbatim. Additive to the per-entity refresh and best-effort: a board
 // pack that fails is reported in `errors` without failing the whole refresh.
 async function refreshBoardPacks(months, actor) {
-  const companies = Object.keys(ENTITY_ID);
+  const companies = Object.keys(await getEntityMap());
   const errors = [];
   let packs = 0;
   for (const [scope, customReportId] of Object.entries(BOARDPACK_REPORTS)) {
