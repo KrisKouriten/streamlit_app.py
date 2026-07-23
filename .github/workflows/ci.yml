@@ -6,6 +6,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch: # allow a manual re-run from the Actions tab
 
 jobs:
   test:
