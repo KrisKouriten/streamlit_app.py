@@ -41,7 +41,7 @@ export function AssignSelect({ task, people }) {
         <option value="">unassigned</option>
         {people.map((p) => <option key={p.user_id} value={p.user_id}>{p.name}</option>)}
       </select>
-      {err && <span style={{ fontSize: 11.5, color: "#a32d2d", marginLeft: 6 }}>{err}</span>}
+      {err && <span style={{ fontSize: 11.5, color: "var(--red)", marginLeft: 6 }}>{err}</span>}
     </span>
   );
 }

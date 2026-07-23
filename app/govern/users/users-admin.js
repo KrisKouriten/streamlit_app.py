@@ -48,7 +48,7 @@ export default function UsersAdmin({ me }) {
 
   return (
     <div>
-      {error && <div style={{ fontSize: 13.5, color: "#a32d2d", marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ fontSize: 13.5, color: "var(--red)", marginBottom: 12 }}>{error}</div>}
       {notice && <div style={{ fontSize: 13.5, color: "var(--green)", marginBottom: 12 }}>{notice}</div>}
 
       <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 24 }}>
@@ -71,7 +71,7 @@ export default function UsersAdmin({ me }) {
                   </select>
                 </td>
                 <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: u.is_active ? "var(--green)" : "#a32d2d" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: u.is_active ? "var(--green)" : "var(--red)" }}>
                     {u.is_active ? "ACTIVE" : "DEACTIVATED"}
                   </span>
                 </td>

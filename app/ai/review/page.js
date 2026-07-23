@@ -7,7 +7,7 @@ import { LifecycleChip, OutputReviewPanel } from "../agent-ui";
 import { AI_NAV } from "../nav";
 
 export const dynamic = "force-dynamic";
-const SEV = { CRITICAL: "#a32d2d", HIGH: "#a32d2d", MEDIUM: "var(--amber)", LOW: "var(--muted)" };
+const SEV = { CRITICAL: "var(--red)", HIGH: "var(--red)", MEDIUM: "var(--amber)", LOW: "var(--muted)" };
 
 export default async function OutputReviewQueue() {
   const session = await getSession();
@@ -34,7 +34,7 @@ export default async function OutputReviewQueue() {
             <span style={{ fontSize: 10.5, fontWeight: 700, color: SEV[o.severity] || "var(--muted)" }}>{o.agent_name} · {o.output_type}{o.severity ? ` · ${o.severity}` : ""}</span>
             <span style={{ fontSize: 14.5, fontWeight: 600, flex: 1 }}>{o.headline}</span>
             {o.financial_impact != null && (
-              <span style={{ fontSize: 13, fontWeight: 600, color: Number(o.financial_impact) < 0 ? "#a32d2d" : "var(--green)" }}>{money(o.financial_impact, { compact: true })}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: Number(o.financial_impact) < 0 ? "var(--red)" : "var(--green)" }}>{money(o.financial_impact, { compact: true })}</span>
             )}
             <LifecycleChip lifecycle={o.lifecycle} />
           </div>

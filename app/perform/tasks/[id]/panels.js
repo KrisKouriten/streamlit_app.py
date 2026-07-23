@@ -22,7 +22,7 @@ export default function TaskPanels({ task, canReview }) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14 }}>
-      {err && <div style={{ gridColumn: "1/-1", fontSize: 13, color: "#a32d2d" }}>{err}</div>}
+      {err && <div style={{ gridColumn: "1/-1", fontSize: 13, color: "var(--red)" }}>{err}</div>}
 
       {canReview && (
         <section style={{ gridColumn: "1/-1", background: "var(--amber-bg)", border: "1px solid var(--amber)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
@@ -31,7 +31,7 @@ export default function TaskPanels({ task, canReview }) {
             <input style={{ ...input, flex: 1, minWidth: 220 }} placeholder="Review comment (required when returning)"
               value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} />
             <button style={btn} onClick={() => act({ action: "approve", comment: reviewComment }, () => setReviewComment(""))}>Approve</button>
-            <button style={{ ...btn, background: "#a32d2d" }}
+            <button style={{ ...btn, background: "var(--red)" }}
               onClick={() => reviewComment.trim() ? act({ action: "return", comment: reviewComment }, () => setReviewComment("")) : setErr("A comment is required when returning a task")}>
               Return
             </button>

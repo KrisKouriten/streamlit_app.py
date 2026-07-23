@@ -18,7 +18,7 @@ function periodOptions() {
 
 const taskKey = (entity, stageId, i) => `${entity}|${stageId}|${i}`;
 
-export default function Dashboard({ user, stages, entities }) {
+export default function Dashboard({ user, stages, entities, team = [] }) {
   const router = useRouter();
   const periods = useMemo(periodOptions, []);
   const [period, setPeriod] = useState(periods[0].key);
@@ -49,10 +49,21 @@ export default function Dashboard({ user, stages, entities }) {
     return () => clearInterval(id);
   }, [period, load]);
 
+  async function setOwner(entity, stageId, i, owner) {
+    const k = taskKey(entity, stageId, i);
+    setState((s) => ({ ...s, [k]: { ...(s[k] || {}), owner: owner || null } }));
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ period, taskKey: k, owner }),
+    });
+    load(period);
+  }
+
   async function toggle(entity, stageId, i) {
     const k = taskKey(entity, stageId, i);
     const next = !state[k]?.done;
-    setState((s) => ({ ...s, [k]: next ? { done: true, by: user.name, at: new Date().toISOString() } : undefined }));
+    setState((s) => ({ ...s, [k]: { ...(s[k] || {}), done: next, by: next ? user.name : null, at: next ? new Date().toISOString() : null } }));
     await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,23 +96,12 @@ export default function Dashboard({ user, stages, entities }) {
   const shown = entities.filter((e) => filter === "all" || entityStatus(e) === filter);
   const dotColor = (st) => (st === "done" ? "var(--green)" : st === "progress" ? "var(--amber)" : "var(--faint)");
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
-
   return (
     <div style={{ maxWidth: 920, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.75rem" }}>
-        <div>
-          <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>Finance</div>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>Month-end close</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13.5, color: "var(--muted)" }}>
-          <a href="/finance-os" style={{ textDecoration: "none" }}>Finance OS</a>
-          <span>{user.name}</span>
-          <button onClick={logout} style={{ border: "1px solid var(--line-strong)", background: "var(--surface)", color: "var(--ink)", borderRadius: 8, padding: "6px 12px", fontSize: 13 }}>Sign out</button>
-        </div>
+      <header style={{ marginBottom: "1.5rem" }}>
+        <span className="fos-eyebrow">Operate · Month-end close</span>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Month-end close</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>Per-entity close checklist — status and sign-off across every entity, by period.</div>
       </header>
 
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
@@ -116,6 +116,21 @@ export default function Dashboard({ user, stages, entities }) {
           style={{ height: 38, padding: "0 10px", border: "1px solid var(--line-strong)", borderRadius: 8, background: "var(--surface)", color: "var(--ink)", fontSize: 14 }}>
           {periods.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
+      </div>
+
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 16 }}>
+        {[
+          ["Overall completion", `${pct}%`, `${doneCells} / ${allCells} tasks`, pct === 100 ? "var(--green)" : "var(--ink)"],
+          ["Entities closed", `${closed}`, `of ${entities.length}`, closed === entities.length && entities.length ? "var(--green)" : "var(--ink)"],
+          ["In progress", `${entities.filter((e) => entityStatus(e) === "progress").length}`, "entities mid-close", "var(--amber)"],
+          ["Not started", `${entities.filter((e) => entityStatus(e) === "notstarted").length}`, "entities untouched", "var(--faint)"],
+        ].map(([label, value, sub, tone]) => (
+          <div key={label} className="fos-card" style={{ padding: "14px 16px 13px" }}>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 8 }}>{label}</div>
+            <div className="fos-num" style={{ fontSize: 26, fontWeight: 650, lineHeight: 1, color: tone }}>{value}</div>
+            <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 6 }}>{sub}</div>
+          </div>
+        ))}
       </div>
 
       <div style={{ height: 6, borderRadius: 99, background: "var(--line)", overflow: "hidden", marginBottom: 22 }}>
@@ -175,16 +190,23 @@ export default function Dashboard({ user, stages, entities }) {
                         const cell = state[taskKey(entity, st.id, i)];
                         const checked = !!cell?.done;
                         return (
-                          <label key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 0", cursor: "pointer", fontSize: 13.5 }}>
-                            <input type="checkbox" checked={checked} onChange={() => toggle(entity, st.id, i)}
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "4px 0", fontSize: 13.5, flexWrap: "wrap" }}>
+                            <input type="checkbox" checked={checked} onChange={() => toggle(entity, st.id, i)} aria-label={`${task} done`}
                               style={{ width: 16, height: 16, flex: "none", accentColor: "var(--accent)", cursor: "pointer" }} />
-                            <span style={{ color: checked ? "var(--faint)" : "var(--ink)", textDecoration: checked ? "line-through" : "none" }}>{task}</span>
+                            <span onClick={() => toggle(entity, st.id, i)} style={{ color: checked ? "var(--faint)" : "var(--ink)", textDecoration: checked ? "line-through" : "none", cursor: "pointer", flex: 1, minWidth: 160 }}>{task}</span>
+                            <span style={{ fontFamily: "var(--mono)", fontSize: 9, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: checked ? "var(--green)" : "var(--amber)", border: "1px solid var(--line)", borderRadius: 4, padding: "1.5px 6px", flex: "none" }}>{checked ? "Done" : "Open"}</span>
+                            <select value={cell?.owner || ""} onChange={(e) => setOwner(entity, st.id, i, e.target.value)} aria-label={`${task} finance owner`}
+                              style={{ height: 26, fontSize: 11.5, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: cell?.owner ? "var(--ink)" : "var(--faint)", flex: "none", maxWidth: 150 }}>
+                              <option value="">— owner</option>
+                              {team.map((t) => <option key={t} value={t}>{t}</option>)}
+                              {cell?.owner && !team.includes(cell.owner) && <option value={cell.owner}>{cell.owner}</option>}
+                            </select>
                             {checked && cell?.by && (
-                              <span style={{ fontSize: 11.5, color: "var(--faint)", marginLeft: "auto" }}>
-                                {cell.by}{cell.at ? ` · ${new Date(cell.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                              <span style={{ fontSize: 11, color: "var(--faint)", flex: "none" }}>
+                                ✓ {cell.by}{cell.at ? ` · ${new Date(cell.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
                               </span>
                             )}
-                          </label>
+                          </div>
                         );
                       })}
                     </div>

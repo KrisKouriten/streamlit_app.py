@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { getSession, isAdmin, hashPassword } from "../../../../lib/auth";
+import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
+import { clearMfaForUser } from "../../../../lib/mfa";
 import { audit, setUserRole, listUsersWithRoles } from "../../../../lib/governance";
 
 const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
@@ -63,6 +64,8 @@ export async function POST(request) {
       }
       const hash = await hashPassword(password);
       await query(`UPDATE users SET password = $1 WHERE id = $2`, [hash, userId]);
+      // A password reset invalidates every existing session for that user.
+      await endAllSessions(userId, session.email);
       await audit({ actor: session, eventType: "user.reset-password", objectType: "users", objectRef: String(userId) });
       return NextResponse.json({ ok: true });
     }
@@ -76,7 +79,20 @@ export async function POST(request) {
         return NextResponse.json({ error: "You cannot deactivate your own account" }, { status: 400 });
       }
       await query(`UPDATE users SET is_active = $1 WHERE id = $2`, [isActive, userId]);
+      // Deactivating an account tears down its live sessions immediately.
+      if (!isActive) await endAllSessions(userId, session.email);
       await audit({ actor: session, eventType: "user.set-active", objectType: "users", objectRef: String(userId), detail: { isActive } });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "clear-mfa") {
+      const { userId } = body;
+      if (!Number.isInteger(userId)) return NextResponse.json({ error: "Invalid user" }, { status: 400 });
+      // Escape hatch for a user who lost their device and recovery codes. Ends
+      // their live sessions too, so the next sign-in re-enrols cleanly.
+      await clearMfaForUser(userId, session);
+      await endAllSessions(userId, session.email);
+      await audit({ actor: session, eventType: "user.clear-mfa", objectType: "users", objectRef: String(userId) });
       return NextResponse.json({ ok: true });
     }
 

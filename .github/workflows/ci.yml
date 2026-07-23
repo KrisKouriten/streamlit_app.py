@@ -1,0 +1,54 @@
+name: CI
+
+# Gate every push and PR on the unit tests, and prove the full migration ladder
+# applies cleanly against a fresh Postgres before it ever reaches Neon.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch: # allow a manual re-run from the Actions tab
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  migrations:
+    name: Migrations apply on a fresh database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: finos_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/finos_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      # Base schema (public.users + core/finance/governance schemas), then the
+      # numbered migrations in order. A second run proves they are idempotent.
+      - run: npm run init-db
+      - run: npm run migrate
+      - run: npm run migrate

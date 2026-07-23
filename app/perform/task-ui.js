@@ -10,10 +10,10 @@ export const STATUS_STYLE = {
   IN_PROGRESS: ["var(--accent)", "var(--accent-bg)", "In progress"],
   WAITING_FOR_INFORMATION: ["var(--amber)", "var(--amber-bg)", "Waiting for info"],
   READY_FOR_REVIEW: ["var(--amber)", "var(--amber-bg)", "Ready for review"],
-  RETURNED: ["#a32d2d", "#f7e6e3", "Returned"],
+  RETURNED: ["var(--red)", "var(--red-bg)", "Returned"],
   COMPLETE: ["var(--green)", "var(--green-bg)", "Complete"],
-  BLOCKED: ["#a32d2d", "#f7e6e3", "Blocked"],
-  OVERDUE: ["#a32d2d", "#f7e6e3", "Overdue"],
+  BLOCKED: ["var(--red)", "var(--red-bg)", "Blocked"],
+  OVERDUE: ["var(--red)", "var(--red-bg)", "Overdue"],
   CANCELLED: ["var(--faint)", "var(--line)", "Cancelled"],
 };
 
@@ -27,7 +27,7 @@ export function StatusChip({ status }) {
 }
 
 export const PRIORITY_STYLE = {
-  CRITICAL: ["#a32d2d", "‼"], HIGH: ["var(--amber)", "!"], MEDIUM: ["var(--muted)", ""], LOW: ["var(--faint)", ""],
+  CRITICAL: ["var(--red)", "‼"], HIGH: ["var(--amber)", "!"], MEDIUM: ["var(--muted)", ""], LOW: ["var(--faint)", ""],
 };
 export function PriorityMark({ priority }) {
   const [fg, mark] = PRIORITY_STYLE[priority] || PRIORITY_STYLE.MEDIUM;
@@ -82,7 +82,7 @@ export function TaskActionButtons({ task, meId, isManager, compact = false }) {
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       {buttons}
-      {err && <span style={{ fontSize: 11.5, color: "#a32d2d" }}>{err}</span>}
+      {err && <span style={{ fontSize: 11.5, color: "var(--red)" }}>{err}</span>}
     </span>
   );
 }

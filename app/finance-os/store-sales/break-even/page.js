@@ -6,7 +6,7 @@ import { PageHeader, StatRow, Stat, Panel, Table, SubNav, STORE_SALES_NAV, money
 export const dynamic = "force-dynamic";
 
 const chip = (status) => {
-  const map = { ABOVE: ["var(--green)", "var(--green-bg)"], BELOW: ["#a32d2d", "#f7e6e3"] };
+  const map = { ABOVE: ["var(--green)", "var(--green-bg)"], BELOW: ["var(--red)", "var(--red-bg)"] };
   const [fg, bg] = map[status] || ["var(--muted)", "var(--line)"];
   return <span style={{ fontSize: 10.5, fontWeight: 600, color: fg, background: bg, padding: "2px 8px", borderRadius: 6 }}>{status || "—"}</span>;
 };
@@ -29,7 +29,7 @@ export default async function BreakEvenBoard() {
   if (!session) redirect("/login");
 
   const [rows, wins] = await Promise.all([getBreakEven(), getWindows()]);
-  if (!wins) return <AwaitingData crumb="Operational intelligence" title="Store Break-even & EBITDA" />;
+  if (!wins) return <AwaitingData crumb="Trading" title="Store Break-even & EBITDA" />;
   const above = rows.filter((r) => r.ytd_status === "ABOVE");
   const below = rows.filter((r) => r.ytd_status === "BELOW");
   const noData = rows.filter((r) => r.ytd_status !== "ABOVE" && r.ytd_status !== "BELOW");
@@ -40,7 +40,7 @@ export default async function BreakEvenBoard() {
 
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title="Store Break-even & EBITDA"
+      <PageHeader crumb="Trading" title="Store Break-even & EBITDA"
         right={`Data to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/break-even" />
 

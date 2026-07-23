@@ -53,7 +53,7 @@ export default async function TeamSchedule({ searchParams }) {
         {isManager && <GenerateWeek week={week} />}
         <span style={{ fontSize: 13, color: "var(--muted)" }}>
           Week completion: <strong>{pct}%</strong> ({stats.complete}/{stats.total}) · {stats.awaiting_review} awaiting review ·{" "}
-          <span style={{ color: stats.overdue ? "#a32d2d" : "var(--muted)" }}>{stats.overdue} overdue</span> · {stats.blocked} blocked
+          <span style={{ color: stats.overdue ? "var(--red)" : "var(--muted)" }}>{stats.overdue} overdue</span> · {stats.blocked} blocked
         </span>
       </div>
       <div style={{ height: 6, borderRadius: 99, background: "var(--line)", overflow: "hidden", marginBottom: 24 }}>
@@ -83,7 +83,7 @@ export default async function TeamSchedule({ searchParams }) {
               <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
               <div style={{ fontSize: 12, color: "var(--faint)" }}>{Math.round(p.minutes / 60 * 10) / 10}h of {Number(p.weekly_hours)}h capacity</div>
               <div style={{ width: 120, height: 5, borderRadius: 99, background: "var(--line)", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${loadPct}%`, background: loadPct > 85 ? "#a32d2d" : "var(--accent)" }} />
+                <div style={{ height: "100%", width: `${loadPct}%`, background: loadPct > 85 ? "var(--red)" : "var(--accent)" }} />
               </div>
             </div>
             {p.tasks.length === 0 && <div style={{ fontSize: 12.5, color: "var(--faint)" }}>No tasks assigned this week.</div>}

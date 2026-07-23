@@ -20,8 +20,8 @@ export default function ReviewButtons({ taskId }) {
       <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Review comment"
         style={{ height: 30, padding: "0 8px", border: "1px solid var(--line-strong)", borderRadius: 7, background: "var(--bg)", color: "var(--ink)", fontSize: 12.5, width: 180 }} />
       <button style={{ ...b, background: "var(--accent)" }} onClick={() => act("approve")}>Approve</button>
-      <button style={{ ...b, background: "#a32d2d" }} onClick={() => act("return")}>Return</button>
-      {err && <span style={{ fontSize: 11.5, color: "#a32d2d" }}>{err}</span>}
+      <button style={{ ...b, background: "var(--red)" }} onClick={() => act("return")}>Return</button>
+      {err && <span style={{ fontSize: 11.5, color: "var(--red)" }}>{err}</span>}
     </span>
   );
 }

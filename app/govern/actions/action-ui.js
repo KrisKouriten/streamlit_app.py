@@ -9,7 +9,7 @@ export const ACTION_STATUS_STYLE = {
   COMPLETE: ["var(--amber)", "var(--amber-bg)"],
   CLOSED: ["var(--green)", "var(--green-bg)"],
   CANCELLED: ["var(--faint)", "var(--line)"],
-  OVERDUE: ["#a32d2d", "#f7e6e3"],
+  OVERDUE: ["var(--red)", "var(--red-bg)"],
 };
 export function ActionStatusChip({ status }) {
   const [fg, bg] = ACTION_STATUS_STYLE[status] || ["var(--muted)", "var(--line)"];
@@ -57,7 +57,7 @@ export function CreateActionForm() {
       <input style={input} type="number" placeholder="Expected value £ (optional)" value={f.expectedValue} onChange={(e) => setF({ ...f, expectedValue: e.target.value })} />
       <input style={{ ...input, gridColumn: "1/-1" }} placeholder="Root cause (optional)" value={f.rootCause} onChange={(e) => setF({ ...f, rootCause: e.target.value })} />
       <textarea style={{ ...input, height: 60, gridColumn: "1/-1", padding: "8px 10px" }} placeholder="Description (optional)" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
-      {err && <div style={{ gridColumn: "1/-1", fontSize: 12.5, color: "#a32d2d" }}>{err}</div>}
+      {err && <div style={{ gridColumn: "1/-1", fontSize: 12.5, color: "var(--red)" }}>{err}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="submit" style={btn()}>Create</button>
         <button type="button" style={ghost} onClick={() => setOpen(false)}>Cancel</button>
@@ -95,7 +95,7 @@ export function ActionControls({ action, isManager, canClose, isOwner }) {
           Completion is the owner saying the work is done. Closure is a separate approval by ADMIN/FINANCE/EXEC.
         </div>
       )}
-      {err && <div style={{ fontSize: 12.5, color: "#a32d2d" }}>{err}</div>}
+      {err && <div style={{ fontSize: 12.5, color: "var(--red)" }}>{err}</div>}
     </div>
   );
 }
@@ -113,7 +113,7 @@ export function RealisedValueForm({ actionId, current }) {
     <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
       <input style={{ ...input, width: 140 }} type="number" placeholder="Realised value £" value={v} onChange={(e) => setV(e.target.value)} />
       <button style={ghost} onClick={save}>Record</button>
-      {err && <span style={{ fontSize: 11.5, color: "#a32d2d" }}>{err}</span>}
+      {err && <span style={{ fontSize: 11.5, color: "var(--red)" }}>{err}</span>}
     </span>
   );
 }
@@ -133,8 +133,8 @@ export function ValidateBenefitControl({ opportunityId, suggested }) {
       <input style={{ ...input, width: 130, height: 30 }} type="number" placeholder="Validated £" value={v} onChange={(e) => setV(e.target.value)} />
       <input style={{ ...input, width: 160, height: 30 }} placeholder="Comment" value={comment} onChange={(e) => setComment(e.target.value)} />
       <button style={{ ...btn("var(--green)"), height: 30 }} onClick={() => decide("VALIDATED")}>Validate</button>
-      <button style={{ ...btn("#a32d2d"), height: 30 }} onClick={() => decide("DISPUTED")}>Dispute</button>
-      {err && <span style={{ fontSize: 11.5, color: "#a32d2d" }}>{err}</span>}
+      <button style={{ ...btn("var(--red)"), height: 30 }} onClick={() => decide("DISPUTED")}>Dispute</button>
+      {err && <span style={{ fontSize: 11.5, color: "var(--red)" }}>{err}</span>}
     </span>
   );
 }

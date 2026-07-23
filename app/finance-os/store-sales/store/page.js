@@ -41,7 +41,7 @@ export default async function StoreDrilldown({ searchParams }) {
 
   const params = await searchParams;
   const [wins, stores, mkt] = await Promise.all([getWindows(), getStoreList(), getMarketAssumptions()]);
-  if (!wins || !stores.length) return <AwaitingData crumb="Operational intelligence" title="Store drilldown" />;
+  if (!wins || !stores.length) return <AwaitingData crumb="Trading" title="Store drilldown" />;
   const code = params?.store && stores.some((s) => s.store_code === params.store) ? params.store : stores[0]?.store_code;
   const store = stores.find((s) => s.store_code === code);
   const d = await getStoreDetail(code, wins.ytd);
@@ -84,7 +84,7 @@ export default async function StoreDrilldown({ searchParams }) {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title={`Store drilldown — ${store?.store_name || code}`}
+      <PageHeader crumb="Trading" title={`Store drilldown — ${store?.store_name || code}`}
         right={`YTD to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/store" />
 
@@ -107,7 +107,7 @@ export default async function StoreDrilldown({ searchParams }) {
           <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{label}</div>
             <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1 }}>{value}</div>
-            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "#a32d2d" }}>{pctOrDash(t)} YoY</div>}
+            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "var(--red)" }}>{pctOrDash(t)} YoY</div>}
           </div>
         ))}
       </div>
@@ -146,7 +146,7 @@ export default async function StoreDrilldown({ searchParams }) {
           {d.profile && (
             <div style={{ marginTop: 10, fontSize: 13, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px" }}>
               Break-even (YTD): {money(d.profile.ytd_break_even)} vs actual {money(d.profile.ytd_actual)} —{" "}
-              <strong style={{ color: d.profile.ytd_status === "ABOVE" ? "var(--green)" : "#a32d2d" }}>{d.profile.ytd_status}</strong>
+              <strong style={{ color: d.profile.ytd_status === "ABOVE" ? "var(--green)" : "var(--red)" }}>{d.profile.ytd_status}</strong>
             </div>
           )}
         </Panel>

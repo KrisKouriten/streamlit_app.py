@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS core.dim_store (
     ownership_type      varchar(20) NOT NULL CHECK (ownership_type IN ('COMPANY','FRANCHISE','ECOMMERCE','OTHER')),
     region              varchar(80),
     area_manager        varchar(120),
+    operator_name       varchar(120),
     opening_date        date,
     closing_date        date,
     selling_sqft        numeric(14,2),

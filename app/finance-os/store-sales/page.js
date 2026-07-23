@@ -49,7 +49,7 @@ function PeriodBlock({ title, range, s, fyPlan, mkt }) {
         {tiles.map(([label, value, tone]) => (
           <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{label}</div>
-            <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1, color: tone === null || tone === undefined ? "var(--ink)" : tone >= 0 ? "var(--green)" : "#a32d2d" }}>{value}</div>
+            <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1, color: tone === null || tone === undefined ? "var(--ink)" : tone >= 0 ? "var(--green)" : "var(--red)" }}>{value}</div>
           </div>
         ))}
       </div>
@@ -122,7 +122,7 @@ export default async function StoreSalesExecutive() {
   if (!session) redirect("/login");
 
   const wins = await getWindows();
-  if (!wins) return <AwaitingData crumb="Operational intelligence" title="Store Sales & KPI — All Stores" />;
+  if (!wins) return <AwaitingData crumb="Trading" title="Store Sales & KPI — All Stores" />;
   const [week, mtd, ytd, fyPlan, mkt] = await Promise.all([
     getPeriodSummary(wins.week), getPeriodSummary(wins.mtd), getPeriodSummary(wins.ytd),
     getFyPlanTotal(), getMarketAssumptions(),
@@ -131,7 +131,7 @@ export default async function StoreSalesExecutive() {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
-      <PageHeader crumb="Operational intelligence" title="Store Sales & KPI — All Stores"
+      <PageHeader crumb="Trading" title="Store Sales & KPI — All Stores"
         right={`Data to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales" />
 

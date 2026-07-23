@@ -8,7 +8,7 @@ import { AI_NAV } from "./nav";
 
 export const dynamic = "force-dynamic";
 
-const RISK = { LOW: "var(--green)", MEDIUM: "var(--amber)", HIGH: "#a32d2d" };
+const RISK = { LOW: "var(--green)", MEDIUM: "var(--amber)", HIGH: "var(--red)" };
 const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
 
 export default async function AgentCentre() {
@@ -76,7 +76,7 @@ export default async function AgentCentre() {
           ? <div style={{ fontSize: 13.5, color: "var(--faint)" }}>No open exceptions.</div>
           : exceptions.map((e) => (
             <div key={e.exception_id} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 6, fontSize: 13 }}>
-              <strong style={{ color: "#a32d2d" }}>{e.severity}</strong> · {e.agent_code} · {e.message}
+              <strong style={{ color: "var(--red)" }}>{e.severity}</strong> · {e.agent_code} · {e.message}
               <Link href={`/ai/runs/${e.run_id}`} style={{ marginLeft: 8 }}>view run</Link>
             </div>
           ))}

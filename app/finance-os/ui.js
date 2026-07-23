@@ -31,43 +31,43 @@ export function dateLabel(d) {
 }
 
 const TONE = {
-  green: "var(--green)", amber: "var(--amber)", red: "#a32d2d", muted: "var(--muted)",
+  green: "var(--green)", amber: "var(--amber)", red: "var(--red)", muted: "var(--muted)",
 };
 
 export function PageHeader({ crumb, title, right }) {
   return (
-    <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", gap: 12, flexWrap: "wrap" }}>
+    <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", margin: "0.5rem 0 1.9rem", gap: 12, flexWrap: "wrap" }}>
       <div>
-        <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-          <Link href="/finance-os" style={{ textDecoration: "none", color: "var(--faint)" }}>Finance OS</Link> · {crumb}
+        <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>
+          <Link href="/dashboards" style={{ textDecoration: "none", color: "var(--faint)" }}>Dashboards</Link> · {crumb}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em", lineHeight: 1.15 }}>{title}</div>
       </div>
-      {right && <div style={{ fontSize: 13, color: "var(--muted)" }}>{right}</div>}
+      {right && <div style={{ fontSize: 12.5, color: "var(--muted)", paddingBottom: 3 }}>{right}</div>}
     </header>
   );
 }
 
 export function StatRow({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 26 }}>{children}</div>;
+  return <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 30 }}>{children}</div>;
 }
 
 export function Stat({ label, value, sub, tone }) {
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
-      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1, color: tone ? TONE[tone] : "var(--ink)" }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 5 }}>{sub}</div>}
+    <div className="fos-card" style={{ padding: "15px 17px 14px" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 9 }}>{label}</div>
+      <div className="fos-num" style={{ fontSize: 27, fontWeight: 650, lineHeight: 1, letterSpacing: "-.025em", color: tone ? TONE[tone] : "var(--ink)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 7 }}>{sub}</div>}
     </div>
   );
 }
 
 export function Panel({ title, note, children }) {
   return (
-    <section style={{ marginBottom: 26 }}>
+    <section style={{ marginBottom: 32 }}>
       {title && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 11 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 650, letterSpacing: "-.015em" }}>{title}</div>
           {note && <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {note}</span>}
         </div>
       )}
@@ -82,12 +82,12 @@ export function Table({ columns, rows, empty = "No data." }) {
     return <div style={{ fontSize: 13.5, color: "var(--faint)", padding: "12px 0" }}>{empty}</div>;
   }
   return (
-    <div style={{ overflowX: "auto", border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--surface)" }}>
+    <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 520 }}>
         <thead>
           <tr>
             {columns.map((c, i) => (
-              <th key={i} style={{ textAlign: c.align || "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 500, fontSize: 12, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
+              <th key={i} style={{ textAlign: c.align || "left", padding: "11px 16px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
                 {c.label}
               </th>
             ))}
@@ -99,11 +99,10 @@ export function Table({ columns, rows, empty = "No data." }) {
               {columns.map((c, ci) => {
                 const tone = typeof c.tone === "function" ? c.tone(row) : c.tone;
                 return (
-                  <td key={ci} style={{
-                    textAlign: c.align || "left", padding: "10px 14px",
-                    borderBottom: ri === rows.length - 1 ? "none" : "1px solid var(--line)",
+                  <td key={ci} className={c.align === "right" ? "fos-num" : undefined} style={{
+                    textAlign: c.align || "left", padding: "10.5px 16px",
+                    borderBottom: ri === rows.length - 1 ? "none" : "1px solid var(--hairline)",
                     color: tone ? TONE[tone] : "var(--ink)", whiteSpace: "nowrap",
-                    fontVariantNumeric: c.align === "right" ? "tabular-nums" : "normal",
                   }}>
                     {c.render(row)}
                   </td>
@@ -119,18 +118,70 @@ export function Table({ columns, rows, empty = "No data." }) {
 
 export function SubNav({ items, active }) {
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
+    <div style={{ display: "inline-flex", gap: 3, marginBottom: 24, flexWrap: "wrap", padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
       {items.map(([href, label]) => {
         const on = href === active;
         return (
           <Link key={href} href={href} style={{
-            fontSize: 12.5, padding: "5px 12px", borderRadius: 7, textDecoration: "none",
-            border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
-            background: on ? "var(--accent-bg)" : "transparent",
-            color: on ? "var(--accent)" : "var(--muted)",
+            fontSize: 12.5, fontWeight: on ? 600 : 500, padding: "6px 13px", borderRadius: 7, textDecoration: "none",
+            background: on ? "var(--surface)" : "transparent",
+            boxShadow: on ? "var(--shadow-1)" : "none",
+            border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+            color: on ? "var(--ink)" : "var(--muted)",
+            transition: "color var(--t-fast) var(--ease), background var(--t-fast) var(--ease)",
           }}>{label}</Link>
         );
       })}
+    </div>
+  );
+}
+
+// The standard KPI card (alias of Stat — one component, one look everywhere).
+export const KpiCard = Stat;
+
+// Reusable filter bar: a labelled row of controls above tables/dashboards.
+// Server-safe; pass links, forms or client controls as children.
+export function FilterBar({ label = "Filters", children, right }) {
+  return (
+    <div className="fos-card" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 14px", marginBottom: 18 }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", flex: "none" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>{children}</div>
+      {right && <div style={{ flex: "none", fontSize: 12, color: "var(--faint)" }}>{right}</div>}
+    </div>
+  );
+}
+
+// Reusable empty state — for screens whose feed/inputs are not loaded yet.
+export function EmptyState({ title = "Nothing here yet", children, action }) {
+  return (
+    <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center" }}>
+      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, maxWidth: 480, margin: "0 auto" }}>{children}</div>
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
+}
+
+// Reusable error state — honest, with the next step.
+export function ErrorState({ title = "Something went wrong", detail, action }) {
+  return (
+    <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center", borderColor: "color-mix(in srgb, var(--red) 35%, var(--line))" }}>
+      <div style={{ fontSize: 15, fontWeight: 650, color: "var(--red)", marginBottom: 6 }}>{title}</div>
+      {detail && <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, maxWidth: 520, margin: "0 auto" }}>{detail}</div>}
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
+}
+
+// Reusable loading skeleton — shimmer rows in a card (used by app/loading.js).
+export function LoadingSkeleton({ rows = 5 }) {
+  return (
+    <div className="fos-card" style={{ padding: "18px 20px" }}>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes fosShimmer{0%{opacity:.35}50%{opacity:.7}100%{opacity:.35}}` }} />
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} aria-hidden="true" style={{ height: 13, borderRadius: 6, background: "var(--raise)", margin: "13px 0", width: `${88 - (i % 3) * 14}%`, animation: `fosShimmer 1.6s ease-in-out ${i * 0.12}s infinite` }} />
+      ))}
+      <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading…</span>
     </div>
   );
 }
@@ -146,4 +197,85 @@ export function varianceTone(v, favourableUp = true) {
   if (v === null || v === undefined) return "muted";
   const good = favourableUp ? Number(v) >= 0 : Number(v) <= 0;
   return good ? "green" : "red";
+}
+
+const BADGE_FG = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)", accent: "var(--accent)", muted: "var(--muted)" };
+const BADGE_BG = { green: "var(--green-bg)", amber: "var(--amber-bg)", red: "var(--red-bg)", accent: "var(--accent-bg)", muted: "var(--raise)" };
+
+// Small uppercase pill. tone ∈ green|amber|red|accent|muted.
+export function Badge({ tone = "muted", children }) {
+  return (
+    <span style={{
+      display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600,
+      textTransform: "uppercase", letterSpacing: ".06em", color: BADGE_FG[tone], background: BADGE_BG[tone],
+      border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap", lineHeight: 1.2,
+    }}>{children}</span>
+  );
+}
+
+// Data-provenance badge — makes "is this real?" legible on every dashboard.
+// kind ∈ xero | feed | model | illustrative.
+const PROVENANCE = {
+  xero: ["accent", "Real · Xero feed"],
+  feed: ["accent", "Real · governed feed"],
+  model: ["accent", "Real · uploaded model"],
+  illustrative: ["amber", "Illustrative · no live feed"],
+};
+export function ProvenanceBadge({ kind }) {
+  const [tone, label] = PROVENANCE[kind] || PROVENANCE.illustrative;
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
+// Inline proportional bar for tables / mini-charts. Renders |value| against max.
+export function Bar({ value, max, tone = "accent", width = 88 }) {
+  const w = max ? Math.max(0, Math.min(100, (Math.abs(Number(value)) / Math.abs(max)) * 100)) : 0;
+  const color = BADGE_FG[tone] || "var(--accent)";
+  return (
+    <span style={{ display: "inline-block", width, height: 7, background: "var(--raise)", borderRadius: 4, overflow: "hidden", verticalAlign: "middle", boxShadow: "inset 0 1px 1px rgba(0,0,0,.18)" }}>
+      <span style={{ display: "block", width: `${w}%`, height: "100%", borderRadius: 4,
+        background: `linear-gradient(90deg, color-mix(in srgb, ${color} 62%, transparent), ${color})`,
+        transition: "width var(--t-slow) var(--ease)" }} />
+    </span>
+  );
+}
+
+// Amber "this is illustrative" banner — the honesty device for no-feed dashboards.
+// Mirrors EntityScopeBanner so real and illustrative dashboards read as one family.
+export function IllustrativeBanner({ children }) {
+  return (
+    <div style={{ background: "linear-gradient(135deg, var(--amber-bg), color-mix(in srgb, var(--amber-bg) 45%, var(--surface)))", border: "1px solid color-mix(in srgb, var(--amber) 30%, var(--line))", borderRadius: "var(--radius)", boxShadow: "var(--card-top)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>Illustrative data</span>
+      {children}
+    </div>
+  );
+}
+
+// Consolidation-scope banner for the real Xero finance dashboards. Makes the
+// partial feed explicit: which entities are live and as at when. Shown whenever
+// a page reports real statutory finance so no one reads it as the whole group.
+export function EntityScopeBanner({ scope, asAt }) {
+  const joiin = scope?.kind === "JOIIN";
+  const count = scope?.count || 0;
+  const names = (scope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
+  const empty = !joiin && count === 0;
+  return (
+    <div style={{ background: "linear-gradient(135deg, var(--accent-bg), color-mix(in srgb, var(--accent-bg) 45%, var(--surface)))", border: "1px solid color-mix(in srgb, var(--accent-deep) 55%, var(--line))", borderRadius: "var(--radius)", boxShadow: "var(--card-top)", padding: "10px 14px", marginBottom: 18, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink)" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: ".08em", marginRight: 8 }}>
+        {joiin ? "Real feed · Joiin" : "Real Xero feed"}
+      </span>
+      {joiin ? (
+        <span>
+          Consolidated across the full group — {count} companies via Joiin, intercompany eliminations applied
+          {asAt ? ` · as at ${dateLabel(asAt)}` : ""}.
+        </span>
+      ) : empty ? (
+        <span>No Xero organisation is connected yet — connect one to populate these figures.</span>
+      ) : (
+        <span>
+          Consolidated across {count} connected {count === 1 ? "entity" : "entities"}{names ? ` — ${names}` : ""}
+          {asAt ? ` · as at ${dateLabel(asAt)}` : ""}. Connect further Xero organisations to consolidate the full Miniso&nbsp;UK group.
+        </span>
+      )}
+    </div>
+  );
 }

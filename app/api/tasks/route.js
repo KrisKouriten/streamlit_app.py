@@ -11,12 +11,12 @@ export async function GET(request) {
   if (!period) return NextResponse.json({ error: "Missing period" }, { status: 400 });
 
   const { rows } = await query(
-    "SELECT task_key, done, done_by, done_at FROM task_state WHERE period = $1 AND done = true",
+    "SELECT task_key, done, done_by, done_at, owner FROM task_state WHERE period = $1",
     [period]
   );
   const state = {};
   for (const r of rows) {
-    state[r.task_key] = { done: true, by: r.done_by, at: r.done_at };
+    state[r.task_key] = { done: r.done, by: r.done_by, at: r.done_at, owner: r.owner };
   }
   return NextResponse.json({ state });
 }
@@ -26,9 +26,19 @@ export async function POST(request) {
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   try {
-    const { period, taskKey, done } = await request.json();
-    if (!period || !taskKey || typeof done !== "boolean") {
+    const { period, taskKey, done, owner } = await request.json();
+    if (!period || !taskKey || (typeof done !== "boolean" && owner === undefined)) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+    if (owner !== undefined) {
+      await query(
+        `INSERT INTO task_state (period, task_key, done, owner) VALUES ($1, $2, false, $3)
+         ON CONFLICT (period, task_key) DO UPDATE SET owner = $3`,
+        [period, taskKey, owner || null]
+      );
+      await audit({ actor: session, eventType: "task.owner", objectType: "task_state",
+        objectRef: `${period}|${taskKey}`, detail: { owner } });
+      return NextResponse.json({ ok: true });
     }
     if (done) {
       await query(
