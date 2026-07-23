@@ -1,7 +1,13 @@
 export const metadata = {
   title: "Miniso UK Finance OS",
   description: "Miniso UK — The Connected Finance Function",
+  manifest: "/manifest.webmanifest",
+  // Installed desktop/app title and behaviour.
+  appleWebApp: { capable: true, title: "Finance OS", statusBarStyle: "black-translucent" },
 };
+
+// Browser/OS window chrome colour when installed as an app.
+export const viewport = { themeColor: "#0d0c0a" };
 
 /* Design system v2 — "The Connected Finance Function", executive grade.
    Dark by default (the brand world) with a retained light theme via
@@ -127,6 +133,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('fos-theme');if(
 import { getSession } from "../lib/auth";
 import AppShell from "./app-shell";
 import PageTransition from "./page-transition";
+import PwaRegister from "./pwa-register";
 
 export default async function RootLayout({ children }) {
   const session = await getSession();
@@ -137,6 +144,7 @@ export default async function RootLayout({ children }) {
         <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
       <body>
+        <PwaRegister />
         {session ? (
           <AppShell userName={session.name}>{children}</AppShell>
         ) : (

@@ -109,6 +109,9 @@ export async function middleware(req) {
 }
 
 export const config = {
-  // Run on everything except Next internals and static asset routes.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/|robots.txt|sitemap.xml|manifest.webmanifest).*)"],
+  // Run on everything except Next internals, static assets, and the PWA files
+  // the browser fetches before sign-in (manifest, icons, service worker).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|fonts/|robots.txt|sitemap.xml|manifest.webmanifest|icon-192.png|icon-512.png|sw.js).*)",
+  ],
 };
