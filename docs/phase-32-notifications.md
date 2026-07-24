@@ -32,15 +32,22 @@ that needs you, as it happens"* — which lights up the previously-PLANNED
 - `lib/agents.js` — the reviewer-notification producer.
 - `lib/nav-registry.js` — Notifications flipped to LIVE.
 
-## Not yet in this part (fast-follow, part 2)
+## Fast-follows (part 2 — now shipped)
 
-- **Top-bar bell + unread badge** — deliberately left off this cut to avoid
-  touching the shared app shell mid-stream; the sidebar **Notifications** link is
-  the entry point for now. `badgeLabel` / the `?count` endpoint are already built
-  for it.
-- **@mentions on comments** — the collaboration half: parse `@name` in comments
-  (building on the existing `workflow.task_comment`) and notify the mentioned
-  user via `notifyUser`. Producer #2.
+- **Top-bar bell + unread badge** — `NotifBell` in `app/topnav.js` polls
+  `/api/notifications?count` on mount, every 60s, and on window focus, showing a
+  badge (`badgeLabel`, capped at "9+") and linking to `/inbox`. Rendered only for
+  a signed-in user.
+- **@mentions on comments** — the collaboration half. `extractMentions` parses
+  `@name` tokens from a comment (ignoring email addresses), `resolveMentions`
+  matches them to active users (email local-part / full name / first name /
+  name-no-spaces), and `notifyMentions` notifies each — excluding the author.
+  Wired into the task-comment handler (`app/api/workflow/tasks/route.js`,
+  `action === "comment"`), best-effort so a notification failure never fails the
+  comment. Producer #2. Both pure helpers are unit-tested.
+
+## Still to come
+
 - More producers (task assignment, review decisions).
 
 ## Migration to run at merge

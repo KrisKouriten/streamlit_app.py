@@ -3,6 +3,7 @@ import { query } from "../../../../lib/db";
 import { getSession, hasRole } from "../../../../lib/auth";
 import { audit } from "../../../../lib/governance";
 import { TRANSITIONS, transitionError, generateWeek, escalateOverdue } from "../../../../lib/workflow";
+import { notifyMentions } from "../../../../lib/notifications";
 
 /*
  * Task actions. Body: { action, taskId?, ... }.
@@ -83,8 +84,21 @@ export async function POST(request) {
     // --- comments & evidence ---------------------------------------------
     if (action === "comment") {
       if (!body.body?.trim()) return NextResponse.json({ error: "Comment cannot be empty" }, { status: 400 });
+      const comment = body.body.trim();
       await query(`INSERT INTO workflow.task_comment (task_id, author, body) VALUES ($1, $2, $3)`,
-        [taskId, session.email, body.body.trim()]);
+        [taskId, session.email, comment]);
+      // Best-effort: notify anyone @mentioned in the comment (never fails the write).
+      try {
+        await notifyMentions({
+          body: comment,
+          link: `/perform/tasks/${taskId}`,
+          actor: session.name || session.email,
+          authorId: session.id,
+          objectType: "task",
+          objectRef: String(taskId),
+          snippet: comment.slice(0, 140),
+        });
+      } catch {}
       return NextResponse.json({ ok: true });
     }
     if (action === "evidence") {

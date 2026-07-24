@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { badgeLabel } from "../lib/notification-rules";
 
 /* Slim glass top bar. Section navigation lives in the persistent sidebar;
    this keeps the brand, menu (narrow screens), Search ⌘K, theme and account. */
@@ -51,6 +52,34 @@ function ThemeToggle() {
   );
 }
 
+function NotifBell() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/notifications?count", { cache: "no-store" });
+        if (r.ok) { const d = await r.json(); if (alive) setCount(d.count || 0); }
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 60000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; clearInterval(id); window.removeEventListener("focus", onFocus); };
+  }, []);
+  const label = badgeLabel(count);
+  return (
+    <Link href="/inbox" title="Notifications" aria-label={`Notifications${count ? ` (${count} unread)` : ""}`}
+      className="fos-btn-ghost" style={{ width: 32, padding: 0, justifyContent: "center", position: "relative", fontSize: 14 }}>
+      <span aria-hidden>&#128276;</span>
+      {label && (
+        <span aria-hidden style={{ position: "absolute", top: -3, right: -3, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8, background: "var(--accent)", color: "var(--accent-ink)", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>{label}</span>
+      )}
+    </Link>
+  );
+}
+
 function UserChip({ name }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -90,6 +119,7 @@ export default function TopNav({ userName }) {
         </Link>
         <div style={{ flex: 1 }} />
         <PaletteTrigger />
+        {userName && <NotifBell />}
         <ThemeToggle />
         {userName && <UserChip name={userName} />}
       </div>
