@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const SOURCE = {
   STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store · all" },
-  XERO: { fg: "var(--accent)", bg: "var(--accent-bg)", label: "Xero" },
+  XERO: { fg: "var(--accent)", bg: "var(--accent-bg)", label: "Joiin" },
 };
 const SEV = {
   CRITICAL: { fg: "var(--red)", bg: "var(--red-bg)", label: "Critical" },
@@ -100,7 +100,7 @@ export default async function ExecutiveHub() {
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
           <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
-          <div>Xero finance as at {dateLabel(financeAsAt)}</div>
+          <div>Joiin finance as at {dateLabel(financeAsAt)}</div>
         </div>
       </header>
 
@@ -108,7 +108,7 @@ export default async function ExecutiveHub() {
 
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5, textAlign: "center", maxWidth: 760, marginInline: "auto" }}>
         Revenue and gross margin (left) are live from the store sales feed — all stores. Revenue, gross profit, net
-        result and cash (right) are real Xero actuals across {connCount} connected {connCount === 1 ? "entity" : "entities"}
+        result and cash (right) are real Joiin actuals across {connCount} connected {connCount === 1 ? "entity" : "entities"}
         {connNames ? ` (${connNames})` : ""}.
       </div>
 

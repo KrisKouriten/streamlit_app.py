@@ -24,18 +24,34 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
   }
 
   const [refreshing, setRefreshing] = useState(false);
+  async function postJson(body) {
+    const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const text = await res.text();
+    let j = {};
+    try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Refresh failed (HTTP ${res.status}) — the server didn't return JSON. ${text.slice(0, 160)}`); }
+    if (!res.ok) throw new Error(j.error || `Refresh failed (HTTP ${res.status})`);
+    return j;
+  }
+
+  // Drive the refresh in small chunks (one phase — and for board packs one scope
+  // — per request) so no single call can hit the serverless time limit. A chunk
+  // that warns (e.g. a table not yet migrated) is recorded and the rest carry on.
   async function refreshFromJoiin(full = false) {
-    setRefreshing(true); setUpMsg(null); setErr(null);
+    setRefreshing(true); setUpMsg("Planning refresh…"); setErr(null);
     try {
-      const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ full }) });
-      const text = await res.text();
-      let j = {};
-      try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Refresh failed (HTTP ${res.status}) — the server didn't return JSON. ${text.slice(0, 160)}`); }
-      if (!res.ok) throw new Error(j.error || `Refresh failed (HTTP ${res.status})`);
-      const packs = j.boardPacks?.packs ?? 0;
-      const bsRows = j.balanceSheet?.bsRows ?? 0;
-      const notes = [...(j.entityErrors || []), ...(j.boardPacks?.errors || []), ...(j.balanceSheet?.bsErrors || [])];
-      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} per-entity rows, ${packs} board pack(s) and ${bsRows} balance-sheet rows across ${(j.months || []).join(", ")}.${notes.length ? ` ${notes.length} warning(s): ${notes.slice(0, 3).join("; ")}${notes.length > 3 ? "…" : ""}` : ""}`);
+      const plan = await postJson({ plan: true, full });
+      const chunks = plan.chunks || [];
+      let entityRows = 0, packs = 0, bsRows = 0;
+      const notes = [];
+      for (let i = 0; i < chunks.length; i++) {
+        setUpMsg(`Refreshing ${i + 1}/${chunks.length} — ${chunks[i].phase}${chunks[i].scope ? ` (${chunks[i].scope})` : ""} ${chunks[i].month}…`);
+        try {
+          const r = await postJson(chunks[i]);
+          entityRows += r.entityRows || 0; packs += r.packs || 0; bsRows += r.bsRows || 0;
+          if (r.errors?.length) notes.push(...r.errors);
+        } catch (e) { notes.push(`${chunks[i].phase} ${chunks[i].month}: ${e.message}`); }
+      }
+      setUpMsg(`Refreshed from Joiin: ${entityRows.toLocaleString()} per-entity rows, ${packs} board pack(s) and ${bsRows} balance-sheet rows across ${(plan.months || []).join(", ")}.${notes.length ? ` ${notes.length} warning(s): ${notes.slice(0, 3).join("; ")}${notes.length > 3 ? "…" : ""}` : ""}`);
       router.refresh();
     } catch (e) { setErr(e.message); } finally { setRefreshing(false); }
   }
