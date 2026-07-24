@@ -1,8 +1,9 @@
-# Phase 30 — Management Accounts board-pack export (Excel)
+# Phase 30 — Management Accounts board-pack export (Excel + PDF)
 
-**Tier 2, item 1 of 3 ("Match the best").** One-click Excel download of the
-four-tab Management Accounts board pack (Store · Head Office · Franchise ·
-Consolidated) for the year and reporting period currently in view.
+**Tier 2, item 1 of 3 ("Match the best").** One-click **Excel** download and a
+**Print / Save-as-PDF** view of the four-tab Management Accounts board pack
+(Store · Head Office · Franchise · Consolidated) for the year and reporting
+period currently in view.
 
 ## What it does
 
@@ -36,9 +37,19 @@ export share it:
 - `app/finance-os/management-accounts/page.js` — now imports the shared logic.
 - `app/finance-os/management-accounts/mc-controls.js` — the ⤓ Excel link.
 
+## PDF (print view)
+
+- **Where:** the ⎙ **PDF** button on the toolbar → opens
+  `/finance-os/management-accounts/print?year=&period=` in a new tab.
+- The print view stacks all four scopes, each on its own page, and the app shell
+  (top bar + sidebar) is marked `.no-print`, so the browser's **Print → Save as
+  PDF** produces a clean board-pack PDF.
+- Implemented with a global `@media print` block in `app/layout.js` (hides
+  `.no-print`, black-on-white, `.fos-print-tab` page breaks, crisp table
+  borders) — so *every* screen now prints cleanly, not just this one.
+- Files: `app/finance-os/management-accounts/print/{page,print-button}.js`;
+  `no-print` class added to `app/topnav.js` and `app/sidebar.js`.
+
 ## Not yet included (fast-follow)
 
-- **Print / Save-as-PDF** of the full pack — needs a print-clean view that strips
-  the app shell (nav/topbar). Deliberately deferred so the shell change is done
-  carefully rather than rushed.
 - Per-store sheets in the export (currently the Store sheet is the consolidation).
