@@ -23,7 +23,7 @@ export default async function MasterDataHub() {
   const when = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "—");
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Finance Data" title="Master Data" right={`${s.managed} managed · ${s.live} live · ${s.awaiting} awaiting feed`} />
 
       <div className="fos-card" style={{ padding: "6px 18px" }}>

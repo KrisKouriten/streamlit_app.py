@@ -28,7 +28,7 @@ export default async function Inventory() {
   ];
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operations" title="Inventory" right="Illustrative snapshot" />
       <IllustrativeBanner>
         These figures are illustrative — no live stock feed is connected yet. Load a stock extract through the

@@ -19,7 +19,7 @@ export default async function Intercompany() {
   const entities = await listEntitiesForPicker();
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ marginBottom: 18 }}>
         <span className="fos-eyebrow">Operate · Intercompany</span>
         <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Intercompany transactions</div>

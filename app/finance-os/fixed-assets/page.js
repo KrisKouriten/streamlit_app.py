@@ -31,7 +31,7 @@ export default async function FixedAssets() {
   const maxCatNbv = cats.reduce((m, c) => Math.max(m, c.closing_nbv), 0);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Financial reporting" title="Fixed Assets" right="Illustrative month" />
       <IllustrativeBanner>
         These figures are illustrative — no live asset register is connected yet. Load the register (cost,

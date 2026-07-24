@@ -40,7 +40,7 @@ export default async function PillarHub({ pillar, title, intro, extras = [] }) {
   const visibleExtras = extras.filter((e) => !e.roles || e.roles.some((r) => session.roles?.includes(r)));
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ margin: "0.5rem 0 1.9rem" }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>Finance OS · {title}</div>
         <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em", lineHeight: 1.15 }}>{title}</div>

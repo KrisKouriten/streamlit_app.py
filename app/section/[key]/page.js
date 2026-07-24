@@ -21,7 +21,7 @@ export default async function SectionHub({ params }) {
   const live = items.filter((it) => !resolveHref(it).startsWith("/module/")).length;
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ margin: "0.5rem 0 1.6rem" }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>
           Section overview

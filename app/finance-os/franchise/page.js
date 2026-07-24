@@ -21,7 +21,7 @@ export default async function Franchise() {
   const collection = invoiced ? cash / invoiced : null;
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operations" title="Franchise" right="Illustrative period" />
       <IllustrativeBanner>
         These figures are illustrative — no live franchise ledger is connected yet. Load a franchise extract

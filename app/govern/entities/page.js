@@ -15,7 +15,7 @@ export default async function EntitiesPage() {
   const connected = entities.filter((e) => e.xero_status === "CONNECTED").length;
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Govern · Entities" title="Entities"
         right={`${active} active · ${connected} connected to Xero`} />
       <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20, maxWidth: "70ch", lineHeight: 1.55 }}>

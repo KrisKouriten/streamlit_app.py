@@ -18,7 +18,7 @@ export default async function AgentCentre() {
   const [agents, queue, exceptions] = await Promise.all([listAgents(), getReviewQueue(), getRecentExceptions(5)]);
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ marginBottom: "1.25rem" }}>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>AI Control Tower</div>
         <div style={{ fontSize: 18, fontWeight: 600 }}>Finance Agent Control Centre</div>

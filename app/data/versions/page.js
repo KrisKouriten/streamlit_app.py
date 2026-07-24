@@ -18,7 +18,7 @@ export default async function VersionsPage({ searchParams }) {
   const canManage = hasRole(session, "ADMIN", "FINANCE");
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader
         crumb="Finance Data"
         title="Forecast & Budget Versions"

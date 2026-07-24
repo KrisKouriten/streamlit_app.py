@@ -14,7 +14,7 @@ export default async function BusinessProjects() {
   const { ready, projects } = await getBusinessProjects();
   const summary = summarise(projects);
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan · Head Office" title="Business Projects"
         right={ready ? `${summary.total} projects · ${summary.active} active` : "Awaiting migration"} />
       {!ready ? (

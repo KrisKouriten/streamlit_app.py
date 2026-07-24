@@ -49,7 +49,7 @@ export default async function MaDashboard({ searchParams }) {
   const box = { fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" };
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Dashboards · Financial reporting" title="Management Accounts Dashboard"
         right={d.loaded ? `Actual vs ${basis.label.toLowerCase()} · ${period === "ytd" ? "YTD" : "current month"}` : "Awaiting data"} />
 

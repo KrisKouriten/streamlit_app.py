@@ -26,11 +26,11 @@ export default async function Handbook() {
   if (!session) redirect("/login");
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "1.75rem 1.25rem 5rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ marginBottom: 8 }}>
         <span className="fos-eyebrow">Govern · Handbook</span>
         <h1 style={{ fontSize: 25, fontWeight: 700, letterSpacing: "-.02em", margin: "12px 0 4px" }}>Finance OS — Standard Operating Procedure</h1>
-        <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Version 1.3 · the operating manual for the Connected Finance Function. Canonical copy: <code style={{ fontFamily: "var(--mono)", fontSize: 12 }}>docs/SOP.md</code>.</div>
+        <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Version 1.4 · the operating manual for the Connected Finance Function. Canonical copy: <code style={{ fontFamily: "var(--mono)", fontSize: 12 }}>docs/SOP.md</code>.</div>
       </header>
 
       <div style={{ ...card, borderColor: "var(--accent-deep)", background: "var(--accent-bg)", marginTop: 16 }}>
@@ -62,7 +62,7 @@ export default async function Handbook() {
       ]} />
 
       <H>3 · The operating rhythm</H>
-      <P><strong>Daily:</strong> start at HOME → "Needs attention" (ranked; clear critical first) and clear the Agent Reviews queue. <strong>Weekly (Mon):</strong> generate the week (OPERATE → Finance Team Schedule), the team works My Finance Week, reviewers approve, run the store agents, review store trading (DASHBOARDS → Store Sales & KPI). <strong>Monthly:</strong> run the management-accounts pre-close checks; management accounts once Joiin actuals are loaded; work the month-end close board (owner + status per entity); reconcile procurement spend vs the cash budget; validate realised benefits; chase overdue actions. <strong>Quarterly / planning:</strong> refresh the forecast (PLAN → Forecast Builder) and flex it in Scenario Planning; review agent performance, task templates, roles and entities.</P>
+      <P><strong>Daily:</strong> start at HOME → "Needs attention" (ranked; clear critical first) and clear the Agent Reviews queue. <strong>Weekly (Mon):</strong> generate the week (OPERATE → Finance Team Schedule), the team works My Finance Week, reviewers approve, run the store agents, review store trading (DASHBOARDS → Store Sales & KPI). <strong>Monthly:</strong> run the Joiin refresh (Govern → P&amp;L Formats) then build the board deck; run the management-accounts pre-close checks; work the month-end close board (owner + status per entity); reconcile procurement spend vs the cash budget; validate realised benefits; chase overdue actions. <strong>Quarterly / planning:</strong> refresh the forecast (PLAN → Forecast Builder) and flex it in Scenario Planning; review agent performance, task templates, roles and entities.</P>
 
       <H>4 · Modules</H>
       <P><strong>HOME</strong> shows two truths kept distinct by source chip: trading (all stores, store feed) and statutory finance (connected entities, the Joiin feed). <strong>Weekly Schedule</strong>: an assignee can only reach "ready for review" — only a reviewer's decision completes a task. <strong>The two closes:</strong> Month-End Close is a status board (each entity's tasks, a finance owner, Open/Done, summary strip); Management Accounts Close is assurance — pre-close checks (completeness/accrual, cost drift, sign) with confirm/correct/explain. <strong>Forecast Builder</strong> ingests a 3-tab store workbook (sales, cost assumptions, labour seasonality) and builds the forecast at store level, rolled up to entity and group, amending &amp; adding on re-upload. <strong>AI agents</strong> can only read (SELECT); material outputs require human sign-off. <strong>Action Centre</strong>: OPEN → IN_PROGRESS → COMPLETE → CLOSED, where closure is a separate approval; an expected value auto-creates a benefit opportunity to realise then validate.</P>
@@ -70,13 +70,16 @@ export default async function Handbook() {
       <H>5 · Entities &amp; consolidation</H>
       <P>Finance Data → Entities is the register of legal entities Miniso UK consolidates. The display name is house-style ("Miniso UK — <em>location</em>"); the legal name is used for statutory mapping and the store→entity forecast hierarchy. A connected entity's actuals flow into the consolidated finance dashboards. Add or amend entities there (ADMIN/FINANCE); retire one by unticking Active.</P>
 
-      <H>6 · Data feeds &amp; refresh</H>
-      <P>The app reads only its database — feeds are loaded into it. <strong>Store sales</strong> load from the store export (9-day freshness tolerance; staleness is flagged). <strong>Consolidated finance</strong> comes from <strong>Joiin</strong> (26 companies, eliminations), with Xero as fallback; a refresh pulls the P&amp;L + cash, maps &amp; reconciles (the mapper refuses a load if a penny is lost), and ingests tagged with its source. <strong>Forecast inputs</strong> load through PLAN → Forecast Builder (3-tab workbook, upsert). Procurement and SKU carry an illustrative seed until their real extract is uploaded.</P>
+      <H>6 · Data feeds &amp; refresh — how it all maps</H>
+      <P>When a screen renders it reads <strong>only the database</strong>; outside systems are called <strong>only during a refresh</strong>. So every output is driven by a stored feed, and a feed changes only when its refresh is run — a page reload never loads new data. <strong>Store sales</strong> load from the store export (9-day freshness tolerance; staleness is flagged) and drive the trade deck. <strong>Consolidated finance</strong> comes from <strong>Joiin</strong> (26 companies, eliminations): the app calls Joiin&rsquo;s API directly on a refresh you run at <strong>Govern → P&amp;L Formats → Refresh (this month) / Full year</strong> (or the monthly cron on the 5th), writing the per-entity P&amp;L, the four board packs and the balance sheet. The deck flips from the Xero fallback to Joiin once those tables carry rows. <strong>Forecast inputs</strong> load through PLAN → Forecast Builder (3-tab workbook, upsert). Procurement and SKU carry an illustrative seed until their real extract is uploaded.</P>
 
-      <H>7 · Governance &amp; controls</H>
+      <H>7 · Building the board deck &amp; the trade deck</H>
+      <P><strong>Board deck (monthly, statutory):</strong> run the Joiin refresh (Govern → P&amp;L Formats), review the four-scope board pack and the three-statement model (P&amp;L · Balance Sheet · Cash Flow) in Management Accounts, clear the MA pre-close checks, then export from the MA toolbar — <strong>⤓ Excel</strong> (one sheet per scope) or <strong>⎙ PDF</strong> (one scope per page). Audited; internal management reporting. <strong>Trade deck (weekly, trading):</strong> load the store sales, review Store Sales &amp; KPI (and SKU Analysis), run the <strong>Trading Commentary</strong> agent and approve its narrative in Agent Reviews, then print/share. The two never mix sources — store feed for trade, Joiin for board.</P>
+
+      <H>8 · Governance &amp; controls</H>
       <P>Separation of duties throughout (completion vs approval, realised vs validated). AI guardrails are structural — read-only, material outputs always reviewed. Every state change writes an audit event. The Data Quality agent and HOME surface stale or incomplete feeds.</P>
 
-      <H>8 · Security &amp; house style</H>
+      <H>9 · Security &amp; house style</H>
       <P>"Miniso UK" in all outputs; legal entity names only where a document is legal/statutory or a connected-system identifier (bank, HMRC, Companies House, Xero/Joiin org names, the store→entity forecast hierarchy). No personal data in exports. Real entity-level financials are internal working material — no share-ready or external summaries without explicit confirmation and human review; escalate anything for a regulator, investors, the Board, or that could be inside information for the listed parent group.</P>
 
       <div style={{ marginTop: 30, fontSize: 12.5, color: "var(--faint)" }}>

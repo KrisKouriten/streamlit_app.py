@@ -21,7 +21,7 @@ export default async function TaskDetail({ params }) {
     (isManager || task.reviewer_id === session.id) && task.assigned_to !== session.id;
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ marginBottom: "1.25rem" }}>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
           <Link href="/perform/my-week" style={{ textDecoration: "none", color: "var(--faint)" }}>Perform · Weekly schedule</Link> · Task

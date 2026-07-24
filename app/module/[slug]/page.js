@@ -20,7 +20,7 @@ export default async function PlannedModule({ params }) {
   const [kindLabel, kindBlurb] = mod.kind || ["Module", ""];
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ margin: "0.5rem 0 1.6rem" }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>
           {mod.section} · {mod.label}

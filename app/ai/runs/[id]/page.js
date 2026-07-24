@@ -19,7 +19,7 @@ export default async function RunDetail({ params }) {
   const canReview = hasRole(session, "ADMIN", "FINANCE");
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ marginBottom: "1.25rem" }}>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
           <Link href="/ai" style={{ textDecoration: "none", color: "var(--faint)" }}>AI Control Tower</Link> ·{" "}

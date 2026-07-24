@@ -45,7 +45,7 @@ export default async function OperateForecast({ searchParams }) {
   }
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Forecast inputs"
         right={fc.loaded ? "Company stores · Head office · Franchise" : "Awaiting forecast load"} />
       <ForecastUI data={payload} ready={fc.ready} canManage={canManage} />
