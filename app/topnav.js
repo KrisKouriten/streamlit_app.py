@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { badgeLabel } from "../lib/notification-rules";
 
 /* Slim glass top bar. Section navigation lives in the persistent sidebar;
@@ -83,23 +83,72 @@ function NotifBell() {
 function UserChip({ name }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null);
   const initials = (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
+  // Close the menu on an outside click or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  useEffect(() => { setOpen(false); }, []);
+
   async function signOut() {
     setBusy(true);
     try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
     router.push("/login");
     router.refresh();
   }
+
+  const item = {
+    display: "flex", alignItems: "center", width: "100%", gap: 8, padding: "9px 12px", borderRadius: 8,
+    fontSize: 13, fontWeight: 500, textAlign: "left", textDecoration: "none", color: "var(--ink)",
+    background: "transparent", border: "none", cursor: "pointer",
+  };
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <Link href="/account/security" title={`${name} · Account & security`} aria-label="Account and security" style={{
-        width: 28, height: 28, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: "var(--accent)", textDecoration: "none",
-        background: "var(--accent-bg)", border: "1px solid var(--accent-deep)", flex: "none",
-      }}>{initials}</Link>
-      <button onClick={signOut} disabled={busy} title="Sign out" className="fos-btn-ghost" style={{ opacity: busy ? 0.6 : 1 }}>
-        {busy ? "Signing out…" : "Sign out"}
-      </button>
+    <div ref={wrap} style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}
+        title={`${name} · Account menu`} aria-label="Account menu" style={{
+          width: 28, height: 28, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em", color: "var(--accent)",
+          background: "var(--accent-bg)", border: "1px solid var(--accent-deep)", flex: "none", padding: 0,
+        }}>{initials}</button>
+
+      {open && (
+        <div role="menu" className="fos-glass" style={{
+          position: "absolute", top: "calc(100% + 8px)", right: 0, minWidth: 214, padding: 6, borderRadius: 12,
+          boxShadow: "var(--shadow-pop)", animation: "fosRise .16s var(--ease) both", zIndex: 200,
+        }}>
+          <div style={{ padding: "8px 12px 10px", borderBottom: "1px solid var(--hairline)", marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)", lineHeight: 1.2 }}>{name}</div>
+            <div style={{ fontSize: 11, color: "var(--faint)", fontFamily: "var(--mono)", letterSpacing: ".04em", marginTop: 2 }}>Signed in</div>
+          </div>
+          <Link href="/account/security" role="menuitem" onClick={() => setOpen(false)} style={item}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+            <span aria-hidden style={{ width: 16, textAlign: "center" }}>&#128273;</span>
+            <span>Change password</span>
+          </Link>
+          <Link href="/account/security" role="menuitem" onClick={() => setOpen(false)} style={item}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+            <span aria-hidden style={{ width: 16, textAlign: "center" }}>&#9881;</span>
+            <span>Account &amp; security</span>
+          </Link>
+          <button role="menuitem" onClick={signOut} disabled={busy} style={{ ...item, color: "var(--red)", opacity: busy ? 0.6 : 1 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--red-bg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+            <span aria-hidden style={{ width: 16, textAlign: "center" }}>&#8618;</span>
+            <span>{busy ? "Signing out…" : "Sign out"}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

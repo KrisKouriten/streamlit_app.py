@@ -3,10 +3,12 @@ import { getSession } from "../../../lib/auth";
 import { getMfaStatus } from "../../../lib/mfa";
 import { PageHeader } from "../../finance-os/ui";
 import SecurityUI from "./security-ui";
+import PasswordUI from "./password-ui";
 
 export const dynamic = "force-dynamic";
 
-// Account → Security: self-service two-step verification for the signed-in user.
+// Account & security: self-service password change and two-step verification
+// for the signed-in user. Reached from the account menu in the top bar.
 export default async function SecurityPage() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -14,14 +16,17 @@ export default async function SecurityPage() {
 
   return (
     <div className="fos-shell-narrow">
-      <PageHeader crumb="Account" title="Security" right={status.enrolled ? "Two-step on" : "Two-step off"} />
-      {!status.ready ? (
-        <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
-          Run migration <span style={{ fontFamily: "var(--mono)" }}>029</span> to enable two-step verification.
-        </div>
-      ) : (
-        <SecurityUI status={status} name={session.name} email={session.email} />
-      )}
+      <PageHeader crumb="Account" title="Account & security" right={status.enrolled ? "Two-step on" : "Two-step off"} />
+      <div style={{ display: "grid", gap: 16 }}>
+        <PasswordUI />
+        {!status.ready ? (
+          <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
+            Run migration <span style={{ fontFamily: "var(--mono)" }}>029</span> to enable two-step verification.
+          </div>
+        ) : (
+          <SecurityUI status={status} name={session.name} email={session.email} />
+        )}
+      </div>
     </div>
   );
 }
