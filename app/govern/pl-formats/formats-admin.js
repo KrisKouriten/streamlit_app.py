@@ -24,17 +24,18 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
   }
 
   const [refreshing, setRefreshing] = useState(false);
-  async function refreshFromJoiin() {
+  async function refreshFromJoiin(full = false) {
     setRefreshing(true); setUpMsg(null); setErr(null);
     try {
-      const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const res = await fetch("/api/joiin-refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ full }) });
       const text = await res.text();
       let j = {};
       try { j = text ? JSON.parse(text) : {}; } catch { throw new Error(`Refresh failed (HTTP ${res.status}) — the server didn't return JSON. ${text.slice(0, 160)}`); }
       if (!res.ok) throw new Error(j.error || `Refresh failed (HTTP ${res.status})`);
       const packs = j.boardPacks?.packs ?? 0;
-      const notes = [...(j.entityErrors || []), ...(j.boardPacks?.errors || [])];
-      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} per-entity rows and ${packs} board pack(s) across ${(j.months || []).join(", ")}.${notes.length ? ` ${notes.length} warning(s): ${notes.slice(0, 3).join("; ")}${notes.length > 3 ? "…" : ""}` : ""}`);
+      const bsRows = j.balanceSheet?.bsRows ?? 0;
+      const notes = [...(j.entityErrors || []), ...(j.boardPacks?.errors || []), ...(j.balanceSheet?.bsErrors || [])];
+      setUpMsg(`Refreshed from Joiin: ${j.entityRows?.toLocaleString?.() ?? j.entityRows} per-entity rows, ${packs} board pack(s) and ${bsRows} balance-sheet rows across ${(j.months || []).join(", ")}.${notes.length ? ` ${notes.length} warning(s): ${notes.slice(0, 3).join("; ")}${notes.length > 3 ? "…" : ""}` : ""}`);
       router.refresh();
     } catch (e) { setErr(e.message); } finally { setRefreshing(false); }
   }
@@ -119,8 +120,13 @@ export default function FormatsAdmin({ formats, reports, canManage, scopeKinds }
             {upMsg && <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 6 }}>{upMsg}</div>}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="fos-btn fos-btn-ghost" onClick={refreshFromJoiin} disabled={refreshing} style={{ cursor: refreshing ? "wait" : "pointer", whiteSpace: "nowrap" }}>
-              {refreshing ? "Refreshing…" : "Refresh from Joiin"}
+            <button className="fos-btn fos-btn-ghost" onClick={() => refreshFromJoiin(false)} disabled={refreshing} style={{ cursor: refreshing ? "wait" : "pointer", whiteSpace: "nowrap" }}
+              title="Refresh the current month only (fast)">
+              {refreshing ? "Refreshing…" : "Refresh (this month)"}
+            </button>
+            <button className="fos-btn fos-btn-ghost" onClick={() => refreshFromJoiin(true)} disabled={refreshing} style={{ cursor: refreshing ? "wait" : "pointer", whiteSpace: "nowrap" }}
+              title="Backfill every month of the year to date (slower)">
+              {refreshing ? "Refreshing…" : "Full year"}
             </button>
             <label className="fos-btn" style={{ cursor: uploading ? "wait" : "pointer", whiteSpace: "nowrap" }}>
               {uploading ? "Loading…" : "Upload workbook"}

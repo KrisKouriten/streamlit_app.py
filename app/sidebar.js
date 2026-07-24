@@ -106,7 +106,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside style={{ position: "sticky", top: 57, height: "calc(100vh - 57px)", flex: "none", borderRight: "1px solid var(--hairline)", background: "color-mix(in srgb, var(--surface) 45%, transparent)" }}>
+    <aside className="no-print" style={{ position: "sticky", top: 57, height: "calc(100vh - 57px)", flex: "none", borderRight: "1px solid var(--hairline)", background: "color-mix(in srgb, var(--surface) 45%, transparent)" }}>
       {body}
     </aside>
   );
