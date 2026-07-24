@@ -59,7 +59,7 @@ export default function Sidebar() {
               </button>
               <Link href={`/section/${s.key}`} aria-current={active === `/section/${s.key}` ? "page" : undefined}
                 style={{ flex: 1, display: "flex", alignItems: "center", padding: "7px 10px 7px 2px", textDecoration: "none",
-                  fontFamily: "var(--mono)", fontSize: 18.75, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase",
+                  fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase",
                   color: hasActive ? "var(--accent)" : "var(--faint)", transition: "color var(--t-fast) var(--ease)" }}>
                 {s.label}
               </Link>
