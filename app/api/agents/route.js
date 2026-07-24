@@ -5,6 +5,11 @@ import { audit } from "../../../lib/governance";
 import { runAgent, reviewError, AGENT_DASHBOARD, DECISIONS } from "../../../lib/agents";
 import { createAction } from "../../../lib/actions";
 
+export const dynamic = "force-dynamic";
+// The LLM commentary agent makes one Claude call inside runAgent — give the
+// function room beyond the default so a slower completion doesn't time out.
+export const maxDuration = 60;
+
 export async function POST(request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
