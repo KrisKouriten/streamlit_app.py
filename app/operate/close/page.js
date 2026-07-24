@@ -22,7 +22,7 @@ export default async function CloseCockpit({ searchParams }) {
   const [board, scope] = await Promise.all([getCloseBoard(params?.period || null), getConnectedEntities()]);
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Close Cockpit"
         right={board.period ? `Period ${board.period} · readiness & lock` : "Awaiting actuals"} />
       <EntityScopeBanner scope={scope} asAt={board.period ? `${board.period} close` : null} />

@@ -21,7 +21,7 @@ export default async function ThreeStatement({ searchParams }) {
   const [model, scope] = await Promise.all([getThreeStatement(params?.month || null), getConnectedEntities()]);
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Perform" title="Three-statement model"
         right={model.ym ? `As at ${model.ym} · P&L · Balance Sheet · Cash Flow` : "Awaiting Joiin feed"} />
       <EntityScopeBanner scope={scope} asAt={model.ym || null} />

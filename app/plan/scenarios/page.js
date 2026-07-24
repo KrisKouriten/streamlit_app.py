@@ -20,7 +20,7 @@ export default async function Scenarios() {
   } : null;
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ margin: "0.5rem 0 1.9rem" }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>Plan · Scenario planning</div>
         <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em" }}>Scenario planning</div>

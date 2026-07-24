@@ -26,7 +26,7 @@ export default async function Handbook() {
   if (!session) redirect("/login");
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "1.75rem 1.25rem 5rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ marginBottom: 8 }}>
         <span className="fos-eyebrow">Govern · Handbook</span>
         <h1 style={{ fontSize: 25, fontWeight: 700, letterSpacing: "-.02em", margin: "12px 0 4px" }}>Finance OS — Standard Operating Procedure</h1>

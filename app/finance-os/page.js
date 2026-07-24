@@ -33,7 +33,7 @@ export default async function FinanceOsHome() {
   for (const d of dashboards) (byLayer[d.dashboard_layer] ||= []).push(d);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.75rem" }}>
         <div>
           <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>Miniso UK</div>

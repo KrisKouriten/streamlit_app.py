@@ -13,7 +13,7 @@ export default async function SecurityPage() {
   const status = await getMfaStatus(session.id);
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <PageHeader crumb="Account" title="Security" right={status.enrolled ? "Two-step on" : "Two-step off"} />
       {!status.ready ? (
         <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>

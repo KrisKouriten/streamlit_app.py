@@ -23,7 +23,7 @@ export default async function ManagementAccountsPrint({ searchParams }) {
   const tabs = await resolveAllTabs(year);
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ fontSize: 13, color: "var(--muted)" }}>
           Board pack ready to print — use <strong>Print → Save as PDF</strong>. Each scope prints on its own page.

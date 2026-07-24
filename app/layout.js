@@ -35,6 +35,7 @@ const css = `
   --glass:rgba(23,22,19,.6); --glass-line:rgba(255,255,255,.08);
   --grain-opacity:.028;
   --radius:12px; --radius-lg:16px;
+  --page-max:1440px; --page-narrow:1080px;
   --ease:cubic-bezier(.22,1,.36,1); --t-fast:.15s; --t-med:.3s; --t-slow:.55s;
   --sans:"InterVariable","Helvetica Neue",Helvetica,"Arial Nova",Arial,system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -68,6 +69,15 @@ a{color:var(--accent)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid var(--bg)}
 ::-webkit-scrollbar-track{background:transparent}
+
+/* page container — one central width knob so every screen fills the viewport
+   consistently with comfortable, responsive side gutters. .fos-shell is the
+   wide default (dashboards, grids, tables); .fos-shell-narrow is for reading,
+   detail and form pages where a very wide column would hurt scanning. */
+.fos-shell{width:100%;max-width:var(--page-max);margin-inline:auto;
+  padding:1.75rem clamp(1.25rem,3vw,2.75rem) 4rem}
+.fos-shell-narrow{width:100%;max-width:var(--page-narrow);margin-inline:auto;
+  padding:1.75rem clamp(1.25rem,3vw,2.5rem) 4rem}
 
 /* brand device: the uppercase olive-gold eyebrow */
 .fos-eyebrow{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;

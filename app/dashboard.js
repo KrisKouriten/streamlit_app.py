@@ -97,7 +97,7 @@ export default function Dashboard({ user, stages, entities, team = [] }) {
   const dotColor = (st) => (st === "done" ? "var(--green)" : st === "progress" ? "var(--amber)" : "var(--faint)");
 
   return (
-    <div style={{ maxWidth: 920, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <header style={{ marginBottom: "1.5rem" }}>
         <span className="fos-eyebrow">Operate · Month-end close</span>
         <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Month-end close</div>

@@ -20,7 +20,7 @@ export default async function GovernUsers() {
     );
   }
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ marginBottom: "1.5rem" }}>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>
           <Link href="/govern" style={{ textDecoration: "none", color: "var(--faint)" }}>Govern</Link> · Users & roles

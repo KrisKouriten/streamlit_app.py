@@ -24,7 +24,7 @@ export default async function ManagementClose({ searchParams }) {
   const actions = pre.period ? await getCloseActions(pre.period) : [];
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Management accounts close"
         right={pre.period ? `Period ${pre.period} · checks before sign-off` : "Awaiting Xero actuals"} />
       <EntityScopeBanner scope={scope} asAt={pre.dk ? `${String(pre.dk).slice(0, 4)}-${String(pre.dk).slice(4, 6)}-${String(pre.dk).slice(6, 8)}` : null} />

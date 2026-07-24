@@ -13,7 +13,7 @@ export default async function Inbox() {
   const notifications = await listForUser(session.id);
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell-narrow">
       <div style={{ marginBottom: 18 }}>
         <div className="fos-eyebrow" style={{ margin: 0 }}>Home</div>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: "2px 0 4px" }}>Notifications</h1>

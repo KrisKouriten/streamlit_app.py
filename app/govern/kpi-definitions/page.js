@@ -16,7 +16,7 @@ export default async function KpiDefinitions() {
   const kpis = await listKpis();
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Finance Data" title="KPI Definitions" right={`${kpis.length} governed KPI${kpis.length === 1 ? "" : "s"}`} />
       <KpiAdmin kpis={kpis} canManage={canManage} />
     </div>

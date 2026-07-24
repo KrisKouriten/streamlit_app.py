@@ -21,7 +21,7 @@ export default async function ActionCentre({ searchParams }) {
   const filters = [["", "All"], ["OPEN", "Open"], ["IN_PROGRESS", "In progress"], ["OVERDUE", "Overdue"], ["COMPLETE", "Awaiting closure"], ["CLOSED", "Closed"]];
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ marginBottom: "1.25rem" }}>
         <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>Govern</div>
         <div style={{ fontSize: 18, fontWeight: 600 }}>Action Centre</div>

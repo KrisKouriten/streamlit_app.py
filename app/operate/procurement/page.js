@@ -16,7 +16,7 @@ export default async function Procurement() {
   const pr = await getProcurement();
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Procurement"
         right={pr.loaded ? "Cash budget vs committed spend" : "Awaiting purchases"} />
       <ProcurementUI data={pr.summary} ready={pr.ready} loaded={pr.loaded} illustrative={pr.illustrative} canManage={canManage} />

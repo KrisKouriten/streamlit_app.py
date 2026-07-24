@@ -27,7 +27,7 @@ export default async function PlFormatsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Govern · Reporting" title="P&L Formats"
         right={ready ? `${formats.filter((f) => f.spec.length).length} layouts` : "Setup"} />
       <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20, maxWidth: "72ch", lineHeight: 1.55 }}>

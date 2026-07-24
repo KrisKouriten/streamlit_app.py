@@ -16,7 +16,7 @@ export default async function CashFlow() {
   const maxCash = byEntity.reduce((m, r) => Math.max(m, Math.abs(Number(r.available_cash) || 0)), 0);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Treasury" title="Cash Flow" right={cash ? "Xero cash position" : "Awaiting Xero feed"} />
       <EntityScopeBanner scope={scope} asAt={cash?.calendar_date} />
 

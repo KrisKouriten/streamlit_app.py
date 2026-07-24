@@ -24,7 +24,7 @@ function autoPriorities(k) {
 
 function AwaitingData({ crumb, title }) {
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb={crumb} title={title} />
       <SubNav items={STORE_SALES_NAV} active="" />
       <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "18px 20px", fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -83,7 +83,7 @@ export default async function StoreDrilldown({ searchParams }) {
   ];
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Trading" title={`Store drilldown — ${store?.store_name || code}`}
         right={`YTD to ${dateLabel(wins.maxDate)}`} />
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/store" />

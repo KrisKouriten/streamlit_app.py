@@ -51,7 +51,7 @@ export default async function Dashboards() {
   const connected = scope?.count || 0;
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ margin: "0.5rem 0 1.9rem" }}>
         <span className="fos-eyebrow">Dashboards</span>
         <h1 style={{ fontSize: 23, fontWeight: 650, letterSpacing: "-.022em", marginTop: 13 }}>Specialist dashboards</h1>

@@ -92,7 +92,7 @@ export default async function ExecutiveHub() {
   const core = { attention: attention.length };
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.75rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
         <div>
           <span className="fos-eyebrow">Home · The connected sphere</span>

@@ -35,7 +35,7 @@ export default async function Reports({ searchParams }) {
   }
 
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Govern" title="Report Builder" right="Saved reports · export to Excel & PDF" />
       <ReportsUI reports={reports} datasets={DATASETS} canManage={canManage} preview={preview} />
     </div>

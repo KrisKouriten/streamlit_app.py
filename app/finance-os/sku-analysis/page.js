@@ -18,7 +18,7 @@ export default async function SkuAnalysis({ searchParams }) {
   const newsku = tab === "newsku" ? await getNewSkuReport() : null;
   const dormant = tab === "dormant" ? await getDormantReport() : null;
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Dashboards · Merchandising" title="SKU Analysis Dashboard"
         right={top80?.loaded ? (top80.period || "Top 80 / Bottom 20") : "Merchandising analysis"} />
       <SkuReportUI tab={tab} top80={top80} newsku={newsku} dormant={dormant} canManage={canManage} />

@@ -35,7 +35,7 @@ export default async function TeamSchedule({ searchParams }) {
   const pct = stats.total ? Math.round((stats.complete / stats.total) * 100) : 0;
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ fontSize: 12.5, color: "var(--faint)", letterSpacing: ".05em", textTransform: "uppercase" }}>Perform · Weekly schedule</div>

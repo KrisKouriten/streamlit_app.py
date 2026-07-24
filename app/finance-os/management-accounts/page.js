@@ -23,7 +23,7 @@ export default async function ManagementAccounts({ searchParams }) {
   const view = data.loaded ? applyPeriod(data, period) : null;
 
   return (
-    <div style={{ maxWidth: 1120, margin: "0 auto", padding: "1.5rem 1.25rem 4rem" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Perform · Financial reporting" title="Management Accounts"
         right={data.loaded ? `${TAB_LABEL[tab]} · actuals` : "Awaiting Joiin actuals"} />
 
