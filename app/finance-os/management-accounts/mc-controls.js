@@ -28,6 +28,12 @@ export default function McControls({ tab, years, year, period, storeList, store 
     router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
   };
 
+  // Download the full board pack (all four scopes) as Excel, for the year and
+  // period currently in view. A plain link so the browser handles the download.
+  const exportHref = `/api/management-accounts/export?period=${period}${year ? `&year=${year}` : ""}`;
+  // Print-clean view of the full pack (→ browser Save as PDF), opened in a new tab.
+  const printHref = `/finance-os/management-accounts/print?period=${period}${year ? `&year=${year}` : ""}`;
+
   const storeIdx = storeList ? storeList.findIndex((s) => s.key === store) : -1;
   const step = (d) => { const n = storeList[(storeIdx + d + storeList.length) % storeList.length]; go({ store: n.key }); };
 
@@ -58,6 +64,16 @@ export default function McControls({ tab, years, year, period, storeList, store 
             {years.length ? years.map((y) => <button key={y} style={pill(y === year)} onClick={() => go({ year: y })}>{y}</button>)
               : <span style={{ fontSize: 12, color: "var(--faint)" }}>no data</span>}
           </div>
+          {years.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <a href={exportHref} style={{ ...pill(false), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }} title="Download the full board pack (all scopes) as Excel">
+                <span aria-hidden>⤓</span> Excel
+              </a>
+              <a href={printHref} target="_blank" rel="noopener" style={{ ...pill(false), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }} title="Open a print-clean board pack to Save as PDF">
+                <span aria-hidden>⎙</span> PDF
+              </a>
+            </div>
+          )}
         </div>
         {tab === "store" && storeList && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

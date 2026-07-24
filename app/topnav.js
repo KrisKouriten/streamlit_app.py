@@ -79,7 +79,7 @@ export default function TopNav({ userName }) {
   const path = usePathname();
   if (path === "/login") return null;
   return (
-    <nav className="fos-glass" style={{ borderLeft: "none", borderRight: "none", borderTop: "none", position: "sticky", top: 0, zIndex: 100 }}>
+    <nav className="fos-glass no-print" style={{ borderLeft: "none", borderRight: "none", borderTop: "none", position: "sticky", top: 0, zIndex: 100 }}>
       <div style={{ padding: "0 1.1rem", display: "flex", alignItems: "center", gap: 10, height: 56 }}>
         <MenuButton />
         <Link href="/finance-os/executive" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none", whiteSpace: "nowrap" }}>

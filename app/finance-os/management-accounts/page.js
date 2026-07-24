@@ -1,74 +1,11 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
-import { getScopePnl } from "../../../lib/joiin-entity";
-import { getBoardPack } from "../../../lib/joiin-boardpack";
+import { resolveTab, TAB_LABEL, SCOPE_NOTE, PERIODS } from "../../../lib/ma-boardpack-view";
+import { applyPeriod } from "../../../lib/ma-export-rules";
 import { PageHeader, money } from "../ui";
 import McControls from "./mc-controls";
 
 export const dynamic = "force-dynamic";
-
-const SCOPE_NOTE = {
-  store: "Company-owned store actuals in the Store board-pack format. Toggle the year, or scroll each store or the consolidation.",
-  head_office: "Head Office / wholesale actuals in the Head Office board-pack format. Toggle the year.",
-  franchise: "Franchise actuals in the Franchise board-pack format. Toggle the year.",
-  consolidated: "All group nominals consolidated, per the Consolidated format. Toggle the year.",
-};
-const TAB_LABEL = { store: "Store", head_office: "Head Office", franchise: "Franchise", consolidated: "Consolidated" };
-const PERIODS = ["current", "trailing", "ytd"];
-
-const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+mo]} ${y.slice(2)}`; };
-
-// Reshape the board-pack rows for the chosen reporting period. The data is
-// monthly, so: "current" shows just the latest month; "trailing" shows every
-// loaded month of the year with a summing Total; "ytd" collapses the year into
-// one cumulative column. Money rows sum; % rows blank on any aggregate column
-// (a summed margin would be meaningless) — same rule the Total column already used.
-function applyPeriod({ months, rows, year }, period) {
-  const sorted = [...months].sort();
-  // Section/heading rows can carry no values object — guard every read.
-  const sumMoney = (r, keys) => (r.isPct ? null : keys.reduce((t, m) => t + (r.values?.[m] || 0), 0));
-
-  if (period === "current") {
-    const m = sorted[sorted.length - 1];
-    const cols = m ? [{ key: m, label: monthLabel(m) }] : [];
-    return { cols, showTotal: false, rows: rows.map((r) => ({ ...r, total: null })) };
-  }
-  if (period === "ytd") {
-    const K = "__ytd__";
-    const cols = [{ key: K, label: `YTD ${year}` }];
-    return { cols, showTotal: false, rows: rows.map((r) => ({ ...r, values: { [K]: sumMoney(r, sorted) }, total: null })) };
-  }
-  // trailing (default multi-month view)
-  const cols = sorted.map((m) => ({ key: m, label: monthLabel(m) }));
-  return { cols, showTotal: true, rows: rows.map((r) => ({ ...r, total: sumMoney(r, sorted) })) };
-}
-
-// Resolve a tab's data. Board-pack tabs (and the store consolidation) render
-// Joiin's own custom-report board pack — Joiin does the arithmetic and the
-// intercompany wholesale elimination, so we render it verbatim. An individual
-// store scrolls the per-entity standalone P&L. When a scope's board pack isn't
-// loaded yet we fall back to the per-entity data so the tab still shows actuals.
-async function resolveTab(tab, storeParam, year) {
-  if (tab === "store") {
-    const scoped = await getScopePnl({ scope: "store", entity: storeParam, year });
-    if (!scoped.ready) return { ready: false };
-    if (!scoped.loaded) return { ready: true, loaded: false };
-    const isAll = scoped.storeList && scoped.selected === scoped.storeList[0].key;
-    if (isAll) {
-      const bp = await getBoardPack("store", year);
-      if (bp.loaded) return { ready: true, loaded: true, source: "boardpack", years: bp.years, year: bp.year, months: bp.months, rows: bp.rows, label: "All stores — consolidated", storeList: scoped.storeList, selected: scoped.selected };
-    }
-    // individual store (or store board pack not loaded) — per-entity standalone
-    return { ready: true, loaded: true, source: scoped.usingGeneric ? "generic" : "entity", years: scoped.years, year: scoped.year, months: scoped.months, rows: scoped.rows, label: scoped.label, storeList: scoped.storeList, selected: scoped.selected, usingGeneric: scoped.usingGeneric };
-  }
-
-  const bp = await getBoardPack(tab, year);
-  if (bp.loaded) return { ready: true, loaded: true, source: "boardpack", years: bp.years, year: bp.year, months: bp.months, rows: bp.rows, label: TAB_LABEL[tab] };
-  const scoped = await getScopePnl({ scope: tab, year });
-  if (!scoped.ready) return { ready: false };
-  if (!scoped.loaded) return { ready: true, loaded: false };
-  return { ready: true, loaded: true, source: scoped.usingGeneric ? "generic" : "entity", years: scoped.years, year: scoped.year, months: scoped.months, rows: scoped.rows, label: scoped.label, usingGeneric: scoped.usingGeneric };
-}
 
 // Management Accounts — a four-tab board-pack workbook (Store · Head Office ·
 // Franchise · Consolidated). Each tab renders Joiin's own custom-report board

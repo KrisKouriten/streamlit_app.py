@@ -125,6 +125,23 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
   .fos-page,.fos-stagger>*{animation:none}
   .fos-card,.fos-card.hover:hover{transition:none;transform:none}
 }
+/* Print — strip the app chrome so any screen (and the board-pack print view)
+   saves as a clean PDF. .no-print hides nav/sidebar; content prints in black
+   on white. .fos-print-tab starts each board-pack scope on its own page. */
+@media print{
+  .no-print{display:none !important}
+  html,body{background:#fff !important;color:#000 !important}
+  body{background-image:none !important}
+  .fos-page{animation:none !important;opacity:1 !important;transform:none !important}
+  *{box-shadow:none !important}
+  .fos-print-tab{break-inside:avoid;page-break-after:always}
+  .fos-print-tab:last-child{page-break-after:auto}
+  /* Theme border vars are near-white on paper — force crisp print rules. */
+  .fos-print-table td,.fos-print-table th{border-color:#dcdcdc !important}
+  .fos-print-table thead th{border-bottom:1.5px solid #000 !important}
+  .fos-print-table tr.fos-total td{border-top:1px solid #000 !important}
+  @page{margin:14mm}
+}
 `;
 
 // Applied before paint so a stored light preference doesn't flash dark. Default is dark.
