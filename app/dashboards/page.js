@@ -56,9 +56,9 @@ export default async function Dashboards() {
         <span className="fos-eyebrow">Dashboards</span>
         <h1 style={{ fontSize: 23, fontWeight: 650, letterSpacing: "-.022em", marginTop: 13 }}>Specialist dashboards</h1>
         <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 8, maxWidth: 680, lineHeight: 1.6 }}>
-          The finance function's specialist views, in one place. Four run on real feeds — Xero actuals,
+          The finance function's specialist views, in one place. Four run on real feeds — Joiin actuals,
           the uploaded plan model and the governed store feed; three carry illustrative figures until their
-          feed is connected, and are badged as such. {connected} Xero {connected === 1 ? "entity is" : "entities are"} currently connected.
+          feed is connected, and are badged as such. {connected} {connected === 1 ? "entity is" : "entities are"} currently connected via Joiin.
         </p>
       </header>
 

@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyBsLine, balanceCheck, bsMovements, indirectCashFlow, SIDE, CATEGORY } from "../lib/threestatement-rules.js";
+import { classifyBsLine, balanceCheck, bsMovements, indirectCashFlow, boardPackNetProfit, SIDE, CATEGORY } from "../lib/threestatement-rules.js";
+
+test("boardPackNetProfit reads the group net-profit line for the month", () => {
+  const rows = [
+    { kind: "section", label: "Revenue", values: {} },
+    { kind: "total", label: "Total Revenue", values: { "2026-06": 500 } },
+    { kind: "calc", label: "Group Net Profit", values: { "2026-06": 42, "2026-05": 30 }, tone: "ebitda" },
+  ];
+  assert.equal(boardPackNetProfit(rows, "2026-06"), 42);
+  assert.equal(boardPackNetProfit(rows, "2026-05"), 30);
+  assert.equal(boardPackNetProfit(rows, "2026-04"), 0); // no value that month
+  assert.equal(boardPackNetProfit([], "2026-06"), 0);
+});
 
 test("classifyBsLine buckets a standard chart of accounts", () => {
   assert.deepEqual(classifyBsLine("Current Assets", "Cash at bank"), { side: SIDE.ASSET, category: CATEGORY.CASH });

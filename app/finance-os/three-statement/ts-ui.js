@@ -35,21 +35,23 @@ function Section({ title, children }) {
 }
 
 function PnlTab({ pnl, ym }) {
-  if (!pnl.loaded) return <Awaiting>No consolidated P&L is loaded yet — run the Joiin refresh to populate it.</Awaiting>;
-  const col = (mm) => Number(mm?.[ym] || 0);
+  if (!pnl.loaded) return <Awaiting>No consolidated board pack is loaded yet — run the Joiin refresh (P&L Formats) to populate it.</Awaiting>;
   return (
-    <div>
-      {pnl.sections.map((s) => (
-        <Section key={s.name} title={s.name}>
-          {s.rows.filter((r) => col(r.months)).map((r) => <Row key={r.account} label={r.account} value={col(r.months)} indent />)}
-          <Row label={`Total ${s.name}`} value={col(s.total.months)} bold />
-        </Section>
-      ))}
-      <Section title="Result">
-        <Row label="Gross profit" value={col(pnl.computed.grossProfit.months)} />
-        <Row label="Operating profit" value={col(pnl.computed.operatingProfit.months)} />
-        <Row label="Net profit" value={col(pnl.computed.netProfit.months)} bold />
-      </Section>
+    <div className="fos-card" style={{ padding: "12px 18px" }}>
+      {pnl.rows.map((r, i) => {
+        if (r.kind === "section" || r.kind === "sub") {
+          return <div key={i} style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".05em", color: "var(--muted)", textTransform: "uppercase", padding: "10px 0 3px" }}>{r.label}</div>;
+        }
+        const v = r.values?.[ym];
+        const display = v == null ? "" : r.isPct ? `${(v * 100).toFixed(1)}%` : money(v);
+        return (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderTop: "1px solid var(--line)",
+            fontSize: 13, fontWeight: r.strong ? 700 : 450, color: r.tone === "ebitda" ? "var(--accent)" : "var(--ink)" }}>
+            <span>{r.label}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{display}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
