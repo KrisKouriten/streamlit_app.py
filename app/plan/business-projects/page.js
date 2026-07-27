@@ -3,6 +3,7 @@ import { getSession } from "../../../lib/auth";
 import { getBusinessProjects } from "../../../lib/business-projects";
 import { summarise } from "../../../lib/business-projects-rules";
 import { PageHeader } from "../../finance-os/ui";
+import PerspectivePanel from "../../perspective-panel";
 import BusinessProjectsUI from "./business-projects-ui";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,11 @@ export default async function BusinessProjects() {
     <div className="fos-shell">
       <PageHeader crumb="Plan · Head Office" title="Business Projects"
         right={ready ? `${summary.total} projects · ${summary.active} active` : "Awaiting migration"} />
+      {ready && (
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+          <PerspectivePanel pageId="business-projects" pageName="Business Projects" />
+        </div>
+      )}
       {!ready ? (
         <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
           Run migration <span style={{ fontFamily: "var(--mono)" }}>026</span> to enable the Business Projects register.

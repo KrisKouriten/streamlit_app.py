@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { listTxns, getSummary, listEntitiesForPicker, CATEGORIES } from "../../../lib/intercompany";
 import IntercompanyUI from "./intercompany-ui";
+import PerspectivePanel from "../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,9 @@ export default async function Intercompany() {
           {canManage ? " Add rows manually or upload a CSV per ledger." : " Viewing only — ADMIN/FINANCE can add and reconcile."}
         </div>
       </header>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-0.5rem 0 1rem" }}>
+        <PerspectivePanel pageId="intercompany" pageName="Intercompany" />
+      </div>
       <IntercompanyUI cats={cats} entities={entities} canManage={canManage} />
     </div>
   );
