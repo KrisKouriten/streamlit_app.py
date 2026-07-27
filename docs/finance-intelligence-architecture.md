@@ -116,6 +116,40 @@ Inbox — no one has to ask.
 - **Migration 041** — `intelligence.briefing` table + `BRIEFING` model config +
   `BRIEFING_V1` prompt. No new calculations; the model still takes no action.
 
+## Drafted commentary (Phase 5b)
+
+A governed draft-and-sign-off surface: the model drafts narrative commentary
+over governed facts, and a human approves or rejects it before use.
+
+- **`lib/intelligence/commentary.js`** — `generateCommentary({ actor, subject })`
+  runs the governed path (retrieve → confidence → interpret → audited `ai_run`,
+  surface `COMMENTARY`) for a subject (`commentary-rules.js`: management accounts,
+  cash, trading, board pack, each mapped to governed domains), then stores a
+  `DRAFT`. `reviewCommentary()` records the `APPROVED`/`REJECTED` sign-off.
+- **`/finance-os/commentary`** — draft (ADMIN/FINANCE), read the sections/sources/
+  confidence, and approve/reject (ADMIN/FINANCE/EXEC). Board/investor commentary
+  stays a **draft** until a person signs it off.
+- **Migration 042** — `intelligence.commentary` table + `COMMENTARY` model config
+  + `COMMENTARY_V1` prompt. No new calculations.
+
+## Benefit measurement (Phase 5b)
+
+Closes the loop: an AI recommendation becomes a tracked benefit opportunity, so
+expected-vs-realised £ can be measured for AI-recommended work. Reuses the
+Phase-4 benefit tables (opportunity → measurement → validation).
+
+- **`lib/intelligence/benefit.js`** — `captureRecommendation()` records an
+  `AI_INTELLIGENCE` opportunity attributed to the run that raised it (the
+  **expected value is human-set** — the model never invents a £). `getIntelligenceBenefits()`
+  returns the realisation picture; `benefit-rules.js` `summariseRealisation()` is
+  the pure accuracy maths (expected/realised/validated totals + rates).
+- **`/finance-os/benefit-realisation`** — capture recommendations, record realised
+  values, and see the realisation/validation rates. Finance **validation** stays
+  on Govern › Benefits, which lists every opportunity including these. A briefing's
+  recommendations link straight into capture.
+- **Migration 043** — adds `ai_run_id` + `origin_surface` to `benefit_opportunity`
+  (attribution only; no new tables, no new calculations).
+
 ## Data model (migration 038, `intelligence.*`)
 
 - `model_configuration` — model/effort/max_tokens/prompt per use-case (ROUTING → Haiku 4.5, PERSPECTIVE → Sonnet 5, BUDDY → Opus 5; **all swappable without a deploy**).
@@ -145,7 +179,7 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 ## Deployment
 
-- Run migrations **038** (foundation), **039** (Buddy conversation memory), **040** (Phase-4 page registry seeds) and **041** (Phase-5 briefing config + table) — all idempotent — on the Neon DB. Phase 5's scheduled brief needs `CRON_SECRET` set (already used by the existing close cron). **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds; **Phase 4** adds only the 040 registry seeds (no new tables, no new calculations).
+- Run migrations **038** (foundation), **039** (Buddy conversation memory), **040** (Phase-4 page registry seeds), **041** (Phase-5 briefing config + table), **042** (commentary config + table) and **043** (benefit AI-attribution columns) — all idempotent — on the Neon DB. Phase 5's scheduled brief needs `CRON_SECRET` set (already used by the existing close cron). **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds; **Phase 4** adds only the 040 registry seeds (no new tables, no new calculations).
 - `ANTHROPIC_API_KEY` is already set (the existing `TRADING_COMMENTARY` agent uses it).
 - Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Phase 2 (Finance Buddy) is the first surface that makes a live governed model call, only when a finance user asks. AI Perspective on the six seeded pages (Phase 3) builds on the same layer.
 
@@ -155,4 +189,4 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 2. **Finance Buddy MVP** ✅ — persistent button (⌘/Ctrl-J) + palette action, panel/workspace, `/api/intelligence/ask`, `runBuddy()`, conversation memory (migration 039), sources & confidence.
 3. **AI Perspective MVP** ✅ — ✦ button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, structured output, sources/confidence, Create Action. **No new migration** — runs on the Phase 1 seeds.
 4. **Wider module coverage** ✅ (Trading & commercial, Position & close, Planning) — seven more governed domains in `retrieval.js` (procurement, SKU, three-statement, close status, intercompany, scenarios, business projects), Buddy routing for each (`domain-select.js`), and AI Perspective on seven more pages (migration **040** registry seeds). Remaining dashboards (franchise, fixed assets, budget & forecast) not yet covered.
-5. **Advanced** — proactive briefings ✅ (scheduled governed brief → Inbox, migration **041**); drafted commentary and benefit measurement still to come.
+5. **Advanced** ✅ — proactive briefings (migration **041**), drafted commentary (migration **042**) and benefit measurement (migration **043**). Phase 5 complete.

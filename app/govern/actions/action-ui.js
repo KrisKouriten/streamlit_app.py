@@ -19,6 +19,7 @@ export function ActionStatusChip({ status }) {
 export const SOURCE_LABEL = {
   DASHBOARD: "Dashboard", MONTH_END: "Month-end", WEEKLY_TASK: "Weekly task", AI_AGENT: "AI agent",
   MANAGEMENT_ACCOUNTS: "Mgmt accounts", BOARD: "Board", CONTROL: "Control", AUDIT: "Audit", MANUAL: "Manual",
+  AI_INTELLIGENCE: "AI intelligence",
 };
 
 async function api(body) {
