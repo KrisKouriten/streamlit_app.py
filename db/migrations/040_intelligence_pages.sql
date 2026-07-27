@@ -86,7 +86,6 @@ INSERT INTO intelligence.suggested_question (page_id, question, display_order) V
 
   ('business-projects', 'Which projects are flagged red?', 1),
   ('business-projects', 'What is our total project budget commitment?', 2),
-  ('business-projects', 'Which active projects need attention?', 3)
-ON CONFLICT (page_id, display_order) DO NOTHING;
+  ('business-projects', 'Which active projects need attention?', 3);
 
 COMMIT;
