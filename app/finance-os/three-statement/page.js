@@ -3,6 +3,7 @@ import { getSession } from "../../../lib/auth";
 import { getThreeStatement } from "../../../lib/threestatement";
 import { getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, EntityScopeBanner } from "../ui";
+import PerspectivePanel from "../../perspective-panel";
 import ThreeStatementUI from "./ts-ui";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ export default async function ThreeStatement({ searchParams }) {
       <PageHeader crumb="Perform" title="Three-statement model"
         right={model.ym ? `As at ${model.ym} · P&L · Balance Sheet · Cash Flow` : "Awaiting Joiin feed"} />
       <EntityScopeBanner scope={scope} asAt={model.ym || null} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-0.5rem 0 1rem" }}>
+        <PerspectivePanel pageId="three-statement" pageName="Three-Statement" filters={{ period: model.ym || undefined }} />
+      </div>
       <ThreeStatementUI model={model} />
     </div>
   );

@@ -123,7 +123,7 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 ## Deployment
 
-- Run migrations **038** (foundation) and **039** (Buddy conversation memory) — both idempotent — on the Neon DB. **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds.
+- Run migrations **038** (foundation), **039** (Buddy conversation memory) and **040** (Phase-4 page registry seeds) — all idempotent — on the Neon DB. **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds; **Phase 4** adds only the 040 registry seeds (no new tables, no new calculations).
 - `ANTHROPIC_API_KEY` is already set (the existing `TRADING_COMMENTARY` agent uses it).
 - Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Phase 2 (Finance Buddy) is the first surface that makes a live governed model call, only when a finance user asks. AI Perspective on the six seeded pages (Phase 3) builds on the same layer.
 
@@ -132,5 +132,5 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 1. **Foundation** ✅ — config, audit, permission-aware retrieval, source + confidence, page registry, orchestrator.
 2. **Finance Buddy MVP** ✅ — persistent button (⌘/Ctrl-J) + palette action, panel/workspace, `/api/intelligence/ask`, `runBuddy()`, conversation memory (migration 039), sources & confidence.
 3. **AI Perspective MVP** ✅ — ✦ button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, structured output, sources/confidence, Create Action. **No new migration** — runs on the Phase 1 seeds.
-4. **Wider module coverage.**
+4. **Wider module coverage** ✅ (Trading & commercial, Position & close, Planning) — seven more governed domains in `retrieval.js` (procurement, SKU, three-statement, close status, intercompany, scenarios, business projects), Buddy routing for each (`domain-select.js`), and AI Perspective on seven more pages (migration **040** registry seeds). Remaining dashboards (franchise, fixed assets, budget & forecast) not yet covered.
 5. **Advanced** — proactive briefings, drafted commentary, benefit measurement.

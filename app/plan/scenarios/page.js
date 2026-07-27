@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { getForecast } from "../../../lib/forecast";
 import ScenariosUI from "./scenarios-ui";
+import PerspectivePanel from "../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,9 @@ export default async function Scenarios() {
           fixed costs, watch EBITDA move by month, and save the scenarios the group plans against.
         </p>
       </header>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="scenarios" pageName="Scenario Planning" />
+      </div>
       <ScenariosUI data={payload} ready={fc.ready} scenarios={fc.scenarios} canManage={canManage} />
     </div>
   );

@@ -12,7 +12,7 @@ test("a cash question selects the cash domain as primary", () => {
 });
 
 test("an inventory question selects the inventory domain", () => {
-  const r = selectDomains("Which SKUs are dormant and how much stock is slow-moving?");
+  const r = selectDomains("What is our inventory value and how many weeks of cover do we hold?");
   assert.equal(r.primary[0], "inventory");
 });
 
@@ -45,6 +45,28 @@ test("a multi-topic question keeps the most specific as primary and the rest as 
 test("only ever returns real retrieval domains", () => {
   const r = selectDomains("cash inventory stores variance revenue margins everything");
   for (const d of [...r.primary, ...r.related]) assert.ok(BUDDY_DOMAINS.includes(d), `${d} is a real domain`);
+});
+
+/* ---------------- Phase 4: wider module coverage routes to the new domains ---------------- */
+
+const PHASE4_CASES = [
+  ["procurement", "Are we within the procurement budget across our suppliers?"],
+  ["sku", "Which SKUs are dormant and how much stock do they tie up?"],
+  ["intercompany", "How much intercompany is still unreconciled?"],
+  ["close_status", "What is outstanding before we can close the month?"],
+  ["three_statement", "Does the balance sheet cash flow reconcile this period?"],
+  ["scenarios", "What happens to EBITDA in the downside scenario?"],
+  ["business_projects", "Which business projects are flagged red?"],
+];
+
+for (const [domain, q] of PHASE4_CASES) {
+  test(`routes "${q.slice(0, 32)}…" to ${domain}`, () => {
+    assert.equal(selectDomains(q).primary[0], domain);
+  });
+}
+
+test("all Phase-4 domains are registered in BUDDY_DOMAINS", () => {
+  for (const [domain] of PHASE4_CASES) assert.ok(BUDDY_DOMAINS.includes(domain), `${domain} registered`);
 });
 
 /* ---------------- conversation title derivation (pure) ---------------- */

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { getSkuReport, getNewSkuReport, getDormantReport } from "../../../lib/sku-report";
 import { PageHeader } from "../ui";
+import PerspectivePanel from "../../perspective-panel";
 import SkuReportUI from "./sku-report-ui";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,9 @@ export default async function SkuAnalysis({ searchParams }) {
     <div className="fos-shell">
       <PageHeader crumb="Dashboards · Merchandising" title="SKU Analysis Dashboard"
         right={top80?.loaded ? (top80.period || "Top 80 / Bottom 20") : "Merchandising analysis"} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="sku-analysis" pageName="SKU Analysis" />
+      </div>
       <SkuReportUI tab={tab} top80={top80} newsku={newsku} dormant={dormant} canManage={canManage} />
     </div>
   );
