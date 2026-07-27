@@ -29,6 +29,9 @@ export default function CommandPalette() {
   const items = useMemo(() => {
     const flat = [];
     for (const [group, entries] of NAV) for (const [label, href, hint] of entries) flat.push({ group, label, href, hint });
+    flat.push({ group: "Actions", label: "Ask Finance Buddy", hint: "Governed AI · ⌘/Ctrl-J", run: () => {
+      try { window.dispatchEvent(new Event("fos:buddy")); } catch {}
+    }});
     flat.push({ group: "Actions", label: "Switch light / dark theme", hint: "Appearance", run: () => {
       const el = document.documentElement;
       const light = el.getAttribute("data-theme") === "light";
