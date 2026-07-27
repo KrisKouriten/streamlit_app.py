@@ -3,6 +3,7 @@ import { getSession, hasRole } from "../../../lib/auth";
 import { getForecast } from "../../../lib/forecast";
 import { computeNominalPnl, SCOPES } from "../../../lib/forecast-rules.js";
 import { PageHeader } from "../../finance-os/ui";
+import PerspectivePanel from "../../perspective-panel";
 import ForecastUI from "./forecast-ui";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,10 @@ export default async function OperateForecast({ searchParams }) {
     <div className="fos-shell">
       <PageHeader crumb="Operate" title="Forecast inputs"
         right={fc.loaded ? "Company stores · Head office · Franchise" : "Awaiting forecast load"} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="forecast" pageName="Forecast Builder"
+          filters={{ store: (payload && payload.selectedStore) || undefined }} />
+      </div>
       <ForecastUI data={payload} ready={fc.ready} canManage={canManage} />
     </div>
   );

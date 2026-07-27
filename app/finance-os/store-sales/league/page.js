@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../../lib/auth";
 import { getWindows, getStoreLeague } from "../../../../lib/store-sales";
 import { PageHeader, Panel, Table, SubNav, STORE_SALES_NAV, money, pct, dateLabel } from "../../ui";
+import PerspectivePanel from "../../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,9 @@ export default async function StoreLeague() {
     <div className="fos-shell">
       <PageHeader crumb="Trading" title="Store League — ranked by YTD net sales"
         right={`Data to ${dateLabel(wins.maxDate)}`} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="store-performance" pageName="Store Performance" />
+      </div>
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/league" />
 
       <Panel title={`All stores (${rows.length})`} note="YTD figures with month-to-date alongside; YoY heatmap vs same dates last year">

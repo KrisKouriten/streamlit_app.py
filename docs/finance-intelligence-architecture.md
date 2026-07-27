@@ -72,6 +72,28 @@ renders the dialogue, cited sources and honest confidence, and computes nothing.
 | `lib/intelligence/orchestrator.js` | Ties it together; `runPerspective()` is ready for the Phase 3 UI. |
 | `lib/llm.js` | `generateGoverned()` added — config-driven model id + structured JSON output; single fetch, no tools (same lean, no-SDK design as the existing `generateText`). |
 
+## AI Perspective (Phase 3)
+
+The page-anchored surface. An **✦ AI Perspective** button sits on each of the six
+governed pages (`app/perspective-panel.js`) and passes its **pageContext** —
+`pageId` + the page's current filters — to the endpoint. No new schema: it runs
+entirely on the Phase 1 seeds and `runPerspective()`.
+
+- **`/api/intelligence/perspective`** — `perspective` (finance-role gated;
+  validates `pageId` against the code-side manifest, then runs the governed
+  `runPerspective` path and returns the structured perspective + sources +
+  confidence + claim-verification), plus `suggestions` (per-page prompts),
+  `create-action`, and `feedback`.
+- **Structured output** rendered from the seeded `PERSPECTIVE_V1` schema:
+  executive summary, facts, drivers, connected context, risks, opportunities,
+  recommended actions, financial effects, data quality, confidence + sources.
+- **Create Action** turns a recommendation into a governed `action_register`
+  entry (`sourceType: AI_PERSPECTIVE`), reusing the existing actions layer —
+  the model still only drafts; a person creates and owns the action.
+- **The six pages** and their `pageContext` are listed in
+  `lib/intelligence/perspective-pages.js` — a pure manifest kept in step with the
+  migration 038 registry (unit-tested against the seed).
+
 ## Data model (migration 038, `intelligence.*`)
 
 - `model_configuration` — model/effort/max_tokens/prompt per use-case (ROUTING → Haiku 4.5, PERSPECTIVE → Sonnet 5, BUDDY → Opus 5; **all swappable without a deploy**).
@@ -101,7 +123,7 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 ## Deployment
 
-- Run migrations **038** (foundation) and **039** (Buddy conversation memory) — both idempotent — on the Neon DB.
+- Run migrations **038** (foundation) and **039** (Buddy conversation memory) — both idempotent — on the Neon DB. **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds.
 - `ANTHROPIC_API_KEY` is already set (the existing `TRADING_COMMENTARY` agent uses it).
 - Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Phase 2 (Finance Buddy) is the first surface that makes a live governed model call, only when a finance user asks. AI Perspective on the six seeded pages (Phase 3) builds on the same layer.
 
@@ -109,6 +131,6 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 1. **Foundation** ✅ — config, audit, permission-aware retrieval, source + confidence, page registry, orchestrator.
 2. **Finance Buddy MVP** ✅ — persistent button (⌘/Ctrl-J) + palette action, panel/workspace, `/api/intelligence/ask`, `runBuddy()`, conversation memory (migration 039), sources & confidence.
-3. **AI Perspective MVP** — button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, sources/confidence, Create Action.
+3. **AI Perspective MVP** ✅ — ✦ button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, structured output, sources/confidence, Create Action. **No new migration** — runs on the Phase 1 seeds.
 4. **Wider module coverage.**
 5. **Advanced** — proactive briefings, drafted commentary, benefit measurement.

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { getRealCashPosition, getRealCashByEntity, getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, StatRow, Stat, Panel, Table, EntityScopeBanner, Badge, Bar, money } from "../ui";
+import PerspectivePanel from "../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,9 @@ export default async function CashFlow() {
   return (
     <div className="fos-shell">
       <PageHeader crumb="Treasury" title="Cash Flow" right={cash ? "Xero cash position" : "Awaiting Xero feed"} />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="cash-flow" pageName="Cash Flow" />
+      </div>
       <EntityScopeBanner scope={scope} asAt={cash?.calendar_date} />
 
       {!cash ? (

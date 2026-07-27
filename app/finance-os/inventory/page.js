@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { getInventoryHealth } from "../../../lib/finance-os";
 import { PageHeader, StatRow, Stat, Panel, Table, IllustrativeBanner, Bar, money, pct } from "../ui";
+import PerspectivePanel from "../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ export default async function Inventory() {
   return (
     <div className="fos-shell">
       <PageHeader crumb="Operations" title="Inventory" right="Illustrative snapshot" />
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="inventory" pageName="Inventory" />
+      </div>
       <IllustrativeBanner>
         These figures are illustrative — no live stock feed is connected yet. Load a stock extract through the
         governed data pipeline (by category, ageing and cover) and the real position replaces them here.
