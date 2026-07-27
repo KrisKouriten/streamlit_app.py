@@ -3,6 +3,7 @@ import { getSession } from "../../../lib/auth";
 import { resolveTab, TAB_LABEL, SCOPE_NOTE, PERIODS } from "../../../lib/ma-boardpack-view";
 import { applyPeriod } from "../../../lib/ma-export-rules";
 import { PageHeader, money } from "../ui";
+import PerspectivePanel from "../../perspective-panel";
 import McControls from "./mc-controls";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,11 @@ export default async function ManagementAccounts({ searchParams }) {
     <div className="fos-shell">
       <PageHeader crumb="Perform · Financial reporting" title="Management Accounts"
         right={data.loaded ? `${TAB_LABEL[tab]} · actuals` : "Awaiting Joiin actuals"} />
+
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
+        <PerspectivePanel pageId="management-accounts" pageName="Management Accounts"
+          filters={{ tab, period, store: data.selected || undefined, year: data.year || undefined }} />
+      </div>
 
       <McControls tab={tab} years={data.years || []} year={data.year} period={period} storeList={data.storeList} store={data.selected} />
 

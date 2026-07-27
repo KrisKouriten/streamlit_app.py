@@ -4,6 +4,7 @@ import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
 import Orbit from "./orbit";
+import PerspectivePanel from "../../perspective-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -98,9 +99,12 @@ export default async function ExecutiveHub() {
           <span className="fos-eyebrow">Home · The connected sphere</span>
           <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Executive Intelligence Hub</div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
-          <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
-          <div>Joiin finance as at {dateLabel(financeAsAt)}</div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
+            <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
+            <div>Joiin finance as at {dateLabel(financeAsAt)}</div>
+          </div>
+          <PerspectivePanel pageId="executive" pageName="Executive Intelligence Hub" />
         </div>
       </header>
 
