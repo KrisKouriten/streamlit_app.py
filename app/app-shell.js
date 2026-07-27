@@ -2,11 +2,12 @@ import TopNav from "./topnav";
 import Sidebar from "./sidebar";
 import PageTransition from "./page-transition";
 import CommandPalette from "./command-palette";
+import FinanceBuddy from "./finance-buddy";
 
 /* The responsive application shell: glass top bar, persistent sidebar (drawer
    on narrow screens), ⌘K palette, and the page-transition content column.
    Pure chrome — no data access and no dashboard calculations live here. */
-export default function AppShell({ userName, children }) {
+export default function AppShell({ userName, canBuddy = false, children }) {
   return (
     <>
       <TopNav userName={userName} />
@@ -17,6 +18,7 @@ export default function AppShell({ userName, children }) {
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
+      {canBuddy && <FinanceBuddy />}
     </>
   );
 }

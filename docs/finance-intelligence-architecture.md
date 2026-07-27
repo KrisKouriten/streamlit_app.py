@@ -32,6 +32,29 @@ user question / AI-perspective request
 
 This lives in `lib/intelligence/orchestrator.js`. The deterministic core —
 everything except the model call — is `buildEvidencePack()`, which is unit-tested.
+`runPerspective()` (structured, page-anchored) and `runBuddy()` (conversational,
+open-ended) both run this one path; only how domains are chosen differs.
+
+## Finance Buddy (Phase 2)
+
+The persistent conversational surface. A floating button (`app/finance-buddy.js`),
+**⌘/Ctrl-J**, or the "Ask Finance Buddy" command-palette action opens a right-hand
+workspace panel. It is pure chrome + a thin client for the endpoint below — it
+renders the dialogue, cited sources and honest confidence, and computes nothing.
+
+- **`runBuddy()`** — Buddy has no page, so it selects governed domains from the
+  question itself (`domain-select.js`, pure + tested), then runs the shared
+  governed path (permissions → retrieve governed facts → confidence → interpret →
+  audited run). Prior turns are passed as conversation memory; the model still has
+  **no tools** and can take no action. Falls back to the consolidated snapshot when
+  a question has no recognisable signal, so there is always a governed anchor.
+- **`/api/intelligence/ask`** — `ask` (permission-gated to finance roles, creates
+  or continues an owned conversation, records the run + both turns), plus
+  `history`, `conversation`, `archive`, and `feedback` actions.
+- **Conversation memory** (`conversation.js`, migration 039) — a titled thread of
+  user/assistant turns owned by one user; assistant turns link back to the
+  governed `ai_run`, so sources / claims / confidence / audit stay in the Phase 1
+  record and are never duplicated.
 
 ## Modules (Phase 1)
 
@@ -78,14 +101,14 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 ## Deployment
 
-- Run migration **038** (idempotent) on the Neon DB.
+- Run migrations **038** (foundation) and **039** (Buddy conversation memory) — both idempotent — on the Neon DB.
 - `ANTHROPIC_API_KEY` is already set (the existing `TRADING_COMMENTARY` agent uses it).
-- Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Finance Buddy (Phase 2) and AI Perspective on the six seeded pages (Phase 3) build on top.
+- Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Phase 2 (Finance Buddy) is the first surface that makes a live governed model call, only when a finance user asks. AI Perspective on the six seeded pages (Phase 3) builds on the same layer.
 
 ## Roadmap
 
-1. **Foundation** (this phase) — config, audit, permission-aware retrieval, source + confidence, page registry, orchestrator.
-2. **Finance Buddy MVP** — persistent button (⌘/Ctrl-J), panel/workspace, `/api/intelligence/ask`, conversation memory.
+1. **Foundation** ✅ — config, audit, permission-aware retrieval, source + confidence, page registry, orchestrator.
+2. **Finance Buddy MVP** ✅ — persistent button (⌘/Ctrl-J) + palette action, panel/workspace, `/api/intelligence/ask`, `runBuddy()`, conversation memory (migration 039), sources & confidence.
 3. **AI Perspective MVP** — button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, sources/confidence, Create Action.
 4. **Wider module coverage.**
 5. **Advanced** — proactive briefings, drafted commentary, benefit measurement.

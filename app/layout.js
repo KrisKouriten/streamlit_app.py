@@ -125,6 +125,7 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
 
 /* motion: one-time page rise + staggered children */
 @keyframes fosRise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes fosSlideIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 .fos-page{animation:fosRise var(--t-slow) var(--ease) both}
 .fos-stagger>*{animation:fosRise var(--t-slow) var(--ease) both}
 .fos-stagger>*:nth-child(1){animation-delay:.02s}.fos-stagger>*:nth-child(2){animation-delay:.06s}
@@ -157,7 +158,7 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
 // Applied before paint so a stored light preference doesn't flash dark. Default is dark.
 const themeScript = `(function(){try{var t=localStorage.getItem('fos-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
 
-import { getSession } from "../lib/auth";
+import { getSession, hasRole } from "../lib/auth";
 import AppShell from "./app-shell";
 import PageTransition from "./page-transition";
 import PwaRegister from "./pwa-register";
@@ -173,7 +174,7 @@ export default async function RootLayout({ children }) {
       <body>
         <PwaRegister />
         {session ? (
-          <AppShell userName={session.name}>{children}</AppShell>
+          <AppShell userName={session.name} canBuddy={hasRole(session, "ADMIN", "FINANCE", "EXEC")}>{children}</AppShell>
         ) : (
           <PageTransition>{children}</PageTransition>
         )}
