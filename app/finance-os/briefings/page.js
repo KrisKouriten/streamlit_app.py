@@ -76,6 +76,12 @@ export default async function Briefings({ searchParams }) {
                 <List title="Highlights" items={body.highlights} />
                 <List title="Watch items" items={body.watch_items} />
                 <List title="Recommended focus" items={body.recommended_focus} />
+                {body.recommended_focus?.length > 0 && (
+                  <a href={`/finance-os/benefit-realisation?run=${current.run_id}&origin=BRIEFING`}
+                    style={{ display: "inline-block", marginTop: 10, fontSize: 12, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
+                    Track a recommendation as a benefit →
+                  </a>
+                )}
                 {sources.length > 0 && (
                   <div style={{ marginTop: 18, borderTop: "1px solid var(--hairline)", paddingTop: 12 }}>
                     <div className="fos-eyebrow" style={{ color: "var(--faint)", marginBottom: 6 }}>{sources.length} source{sources.length > 1 ? "s" : ""}</div>
