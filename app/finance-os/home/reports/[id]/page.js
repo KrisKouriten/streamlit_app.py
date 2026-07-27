@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession, hasRole } from "../../../../../lib/auth";
+import { getSession, hasRole, isAdmin } from "../../../../../lib/auth";
 import { scopeForSession } from "../../../../../lib/intelligence/permission";
 import { resolveReport, validateReportById, listVersions } from "../../../../../lib/reporting/reports";
 import { PageHeader, EmptyState } from "../../../ui";
@@ -22,6 +22,7 @@ export default async function ReportBuilderPage({ params }) {
   const validation = await validateReportById(id, scope);
   const versions = await listVersions(id);
   const canEdit = hasRole(session, "ADMIN", "FINANCE");
+  const canApprove = isAdmin(session);
 
   return (
     <div style={{ padding: "1rem 0" }}>
@@ -30,6 +31,7 @@ export default async function ReportBuilderPage({ params }) {
         reportId={String(id)}
         initial={{ report: resolved.report, sections: resolved.sections, allSections: resolved.allSections, components: resolved.components, validation, versions }}
         canEdit={canEdit}
+        canApprove={canApprove}
       />
     </div>
   );

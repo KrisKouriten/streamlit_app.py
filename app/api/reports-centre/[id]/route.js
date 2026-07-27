@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, hasRole } from "../../../../lib/auth";
+import { getSession, hasRole, isAdmin } from "../../../../lib/auth";
 import { scopeForSession } from "../../../../lib/intelligence/permission";
 import {
   getReport, resolveReport, validateReportById, updateReport, setSectionIncluded,
@@ -34,6 +34,11 @@ export async function POST(request, { params }) {
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const scope = scopeForSession(session);
+  // Segregation of duties: approval / issue of a report is an admin (Finance
+  // Director) right; finance managers create, edit and review but do not approve.
+  if (body.op === "transition" && ["approve", "issue"].includes(body.action) && !isAdmin(session)) {
+    return NextResponse.json({ error: "Approving or issuing a report requires admin (Finance Director) rights" }, { status: 403 });
+  }
   try {
     switch (body.op) {
       case "update":

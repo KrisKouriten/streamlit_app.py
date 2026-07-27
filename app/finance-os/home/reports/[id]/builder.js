@@ -28,7 +28,7 @@ const ghost = { fontSize: 12.5, fontWeight: 500, padding: "7px 13px", borderRadi
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 };
 const mono = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
 
-export default function Builder({ reportId, initial, canEdit }) {
+export default function Builder({ reportId, initial, canEdit, canApprove = false }) {
   const [data, setData] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -99,8 +99,9 @@ export default function Builder({ reportId, initial, canEdit }) {
           {status === "REVIEW_READY" && <button style={btn("var(--accent)")} disabled={busy} onClick={() => op({ op: "transition", action: "start_review" }, "Review started")}>Start review</button>}
           {status === "IN_REVIEW" && <button style={btn("var(--accent)")} disabled={busy} onClick={() => op({ op: "transition", action: "ready_for_approval" }, "Marked ready for approval")}>Ready for approval</button>}
           {status === "IN_REVIEW" && <button style={btn("var(--red)")} disabled={busy} onClick={() => op({ op: "transition", action: "return" }, "Returned for amendment")}>Return</button>}
-          {status === "APPROVAL_READY" && <button style={btn("var(--green)")} disabled={busy || !v.canIssue} onClick={() => op({ op: "transition", action: "approve" }, "Approved & locked")}>Approve & lock</button>}
-          {status === "APPROVED" && <button style={btn("var(--green)")} disabled={busy} onClick={() => op({ op: "transition", action: "issue" }, "Issued")}>Issue</button>}
+          {status === "APPROVAL_READY" && canApprove && <button style={btn("var(--green)")} disabled={busy || !v.canIssue} onClick={() => op({ op: "transition", action: "approve" }, "Approved & locked")}>Approve & lock</button>}
+          {status === "APPROVAL_READY" && !canApprove && <span style={{ fontSize: 12, color: "var(--faint)", alignSelf: "center" }}>Awaiting admin (Finance Director) approval</span>}
+          {status === "APPROVED" && canApprove && <button style={btn("var(--green)")} disabled={busy} onClick={() => op({ op: "transition", action: "issue" }, "Issued")}>Issue</button>}
           <button style={ghost} disabled={busy} onClick={() => op({ op: "snapshot", label: null }, "Draft snapshot taken")}>Snapshot draft</button>
         </div>
       )}
