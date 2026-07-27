@@ -86,14 +86,16 @@ export async function POST(request) {
       }
 
       // Invited accounts get an unguessable random password nobody knows, so
-      // the only way in is the invite link — and must_change_password flags the
-      // account as "invited, awaiting first sign-in" for the admin list.
+      // the only way in is the invite link. For an admin-issued starter
+      // password, must_change_password defaults to true so the user is forced
+      // to set their own on first sign-in (pass requireChange:false to opt out).
       const rawPassword = wantsInvite ? crypto.randomBytes(24).toString("hex") : password;
+      const mustChange = wantsInvite ? true : body.requireChange !== false;
       const hash = await hashPassword(rawPassword);
       const { rows } = await query(
         `INSERT INTO users (email, name, password, must_change_password) VALUES (lower($1), $2, $3, $4)
          ON CONFLICT (email) DO NOTHING RETURNING id`,
-        [email.trim(), name.trim(), hash, wantsInvite]
+        [email.trim(), name.trim(), hash, mustChange]
       );
       if (!rows.length) return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
       const userId = rows[0].id;
@@ -150,8 +152,11 @@ export async function POST(request) {
         return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
       }
       const hash = await hashPassword(password);
-      // A direct admin set clears any "awaiting first sign-in" flag too.
-      await query(`UPDATE users SET password = $1, must_change_password = false WHERE id = $2`, [hash, userId]);
+      // An admin-set password is a starter credential, so by default the user
+      // must change it on next sign-in (pass requireChange:false to opt out —
+      // e.g. setting a genuinely permanent password for a service account).
+      const mustChange = body.requireChange !== false;
+      await query(`UPDATE users SET password = $1, must_change_password = $2 WHERE id = $3`, [hash, mustChange, userId]);
       // A password reset invalidates every existing session for that user.
       await endAllSessions(userId, session.email);
       await audit({ actor: session, eventType: "user.reset-password", objectType: "users", objectRef: String(userId) });

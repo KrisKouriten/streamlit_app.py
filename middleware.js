@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-import { isPublicPath, requiredRolesForPath, isAllowed, originAllowed } from "./lib/route-guards";
+import { isPublicPath, requiredRolesForPath, isAllowed, originAllowed, mustChangePasswordGate } from "./lib/route-guards";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -90,6 +90,19 @@ export async function middleware(req) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    return withSecurityHeaders(NextResponse.redirect(url), dev);
+  }
+
+  // Forced password change: a session issued with a starter password (mustChange
+  // in the token) can only reach the change-password screen and its endpoint
+  // until a new password is set. Takes priority over role gating.
+  if (mustChangePasswordGate(pathname, payload.mustChange === true)) {
+    if (isApi) {
+      return withSecurityHeaders(NextResponse.json({ error: "You must set a new password before continuing" }, { status: 403 }), dev);
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/change-password";
+    url.search = "";
     return withSecurityHeaders(NextResponse.redirect(url), dev);
   }
 
