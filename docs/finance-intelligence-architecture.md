@@ -94,6 +94,28 @@ entirely on the Phase 1 seeds and `runPerspective()`.
   `lib/intelligence/perspective-pages.js` — a pure manifest kept in step with the
   migration 038 registry (unit-tested against the seed).
 
+## Proactive briefings (Phase 5)
+
+The first proactive surface: a scheduled governed brief, generated over the same
+retrieval layer as Buddy and Perspective and pushed to finance/admin/exec users'
+Inbox — no one has to ask.
+
+- **`lib/intelligence/briefing.js`** — `generateBriefing({ actor })` resolves the
+  permission scope, retrieves a curated cross-section of governed domains
+  (`briefing-rules.js`: finance snapshot, management accounts, cash, store
+  performance, inventory), assesses confidence, has the model interpret (never
+  compute) against the seeded `BRIEFING_V1` prompt/schema, records an auditable
+  `ai_run` (surface `BRIEFING`), persists the brief, and notifies recipients.
+- **`/api/intelligence/briefing/cron`** — Vercel Cron (weekday 06:00 UTC, guarded
+  by `CRON_SECRET`) generates the brief; an ADMIN/FINANCE session can also kick
+  one manually. The system cron actor carries a finance grant so the brief sees
+  exactly what the app shows finance users today.
+- **`/finance-os/briefings`** — reads the stored briefs (headline, summary,
+  highlights, watch items, recommended focus, confidence, sources); the Inbox
+  notification links straight to the latest.
+- **Migration 041** — `intelligence.briefing` table + `BRIEFING` model config +
+  `BRIEFING_V1` prompt. No new calculations; the model still takes no action.
+
 ## Data model (migration 038, `intelligence.*`)
 
 - `model_configuration` — model/effort/max_tokens/prompt per use-case (ROUTING → Haiku 4.5, PERSPECTIVE → Sonnet 5, BUDDY → Opus 5; **all swappable without a deploy**).
@@ -123,7 +145,7 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 
 ## Deployment
 
-- Run migrations **038** (foundation), **039** (Buddy conversation memory) and **040** (Phase-4 page registry seeds) — all idempotent — on the Neon DB. **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds; **Phase 4** adds only the 040 registry seeds (no new tables, no new calculations).
+- Run migrations **038** (foundation), **039** (Buddy conversation memory), **040** (Phase-4 page registry seeds) and **041** (Phase-5 briefing config + table) — all idempotent — on the Neon DB. Phase 5's scheduled brief needs `CRON_SECRET` set (already used by the existing close cron). **Phase 3 (AI Perspective) adds no migration** — it runs on the 038 seeds; **Phase 4** adds only the 040 registry seeds (no new tables, no new calculations).
 - `ANTHROPIC_API_KEY` is already set (the existing `TRADING_COMMENTARY` agent uses it).
 - Phase 1 adds **no UI and makes no live model calls in any user path** — it is the foundation. Phase 2 (Finance Buddy) is the first surface that makes a live governed model call, only when a finance user asks. AI Perspective on the six seeded pages (Phase 3) builds on the same layer.
 
@@ -133,4 +155,4 @@ permissions + prompt-version, with manual refresh and no cross-permission reuse.
 2. **Finance Buddy MVP** ✅ — persistent button (⌘/Ctrl-J) + palette action, panel/workspace, `/api/intelligence/ask`, `runBuddy()`, conversation memory (migration 039), sources & confidence.
 3. **AI Perspective MVP** ✅ — ✦ button + `pageContext` on the six seeded pages, `/api/intelligence/perspective`, structured output, sources/confidence, Create Action. **No new migration** — runs on the Phase 1 seeds.
 4. **Wider module coverage** ✅ (Trading & commercial, Position & close, Planning) — seven more governed domains in `retrieval.js` (procurement, SKU, three-statement, close status, intercompany, scenarios, business projects), Buddy routing for each (`domain-select.js`), and AI Perspective on seven more pages (migration **040** registry seeds). Remaining dashboards (franchise, fixed assets, budget & forecast) not yet covered.
-5. **Advanced** — proactive briefings, drafted commentary, benefit measurement.
+5. **Advanced** — proactive briefings ✅ (scheduled governed brief → Inbox, migration **041**); drafted commentary and benefit measurement still to come.
