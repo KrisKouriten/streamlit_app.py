@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 /* The doorway. A quiet, lit field with the orbital motif behind a glass card —
@@ -13,6 +13,17 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("password"); // "password" | "mfa"
   const [code, setCode] = useState("");
+  const [notice, setNotice] = useState("");
+
+  // A user who just set their password via an invite/reset link lands here
+  // with ?set=1 — confirm the account is ready so the next step is obvious.
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("set") === "1") {
+        setNotice("Your password has been set. Sign in below to continue.");
+      }
+    } catch {}
+  }, []);
 
   // Honour ?next= set by the auth middleware, but only same-origin paths — a
   // leading single "/" and never "//" (which would be a protocol-relative
@@ -91,6 +102,8 @@ export default function LoginPage() {
           <span className="fos-eyebrow">Miniso UK · Finance OS</span>
           <h1 style={{ fontSize: 22.5, fontWeight: 650, letterSpacing: "-.025em", margin: "14px 0 5px", lineHeight: 1.2 }}>The Connected Finance Function</h1>
           <p style={{ fontSize: 13.5, color: "var(--muted)", marginBottom: 24, lineHeight: 1.55 }}>Sign in to your finance workspace.</p>
+
+          {notice && <div style={{ fontSize: 13, color: "var(--green)", background: "var(--green-bg)", border: "1px solid color-mix(in srgb, var(--green) 40%, transparent)", borderRadius: 8, padding: "9px 12px", marginBottom: 16, lineHeight: 1.45 }}>{notice}</div>}
 
           <label htmlFor="fos-email" style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", display: "block", marginBottom: 7 }}>Email</label>
           <input id="fos-email" className="fos-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required

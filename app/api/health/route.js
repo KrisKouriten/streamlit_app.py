@@ -20,6 +20,12 @@ export async function GET() {
       joiinApiKey: flag(env.JOIIN_API_KEY),
       cronSecret: flag(env.CRON_SECRET),
       mfaSecretKey: env.MFA_SECRET_KEY ? "set" : "fallback (SESSION_SECRET)",
+      // Email invites: "set" only when all four Graph vars are present.
+      graphEmail:
+        env.MS_GRAPH_TENANT_ID && env.MS_GRAPH_CLIENT_ID && env.MS_GRAPH_CLIENT_SECRET && env.MS_GRAPH_SENDER
+          ? "set"
+          : "MISSING (invites fall back to a manual link)",
+      appBaseUrl: env.APP_BASE_URL ? "set" : "fallback (request origin)",
     },
     databaseVarFound: !!resolveConnectionString(),
     databaseVarNamesSeen: Object.keys(env)
