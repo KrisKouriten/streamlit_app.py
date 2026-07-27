@@ -1,13 +1,60 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
 import { clearMfaForUser } from "../../../../lib/mfa";
 import { audit, setUserRole, listUsersWithRoles } from "../../../../lib/governance";
+import { createInvite } from "../../../../lib/invite";
+import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
+import { graphConfigured, sendMail } from "../../../../lib/email/graph";
+import { inviteEmail, resetEmail } from "../../../../lib/email/templates";
 
 const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
 
 function forbidden() {
   return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+}
+
+// Best-effort public origin for building the emailed link. The CSRF gate in
+// middleware guarantees a same-origin Origin header on these POSTs, so it is
+// the most reliable source; fall back to forwarded host, then env.
+function requestOrigin(request) {
+  const origin = request.headers.get("origin");
+  if (origin) return origin;
+  const host = request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  return host ? `${proto}://${host}` : null;
+}
+
+/*
+ * Generate a link for a user and try to email it. Returns what the admin UI
+ * needs to react: whether the email went out, and — only when it did NOT — the
+ * raw link so the admin can pass it on manually. We never hand the link back
+ * when the email succeeded, so the token stays out of the admin's screen.
+ */
+async function deliverLink({ request, user, purpose, actor }) {
+  const { rawToken, ttlHours } = await createInvite({
+    userId: user.id,
+    purpose,
+    createdBy: actor.email,
+  });
+  const baseUrl = resolveBaseUrl({ origin: requestOrigin(request), env: process.env });
+  const link = setPasswordLink(baseUrl, rawToken);
+  const msg =
+    purpose === "RESET"
+      ? resetEmail({ name: user.name, link, expiresHours: ttlHours })
+      : inviteEmail({ name: user.name, link, expiresHours: ttlHours, inviterName: actor.name });
+
+  if (!graphConfigured()) {
+    return { emailSent: false, reason: "not-configured", link };
+  }
+  try {
+    await sendMail({ to: user.email, subject: msg.subject, html: msg.html, text: msg.text });
+    return { emailSent: true, link: null };
+  } catch (e) {
+    console.error("invite email failed:", e.message);
+    return { emailSent: false, reason: "send-failed", link, error: e.message };
+  }
 }
 
 export async function GET() {
@@ -28,20 +75,60 @@ export async function POST(request) {
   try {
     if (action === "create") {
       const { name, email, password, role } = body;
-      if (!name?.trim() || !email?.includes("@") || !password || password.length < 8 || !VALID_ROLES.includes(role)) {
-        return NextResponse.json({ error: "Need name, valid email, password (8+ chars) and a valid role" }, { status: 400 });
+      // Password is now OPTIONAL. Omit it to invite the user by email (they set
+      // their own password via a one-time link); supply one to set it directly.
+      const wantsInvite = !password;
+      if (!name?.trim() || !email?.includes("@") || !VALID_ROLES.includes(role)) {
+        return NextResponse.json({ error: "Need a name, a valid email and a valid role" }, { status: 400 });
       }
-      const hash = await hashPassword(password);
+      if (!wantsInvite && password.length < 8) {
+        return NextResponse.json({ error: "A password must be at least 8 characters (or leave it blank to email an invite)" }, { status: 400 });
+      }
+
+      // Invited accounts get an unguessable random password nobody knows, so
+      // the only way in is the invite link — and must_change_password flags the
+      // account as "invited, awaiting first sign-in" for the admin list.
+      const rawPassword = wantsInvite ? crypto.randomBytes(24).toString("hex") : password;
+      const hash = await hashPassword(rawPassword);
       const { rows } = await query(
-        `INSERT INTO users (email, name, password) VALUES (lower($1), $2, $3)
+        `INSERT INTO users (email, name, password, must_change_password) VALUES (lower($1), $2, $3, $4)
          ON CONFLICT (email) DO NOTHING RETURNING id`,
-        [email.trim(), name.trim(), hash]
+        [email.trim(), name.trim(), hash, wantsInvite]
       );
       if (!rows.length) return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
-      await setUserRole(rows[0].id, role, session.email);
-      await query(`INSERT INTO workflow.team_capacity (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [rows[0].id]).catch(() => {});
-      await audit({ actor: session, eventType: "user.create", objectType: "users", objectRef: email.trim().toLowerCase(), detail: { role } });
-      return NextResponse.json({ ok: true });
+      const userId = rows[0].id;
+      await setUserRole(userId, role, session.email);
+      await query(`INSERT INTO workflow.team_capacity (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [userId]).catch(() => {});
+      await audit({ actor: session, eventType: "user.create", objectType: "users", objectRef: email.trim().toLowerCase(), detail: { role, invited: wantsInvite } });
+
+      if (!wantsInvite) return NextResponse.json({ ok: true, invited: false });
+
+      const delivery = await deliverLink({
+        request,
+        user: { id: userId, name: name.trim(), email: email.trim().toLowerCase() },
+        purpose: "INVITE",
+        actor: session,
+      });
+      await audit({ actor: session, eventType: "user.invite", objectType: "users", objectRef: email.trim().toLowerCase(), detail: { emailSent: delivery.emailSent } });
+      return NextResponse.json({ ok: true, invited: true, ...delivery });
+    }
+
+    if (action === "invite" || action === "email-reset") {
+      const { userId } = body;
+      if (!Number.isInteger(userId)) return NextResponse.json({ error: "Invalid user" }, { status: 400 });
+      const { rows } = await query("SELECT id, name, email FROM users WHERE id = $1", [userId]);
+      const user = rows[0];
+      if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+      const purpose = action === "invite" ? "INVITE" : "RESET";
+      // Re-inviting marks the account as awaiting a fresh set-up; an emailed
+      // reset leaves the current password working until a new one is chosen.
+      if (purpose === "INVITE") {
+        await query(`UPDATE users SET must_change_password = true WHERE id = $1`, [userId]);
+      }
+      const delivery = await deliverLink({ request, user, purpose, actor: session });
+      await audit({ actor: session, eventType: purpose === "INVITE" ? "user.invite" : "user.email-reset", objectType: "users", objectRef: String(userId), detail: { emailSent: delivery.emailSent } });
+      return NextResponse.json({ ok: true, ...delivery });
     }
 
     if (action === "set-role") {
@@ -63,7 +150,8 @@ export async function POST(request) {
         return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
       }
       const hash = await hashPassword(password);
-      await query(`UPDATE users SET password = $1 WHERE id = $2`, [hash, userId]);
+      // A direct admin set clears any "awaiting first sign-in" flag too.
+      await query(`UPDATE users SET password = $1, must_change_password = false WHERE id = $2`, [hash, userId]);
       // A password reset invalidates every existing session for that user.
       await endAllSessions(userId, session.email);
       await audit({ actor: session, eventType: "user.reset-password", objectType: "users", objectRef: String(userId) });
