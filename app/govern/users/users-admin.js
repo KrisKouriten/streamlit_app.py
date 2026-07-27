@@ -15,7 +15,8 @@ export default function UsersAdmin({ me }) {
   const [notice, setNotice] = useState("");
   const [linkInfo, setLinkInfo] = useState(null); // { email, link, reason } — manual fallback
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "FINANCE" });
-  const [invite, setInvite] = useState(true); // default: email an invite rather than set a password
+  const [invite, setInvite] = useState(false); // default: admin sets a starter password (email invites need M365/Resend wired up)
+  const [requireChange, setRequireChange] = useState(true); // force a change at first sign-in
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/users");
@@ -56,7 +57,7 @@ export default function UsersAdmin({ me }) {
   async function createUser(e) {
     e.preventDefault();
     const body = { action: "create", name: form.name, email: form.email, role: form.role };
-    if (!invite) body.password = form.password; // omit -> server emails an invite
+    if (!invite) { body.password = form.password; body.requireChange = requireChange; } // omit password -> server emails an invite
     const ok = await post(body, "", (data) => {
       if (data.invited) reflectDelivery(data, `Invite sent to ${form.email}.`);
       else setNotice(`User ${form.email} created.`);
@@ -78,7 +79,9 @@ export default function UsersAdmin({ me }) {
 
   function statusOf(u) {
     if (!u.is_active) return { label: "DEACTIVATED", color: "var(--red)" };
-    if (u.must_change_password) return { label: "INVITED", color: "var(--amber)" };
+    // Awaiting first sign-in / password change (starter password not yet
+    // changed, or an invite not yet accepted).
+    if (u.must_change_password) return { label: "PENDING", color: "var(--amber)" };
     return { label: "ACTIVE", color: "var(--green)" };
   }
 
@@ -122,7 +125,7 @@ export default function UsersAdmin({ me }) {
                 </td>
                 <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", textAlign: "right", whiteSpace: "nowrap" }}>
                   {u.must_change_password ? (
-                    <button style={{ ...btnGhost, height: 30, fontSize: 12.5, marginRight: 6 }} onClick={() => sendLink(u, "invite")}>Resend invite</button>
+                    <button style={{ ...btnGhost, height: 30, fontSize: 12.5, marginRight: 6 }} onClick={() => sendLink(u, "invite")}>Send set-up link</button>
                   ) : (
                     <button style={{ ...btnGhost, height: 30, fontSize: 12.5, marginRight: 6 }} onClick={() => sendLink(u, "email-reset")}>Email reset link</button>
                   )}
@@ -145,7 +148,7 @@ export default function UsersAdmin({ me }) {
         <input style={input} placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <input style={input} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         {!invite && (
-          <input style={input} type="password" placeholder="Password (8+ chars)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
+          <input style={input} type="password" placeholder="Starter password (8+ chars)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
         )}
         <select style={input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -154,10 +157,16 @@ export default function UsersAdmin({ me }) {
       </form>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--muted)", marginTop: 12, cursor: "pointer" }}>
         <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} />
-        Email an invite — the user sets their own password via a one-time link (recommended). Uncheck to set a password yourself.
+        Email an invite instead — the user sets their own password via a one-time link (needs email connected).
       </label>
+      {!invite && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--muted)", marginTop: 8, cursor: "pointer" }}>
+          <input type="checkbox" checked={requireChange} onChange={(e) => setRequireChange(e.target.checked)} />
+          Require the user to change this password the first time they sign in (recommended).
+        </label>
+      )}
       <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 10 }}>
-        Every change here is written to the audit trail. Passwords are stored hashed; nobody can read them back.
+        Hand the person their email and starter password. With the box above ticked, they&#39;ll be prompted to set their own password on first sign-in. Every change here is written to the audit trail; passwords are stored hashed and can never be read back.
       </div>
     </div>
   );

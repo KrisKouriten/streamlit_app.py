@@ -18,7 +18,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Too many attempts — sign-in is locked for a few minutes. Try again shortly." }, { status: 429 });
     }
 
-    const { rows } = await query("SELECT id, email, name, password, is_active FROM users WHERE email = $1", [
+    const { rows } = await query("SELECT id, email, name, password, is_active, must_change_password FROM users WHERE email = $1", [
       String(email).toLowerCase().trim(),
     ]);
     const user = rows[0];
@@ -42,9 +42,9 @@ export async function POST(request) {
     const roles = await getUserRoles(user.id);
     const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
     const userAgent = request.headers.get("user-agent") || null;
-    const token = await startSession(user, roles.length ? roles : ["FINANCE"], { ip, userAgent });
+    const token = await startSession(user, roles.length ? roles : ["FINANCE"], { ip, userAgent }, { mustChange: user.must_change_password === true });
     await setSessionCookie(token);
-    await audit({ actor: user, eventType: "auth.login", objectType: "users", objectRef: String(user.id) });
+    await audit({ actor: user, eventType: "auth.login", objectType: "users", objectRef: String(user.id), detail: user.must_change_password ? { mustChangePassword: true } : null });
     return NextResponse.json({ id: user.id, name: user.name, email: user.email });
   } catch (e) {
     return NextResponse.json({ error: "Something went wrong. Try again." }, { status: 500 });

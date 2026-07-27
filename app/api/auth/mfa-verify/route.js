@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 
   // Load the live account, re-checking it is still active before issuing a session.
-  const { rows } = await query("SELECT id, email, name, is_active FROM users WHERE id = $1", [pending.uid]);
+  const { rows } = await query("SELECT id, email, name, is_active, must_change_password FROM users WHERE id = $1", [pending.uid]);
   const user = rows[0];
   if (!user || user.is_active === false) {
     clearMfaPendingCookie();
@@ -37,7 +37,7 @@ export async function POST(request) {
   const roles = await getUserRoles(user.id);
   const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
   const userAgent = request.headers.get("user-agent") || null;
-  const token = await startSession(user, roles.length ? roles : ["FINANCE"], { ip, userAgent });
+  const token = await startSession(user, roles.length ? roles : ["FINANCE"], { ip, userAgent }, { mustChange: user.must_change_password === true });
   await setSessionCookie(token);
   clearMfaPendingCookie();
   await audit({ actor: user, eventType: "auth.login", objectType: "users", objectRef: String(user.id), detail: { mfa: result.method } });
