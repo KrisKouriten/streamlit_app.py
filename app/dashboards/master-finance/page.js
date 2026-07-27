@@ -4,6 +4,7 @@ import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EntityScopeBanner, money, pct, num, dateLabel } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
+import AddToReport from "../../add-to-report";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function MasterFinanceDashboard() {
         right={d.tradingAsAt ? `Trading to ${dateLabel(d.tradingAsAt)}` : "Read-only overview"} />
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, margin: "-1rem 0 1rem" }}>
+        <AddToReport sourceKey="executive_hub" sourceRoute="/dashboards/master-finance" defaultTitle="Master Finance headlines" componentType="kpi_row" />
         <PerspectivePanel pageId="executive" pageName="Master Finance Dashboard" />
       </div>
 
