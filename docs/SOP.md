@@ -125,7 +125,7 @@ route-preservation record and the documented overlaps live in
 |---|---|
 | **HOME** | **Executive Intelligence Hub** (position & attention) **· Corporate Reporting Centre** (governed reporting decks, §5.15); My Finance Home, Notifications, Global Search (⌘K). |
 | **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, PO & Procurement, Department/Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
-| **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects**; planned Budget Builder, Store/Wholesale/Franchise planning, Department/Project budgets, Consolidated P&L. |
+| **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects · Departmental Budgets**; planned Budget Builder, Store/Wholesale/Franchise planning, Project budgets, Consolidated P&L. |
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
 | **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · Purchase Order Tracker**; planned WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
@@ -511,7 +511,32 @@ The P.O and its recharge allocation are governed data (`finance.purchase_order` 
 `finance.purchase_order_recharge`, migrations 046/047), audited on every change. The
 seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
 Logistics, Architecture & Build) are governed in `core.dim_department` and assignable
-per user in **GOVERN → Users & Roles**.
+per user in **GOVERN → Users, Roles & Permissions**.
+
+### 5.17 Departmental Budgets (PLAN — HO)
+
+**PLAN — HO → Departmental Budgets** (`/plan/dept-budget`) is where a department head
+builds their department's budget for the year. The build:
+
+1. **Create a budget** — pick the **department**, the **budget year** and a **version
+   label** (versions are kept, never overwritten). It opens seeded with a **starter set
+   of cost lines** for that department (editable), so nobody starts from a blank sheet.
+2. **Build the grid** — cost lines are grouped into **categories** down the side and
+   the **12 months (Jan–Dec)** run across the top. Enter each line's monthly phasing;
+   the **full-year total**, the **category subtotals**, the **monthly column totals** and
+   the **grand total** all calculate live, alongside a **prior-year** comparison and the
+   **variance**. Add or remove lines and categories; the **≡** button spreads a full-year
+   figure evenly across the 12 months.
+3. **Save** while it is a **Draft**. **Submit for sign-off** when it is ready — it moves
+   to **Submitted** and locks. The department's **sign-off approvers** (set in GOVERN →
+   Users, Roles & Permissions → Department sign-off), or an admin, then **Approve** it.
+   **Reopen** returns an approved/submitted budget to Draft for further edits.
+
+Who can do what: **Admins and Finance** can build any department's budget; a department
+member can build **their own** department's. **Approval** is limited to that department's
+listed sign-off approvers (or an admin). Budgets are governed data
+(`finance.dept_budget` + `finance.dept_budget_line`, seeded from
+`finance.dept_budget_template`, migration 049) and audited on every change.
 
 ---
 
