@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   MONTH_KEYS, lineTotal, monthlyTotals, grandTotal, priorYearTotal,
   categoryGroups, variance, equalSplit, validateLine, validateBudget,
-  budgetTransitionError, isEditableBudget,
+  budgetTransitionError, isEditableBudget, availableTransitions,
+  budgetSummary, completionPct, quarterTotals, lineMovers, budgetValidation,
 } from "../lib/dept-budget-rules.js";
 
 const lineWith = (over = {}) => ({ category: "Media", line_label: "Paid media", prior_year: 0, ...Object.fromEntries(MONTH_KEYS.map((k) => [k, 0])), ...over });
@@ -72,14 +73,66 @@ test("validateLine needs a label; validateBudget needs dept + sane year", () => 
   assert.match(validateBudget({ department: "Marketing", budget_year: 1900 }), /valid budget year/);
 });
 
-test("state machine: only legal transitions pass; DRAFT is the only editable state", () => {
-  assert.equal(budgetTransitionError("submit", "DRAFT"), null);
-  assert.equal(budgetTransitionError("approve", "SUBMITTED"), null);
-  assert.equal(budgetTransitionError("reopen", "APPROVED"), null);
-  assert.match(budgetTransitionError("approve", "DRAFT"), /Cannot approve/);
-  assert.match(budgetTransitionError("submit", "APPROVED"), /Cannot submit/);
+test("state machine: the full chain's legal transitions pass; DRAFT is the only editable state", () => {
+  assert.equal(budgetTransitionError("submit_to_finance", "DRAFT"), null);
+  assert.equal(budgetTransitionError("finance_pass", "FINANCE_REVIEW"), null);
+  assert.equal(budgetTransitionError("dept_approve", "DEPT_APPROVAL"), null);
+  assert.equal(budgetTransitionError("slt_approve", "SLT_APPROVAL"), null);
+  assert.equal(budgetTransitionError("reopen", "LOCKED"), null);
+  assert.equal(budgetTransitionError("finance_return", "FINANCE_REVIEW"), null);
+  assert.match(budgetTransitionError("slt_approve", "DRAFT"), /Cannot slt approve/);
+  assert.match(budgetTransitionError("submit_to_finance", "LOCKED"), /Cannot submit/);
   assert.match(budgetTransitionError("frobnicate", "DRAFT"), /Unknown action/);
   assert.equal(isEditableBudget("DRAFT"), true);
-  assert.equal(isEditableBudget("SUBMITTED"), false);
-  assert.equal(isEditableBudget("APPROVED"), false);
+  assert.equal(isEditableBudget("FINANCE_REVIEW"), false);
+  assert.equal(isEditableBudget("LOCKED"), false);
+});
+
+test("availableTransitions lists exactly what's runnable from a stage", () => {
+  const draft = availableTransitions("DRAFT").map((t) => t.action);
+  assert.deepEqual(draft, ["submit_to_finance"]);
+  const fin = availableTransitions("FINANCE_REVIEW").map((t) => t.action).sort();
+  assert.deepEqual(fin, ["finance_pass", "finance_return"]);
+  assert.deepEqual(availableTransitions("SLT_APPROVAL").map((t) => t.action).sort(), ["slt_approve", "slt_return"]);
+});
+
+const L = (over) => ({ category: "Media", line_label: "Paid media", prior_year: 0, commentary: "", ...Object.fromEntries(MONTH_KEYS.map((k) => [k, 0])), ...over });
+
+test("budgetSummary: envelope, remaining, vs prior year, completion", () => {
+  const lines = [L({ line_label: "A", m01: 600, prior_year: 500 }), L({ line_label: "B", prior_year: 0 })];
+  const s = budgetSummary(1000, lines);
+  assert.equal(s.target, 1000);
+  assert.equal(s.proposed, 600);
+  assert.equal(s.remaining, 400);
+  assert.equal(s.priorYear, 500);
+  assert.equal(s.vsPriorAbs, 100);
+  assert.equal(s.completion, 50); // 1 of 2 named lines has a value
+  assert.equal(budgetSummary(null, lines).remaining, null);
+});
+
+test("quarterTotals buckets the 12 months into quarters", () => {
+  const q = quarterTotals(L({ m01: 10, m02: 5, m04: 20, m12: 3 }));
+  assert.deepEqual(q, [15, 20, 0, 3]);
+});
+
+test("lineMovers ranks increases and reductions vs prior year", () => {
+  const lines = [L({ line_label: "Up big", m01: 300, prior_year: 100 }), L({ line_label: "Down", m01: 50, prior_year: 200 })];
+  const m = lineMovers(lines);
+  assert.equal(m.up[0].label, "Up big");
+  assert.equal(m.up[0].delta, 200);
+  assert.equal(m.down[0].label, "Down");
+  assert.equal(m.down[0].delta, -150);
+});
+
+test("budgetValidation flags over-target and missing commentary on material lines", () => {
+  const lines = [
+    L({ line_label: "Big no note", m01: 20000, prior_year: 0 }),           // material by £, no commentary
+    L({ line_label: "Big with note", m02: 20000, commentary: "explained" }), // material but has commentary
+    L({ line_label: "Small", m03: 100, prior_year: 100 }),                  // immaterial
+  ];
+  const issues = budgetValidation(30000, lines);
+  const codes = issues.map((i) => i.code);
+  assert.ok(codes.includes("over_target")); // 40,100 > 30,000
+  assert.ok(codes.includes("missing_commentary"));
+  assert.equal(issues.filter((i) => i.code === "missing_commentary").length, 1);
 });

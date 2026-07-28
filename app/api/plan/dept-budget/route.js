@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../../lib/auth";
 import {
-  listBudgets, getBudget, createBudget, saveLines,
-  submitBudget, approveBudget, reopenBudget, deleteBudget,
+  listBudgets, getBudget, createBudget, saveLines, setTarget,
+  transitionBudget, deleteBudget,
   budgetDepartment, getUserDepartment, getApproverEmails,
 } from "../../../../lib/dept-budget";
+import { BUDGET_TRANSITIONS } from "../../../../lib/dept-budget-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,27 @@ async function canEditDept(session, department) {
   return !!dept && dept === department;
 }
 
-// May the user sign off this department's budget? ADMIN, or a listed approver.
-async function canApproveDept(session, department) {
+async function isApprover(session, department) {
   if (hasRole(session, "ADMIN")) return true;
   const emails = (await getApproverEmails(department)).map((e) => (e || "").toLowerCase());
   return emails.includes((session.email || "").toLowerCase());
+}
+
+/*
+ * Whether the session may run a given workflow transition, per its role tag:
+ *   OWNER         — the department's own head, or ADMIN/FINANCE (edit rights)
+ *   FINANCE       — ADMIN/FINANCE
+ *   DEPT_APPROVER — a listed department sign-off approver, or ADMIN
+ *   ADMIN         — SLT / admin
+ */
+async function canTransition(session, department, action) {
+  const role = BUDGET_TRANSITIONS[action]?.role;
+  if (!role) return false;
+  if (role === "ADMIN") return hasRole(session, "ADMIN");
+  if (role === "FINANCE") return hasRole(session, "ADMIN", "FINANCE");
+  if (role === "DEPT_APPROVER") return isApprover(session, department);
+  if (role === "OWNER") return canEditDept(session, department);
+  return false;
 }
 
 export async function GET(request) {
@@ -33,10 +50,17 @@ export async function GET(request) {
     const loaded = await getBudget(Number(id));
     if (!loaded) return NextResponse.json({ error: "Budget not found" }, { status: 404 });
     const dept = loaded.budget.department;
-    const [canEdit, canApprove, approvers] = await Promise.all([
-      canEditDept(session, dept), canApproveDept(session, dept), getApproverEmails(dept),
+    const [canEdit, canApprove, isAdmin, isFinance, approvers] = await Promise.all([
+      canEditDept(session, dept), isApprover(session, dept),
+      Promise.resolve(hasRole(session, "ADMIN")), Promise.resolve(hasRole(session, "ADMIN", "FINANCE")),
+      getApproverEmails(dept),
     ]);
-    return NextResponse.json({ ...loaded, canEdit, canApprove, approvers });
+    // The transitions this user can actually run from the current stage.
+    const allowed = {};
+    for (const action of Object.keys(BUDGET_TRANSITIONS)) {
+      allowed[action] = await canTransition(session, dept, action);
+    }
+    return NextResponse.json({ ...loaded, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
   }
 
   const department = url.searchParams.get("department") || null;
@@ -53,35 +77,35 @@ export async function POST(request) {
 
   try {
     if (action === "create") {
-      const { department } = body;
-      if (!(await canEditDept(session, department))) {
+      if (!(await canEditDept(session, body.department))) {
         return NextResponse.json({ error: "You can only create budgets for your own department" }, { status: 403 });
       }
-      const r = await createBudget(body, session);
-      return NextResponse.json({ ok: true, ...r });
+      return NextResponse.json({ ok: true, ...(await createBudget(body, session)) });
     }
 
-    // Everything below acts on an existing budget — resolve its department first.
     const budgetId = Number(body.budgetId);
     if (!Number.isInteger(budgetId)) return NextResponse.json({ error: "Invalid budget" }, { status: 400 });
     const dept = await budgetDepartment(budgetId);
     if (!dept) return NextResponse.json({ error: "Budget not found" }, { status: 404 });
 
-    if (action === "save-lines" || action === "submit" || action === "reopen" || action === "delete") {
-      if (!(await canEditDept(session, dept))) {
-        return NextResponse.json({ error: "You cannot edit this department's budget" }, { status: 403 });
-      }
+    if (action === "save-lines" || action === "delete") {
+      if (!(await canEditDept(session, dept))) return NextResponse.json({ error: "You cannot edit this department's budget" }, { status: 403 });
       if (action === "save-lines") return NextResponse.json(await saveLines(budgetId, body.lines || [], session));
-      if (action === "submit") return NextResponse.json(await submitBudget(budgetId, session));
-      if (action === "reopen") return NextResponse.json(await reopenBudget(budgetId, session));
-      if (action === "delete") return NextResponse.json(await deleteBudget(budgetId, session));
+      return NextResponse.json(await deleteBudget(budgetId, session));
     }
 
-    if (action === "approve") {
-      if (!(await canApproveDept(session, dept))) {
-        return NextResponse.json({ error: "Only this department's sign-off approvers (or an admin) can approve" }, { status: 403 });
+    if (action === "set-target") {
+      if (!hasRole(session, "ADMIN", "FINANCE")) return NextResponse.json({ error: "Only Finance or an admin can set the budget target" }, { status: 403 });
+      return NextResponse.json(await setTarget(budgetId, body.target, session));
+    }
+
+    if (action === "transition") {
+      const t = body.transition;
+      if (!BUDGET_TRANSITIONS[t]) return NextResponse.json({ error: "Unknown transition" }, { status: 400 });
+      if (!(await canTransition(session, dept, t))) {
+        return NextResponse.json({ error: "You are not authorised to run that step" }, { status: 403 });
       }
-      return NextResponse.json(await approveBudget(budgetId, session));
+      return NextResponse.json(await transitionBudget(budgetId, t, { note: body.note || null }, session));
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
