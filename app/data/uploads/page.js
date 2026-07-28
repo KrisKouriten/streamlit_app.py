@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
+import { getLoadedActualYears } from "../../../lib/management-accounts";
 import { PageHeader, Panel, Badge, EmptyState } from "../../finance-os/ui";
 import { InlineUpload } from "./uploaders";
 
@@ -19,9 +20,9 @@ const LIVE = [
     key: "mgmt-actuals",
     title: "Management Accounts — Actuals",
     drives: "The MA blend (Perform), the dashboards and the Corporate Reporting Centre.",
-    detail: "Workbook grain: Entity · Store · Month · Nominal · Value. Upsert on store · nominal · month. Upload current year and prior year separately (each is a set of months).",
-    uploads: [{ endpoint: "/api/management-accounts", action: "workbook", fileField: "file", label: "Upload actuals (Excel)" }],
-    fullHref: "/finance-os/management-accounts", fullLabel: "Open management accounts view ↗",
+    detail: "Upload one workbook per fiscal year — 2025, then 2026, and so on. Grain: Entity · Store · Month · Nominal · Value. Each year is a separate load; a new year never overwrites a prior one (upsert is by store · nominal · month).",
+    uploads: [{ endpoint: "/api/management-accounts", action: "workbook", fileField: "file", label: "Upload a year's actuals (Excel)" }],
+    fullHref: "/finance-os/management-accounts", fullLabel: "View the management accounts →",
   },
   {
     key: "statements",
@@ -84,6 +85,7 @@ export default async function DataUploads() {
   const session = await getSession();
   if (!session) redirect("/login");
   const canUpload = hasRole(session, "ADMIN", "FINANCE");
+  const actualYears = await getLoadedActualYears();
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
@@ -106,6 +108,14 @@ export default async function DataUploads() {
               </div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{f.detail}</div>
               <div style={{ fontSize: 11.5, color: "var(--faint)" }}><strong style={{ color: "var(--muted)" }}>Drives:</strong> {f.drives}</div>
+              {f.key === "mgmt-actuals" && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 10.5, fontFamily: "var(--mono)", letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Years loaded:</span>
+                  {actualYears.years.length ? actualYears.years.map((y) => (
+                    <Badge key={y.year} tone="accent">{y.year} · {y.months} mo</Badge>
+                  )) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>none yet</span>}
+                </div>
+              )}
               {canUpload ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                   {f.uploads.map((u, i) => (

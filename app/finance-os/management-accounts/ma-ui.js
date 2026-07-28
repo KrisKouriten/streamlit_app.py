@@ -1,25 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { money } from "../ui";
 
 /* Management accounts — store-level P&L blending Actuals (lead where a month has
-   them) with the Forecast forward, against Budget (the frozen forecast). Excel
-   upload of actuals; year selector; variance vs budget. */
+   them) with the Forecast forward, against Budget (the frozen forecast). This is
+   the analysis view; actuals are uploaded in Finance Data → Data Uploads (kept
+   separate from this screen), one workbook per fiscal year. */
 
-async function post(body) {
-  const res = await fetch("/api/management-accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(d.error || "Request failed");
-  return d;
+function UploadHubNote() {
+  return (
+    <div style={{ fontSize: 12.5, color: "var(--faint)", lineHeight: 1.5 }}>
+      Actuals are uploaded in <a href="/data/uploads" style={{ color: "var(--accent)", textDecoration: "none" }}>Finance Data → Data Uploads</a> — one workbook per fiscal year (2025, then 2026, …). This screen reads what's loaded there.
+    </div>
+  );
 }
 const k = (v) => money(v, { compact: true });
 const cell = (v) => (v == null || Math.round(v) === 0 ? "·" : money(v, { compact: true }));
 
 export default function MaUI({ data, canManage }) {
-  const router = useRouter();
-
   if (!data.ready) {
     return <div className="fos-card" style={{ padding: "18px 20px", fontSize: 13.5, color: "var(--muted)", lineHeight: 1.6 }}>
       <div style={{ fontSize: 15, fontWeight: 650, color: "var(--ink)", marginBottom: 6 }}>One migration to run</div>
@@ -28,10 +26,10 @@ export default function MaUI({ data, canManage }) {
   }
   if (!data.loaded) {
     return <div>
-      <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--faint)", marginBottom: 14 }}>
-        No actuals or forecast loaded yet — upload the management-accounts actuals workbook (Entity · Store · Month · Nominal · Value) and the P&L appears, with actuals leading each month they cover and the forecast carrying the rest.
+      <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--faint)", marginBottom: 14, lineHeight: 1.6 }}>
+        No actuals loaded yet — once a year's actuals workbook (Entity · Store · Month · Nominal · Value) is uploaded, the P&L appears here, with actuals leading each month they cover and the forecast carrying the rest.
       </div>
-      {canManage && <Upload onDone={() => router.refresh()} />}
+      {canManage && <UploadHubNote />}
     </div>;
   }
 
@@ -98,7 +96,7 @@ export default function MaUI({ data, canManage }) {
         {" "}{data.counts.actuals.toLocaleString()} actual · {data.counts.forecast.toLocaleString()} forecast input lines.
       </div>
 
-      {canManage && <Upload onDone={() => router.refresh()} />}
+      {canManage && <UploadHubNote />}
     </>
   );
 }
@@ -135,28 +133,3 @@ function Tile({ label, value, sub, tone }) {
   );
 }
 
-function Upload({ onDone }) {
-  const wbRef = useRef(null);
-  const [state, setState] = useState("");
-  async function onWorkbook(e) {
-    const f = e.target.files?.[0]; if (!f) return;
-    setState("Reading workbook…");
-    try {
-      const buf = await f.arrayBuffer();
-      let bin = ""; const bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const r = await post({ action: "workbook", file: btoa(bin) });
-      setState(`Loaded ${r.loaded.toLocaleString()} actual lines · ${r.stores} stores · ${r.months} months.`);
-      onDone();
-    } catch (x) { setState(x.message); }
-    finally { if (wbRef.current) wbRef.current.value = ""; }
-  }
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
-      <button className="fos-btn" onClick={() => wbRef.current?.click()}>Upload actuals (Excel)</button>
-      <span>Entity · Store · Month · Nominal · Value — one row per store/nominal/month. Amends &amp; adds; upserts on store · nominal · month.</span>
-      <input ref={wbRef} type="file" accept=".xlsx,.xlsb,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onWorkbook} style={{ display: "none" }} />
-      {state && <span style={{ color: "var(--muted)" }}>{state}</span>}
-    </div>
-  );
-}
