@@ -159,12 +159,14 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
 const themeScript = `(function(){try{var t=localStorage.getItem('fos-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
 
 import { getSession, hasRole } from "../lib/auth";
+import { getHiddenNavForSession } from "../lib/governance";
 import AppShell from "./app-shell";
 import PageTransition from "./page-transition";
 import PwaRegister from "./pwa-register";
 
 export default async function RootLayout({ children }) {
   const session = await getSession();
+  const hiddenNav = session ? await getHiddenNavForSession(session) : [];
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -174,7 +176,7 @@ export default async function RootLayout({ children }) {
       <body>
         <PwaRegister />
         {session ? (
-          <AppShell userName={session.name} canBuddy={hasRole(session, "ADMIN", "FINANCE", "EXEC")}>{children}</AppShell>
+          <AppShell userName={session.name} canBuddy={hasRole(session, "ADMIN", "FINANCE", "EXEC")} hiddenNav={hiddenNav}>{children}</AppShell>
         ) : (
           <PageTransition>{children}</PageTransition>
         )}

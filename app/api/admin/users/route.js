@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
 import { clearMfaForUser } from "../../../../lib/mfa";
-import { audit, setUserRole, setUserDepartment, listUsersWithRoles } from "../../../../lib/governance";
+import { audit, setUserRole, setUserDepartment, listUsersWithRoles, addSignoff, removeSignoff, setNavVisibility } from "../../../../lib/governance";
 import { createInvite } from "../../../../lib/invite";
 import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
 import { graphConfigured, sendMail } from "../../../../lib/email/graph";
@@ -151,6 +151,30 @@ export async function POST(request) {
       if (!Number.isInteger(userId)) return NextResponse.json({ error: "Invalid user" }, { status: 400 });
       await setUserDepartment(userId, department || null);
       await audit({ actor: session, eventType: "user.set-department", objectType: "users", objectRef: String(userId), detail: { department: department || null } });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "add-signoff") {
+      const { department, email, name } = body;
+      if (!department || !email) return NextResponse.json({ error: "Department and person required" }, { status: 400 });
+      await addSignoff({ department, email, name }, session);
+      await audit({ actor: session, eventType: "dept.signoff.add", objectType: "department_signoff", objectRef: department, detail: { email } });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "remove-signoff") {
+      const { signoffId } = body;
+      if (!Number.isInteger(signoffId)) return NextResponse.json({ error: "Invalid sign-off id" }, { status: 400 });
+      await removeSignoff(signoffId);
+      await audit({ actor: session, eventType: "dept.signoff.remove", objectType: "department_signoff", objectRef: String(signoffId) });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "set-visibility") {
+      const { department, hiddenKeys } = body;
+      if (!department || !Array.isArray(hiddenKeys)) return NextResponse.json({ error: "Department and hiddenKeys[] required" }, { status: 400 });
+      await setNavVisibility(department, hiddenKeys, session);
+      await audit({ actor: session, eventType: "dept.access.set", objectType: "nav_visibility", objectRef: department, detail: { hidden: hiddenKeys.length } });
       return NextResponse.json({ ok: true });
     }
 
