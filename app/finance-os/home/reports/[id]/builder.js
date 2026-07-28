@@ -89,6 +89,7 @@ export default function Builder({ reportId, initial, canEdit, canApprove = false
         <span style={{ fontSize: 12, color: "var(--faint)" }}>{v.summary.passed || 0} pass · {v.summary.warning || 0} warn · {v.summary.failed || 0} fail</span>
         <div style={{ flex: 1 }} />
         <a style={ghost} href={`/api/reports-centre/${reportId}/export?format=pptx`}>Export PowerPoint</a>
+        <a style={ghost} href={`/api/reports-centre/${reportId}/export?format=docx`}>Word</a>
         <a style={ghost} href={`/api/reports-centre/${reportId}/export?format=xlsx`}>Excel appendix</a>
         <a style={ghost} href={`/finance-os/home/reports/${reportId}/print`} target="_blank" rel="noreferrer">Print / PDF</a>
       </div>
