@@ -388,7 +388,7 @@ agent, board, control, audit, manual).
 
 > **Now also available through the Corporate Reporting Centre (§5.15)** — the
 > **Finance Board Deck** template produces this pack end-to-end (sections, governed
-> figures, reviewed AI commentary, validation, approval, PowerPoint/PDF/Excel). The
+> figures, reviewed AI commentary, validation, approval, PowerPoint/Word/PDF/Excel). The
 > steps below remain the module-by-module route and the source of the figures.
 
 The board deck is **assembled from live modules, not rebuilt by hand** — the app
@@ -434,7 +434,7 @@ not circulate externally without the sign-off in §12.
 > **Now also available through the Corporate Reporting Centre (§5.15)** — the
 > **Weekly Trade Pack** template assembles trading, margin, inventory, franchise and
 > priority-action sections with reviewed AI commentary and one-click
-> PowerPoint/PDF/Excel export. The steps below remain the module route and the source
+> PowerPoint/Word/PDF/Excel export. The steps below remain the module route and the source
 > of the figures.
 
 The build:
@@ -493,9 +493,11 @@ AI commentary → generate → review → validate → approve → export → ar
   approved reports.
 - **Versions.** Approving **freezes and locks a version snapshot** — an approved
   report never changes when the underlying data later moves.
-- **Export.** Native **PowerPoint** (styled to the Finance OS identity), **PDF**
-  (print view → Save as PDF) and an **Excel appendix**; every export is recorded with
-  a checksum. Confidentiality/DRAFT watermarks apply until approved.
+- **Export.** Native **PowerPoint** (styled to the Finance OS identity), native
+  **Word** (a real `.docx` — headings, KPI & data tables and governed commentary,
+  for finance memos and board write-ups), **PDF** (print view → Save as PDF) and an
+  **Excel appendix**; every export is recorded with a checksum.
+  Confidentiality/DRAFT watermarks apply until approved.
 - **Add to Report.** On a dashboard, **+ Add to Report** drops a chart/KPI/table into
   a draft (new or existing), keeping its **source and current filters** so it
   refreshes from governed data — never a screenshot.

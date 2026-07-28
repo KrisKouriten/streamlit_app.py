@@ -4,6 +4,7 @@ import { scopeForSession } from "../../../../../lib/intelligence/permission";
 import { resolveReport, getVersion, recordExport } from "../../../../../lib/reporting/reports";
 import { buildDeckPptx } from "../../../../../lib/reporting/export-pptx";
 import { buildAppendixWorkbook } from "../../../../../lib/reporting/export-xlsx";
+import { buildReportDocx } from "../../../../../lib/reporting/export-docx";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,6 +58,10 @@ export async function GET(request, { params }) {
     buffer = buildAppendixWorkbook(assembled);
     contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     ext = "xlsx";
+  } else if (format === "docx") {
+    buffer = await buildReportDocx(assembled, { includeDraftCommentary: !isFinal, watermarkText });
+    contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    ext = "docx";
   } else {
     buffer = await buildDeckPptx(assembled, { includeDraftCommentary: !isFinal, watermarkText });
     contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
