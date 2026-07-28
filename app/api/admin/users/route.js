@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
 import { clearMfaForUser } from "../../../../lib/mfa";
-import { audit, setUserRole, listUsersWithRoles } from "../../../../lib/governance";
+import { audit, setUserRole, setUserDepartment, listUsersWithRoles } from "../../../../lib/governance";
 import { createInvite } from "../../../../lib/invite";
 import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
 import { graphConfigured, sendMail } from "../../../../lib/email/graph";
@@ -143,6 +143,14 @@ export async function POST(request) {
       }
       await setUserRole(userId, role, session.email);
       await audit({ actor: session, eventType: "user.set-role", objectType: "users", objectRef: String(userId), detail: { role } });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "set-department") {
+      const { userId, department } = body;
+      if (!Number.isInteger(userId)) return NextResponse.json({ error: "Invalid user" }, { status: 400 });
+      await setUserDepartment(userId, department || null);
+      await audit({ actor: session, eventType: "user.set-department", objectType: "users", objectRef: String(userId), detail: { department: department || null } });
       return NextResponse.json({ ok: true });
     }
 

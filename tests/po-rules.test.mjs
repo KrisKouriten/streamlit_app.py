@@ -20,7 +20,7 @@ test("validatePo catches each missing/!bad field", () => {
   assert.match(validatePo({ ...goodPo, supplier: "  " }), /supplier/);
   assert.match(validatePo({ ...goodPo, currency: "" }), /currency/);
   assert.match(validatePo({ ...goodPo, payment_value: 0 }), /greater than zero/);
-  assert.match(validatePo({ ...goodPo, vat_amount: -5 }), /VAT/);
+  assert.match(validatePo({ ...goodPo, fulfilment_days: -3 }), /days/);
   assert.match(validatePo({ ...goodPo, po_category: "" }), /category/);
   assert.match(validatePo({ ...goodPo, xero_po_number: "" }), /Xero/);
   assert.match(validatePo({ ...goodPo, department: "" }), /department/);
@@ -74,6 +74,8 @@ test("canSubmitForSignoff enforces fields, levy answer and 100% recharge", () =>
     canSubmitForSignoff({ ...goodPo, is_marketing: true, marketing_levy: true, recharge_enabled: true }, [{ pct: 50 }, { pct: 50 }]),
     null
   );
+  // Head-Office-only recharge needs no store split
+  assert.equal(canSubmitForSignoff({ ...goodPo, recharge_enabled: true, recharge_ho_only: true }, []), null);
 });
 
 test("PO transitions", () => {

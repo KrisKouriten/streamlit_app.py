@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 /* Users & roles admin (ADMIN only — enforced again server-side). */
 
 const ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
+const DEPARTMENTS = ["Finance", "Marketing", "Merchandising", "Operations", "HR", "Logistics", "Architecture & Build"];
 const input = { height: 36, padding: "0 10px", border: "1px solid var(--line-strong)", borderRadius: 8, background: "var(--bg)", color: "var(--ink)", fontSize: 14 };
 const btn = { height: 36, padding: "0 14px", border: "none", borderRadius: 8, background: "var(--accent)", color: "#fff", fontSize: 13.5, cursor: "pointer" };
 const btnGhost = { ...btn, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--line-strong)" };
@@ -102,7 +103,7 @@ export default function UsersAdmin({ me }) {
       <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 24 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
           <thead><tr>
-            {["Name", "Email", "Role", "Status", ""].map((h) => (
+            {["Name", "Email", "Role", "Department", "Status", ""].map((h) => (
               <th key={h} style={{ textAlign: "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 500, fontSize: 12, borderBottom: "1px solid var(--line)" }}>{h}</th>
             ))}
           </tr></thead>
@@ -118,6 +119,14 @@ export default function UsersAdmin({ me }) {
                     onChange={(e) => post({ action: "set-role", userId: u.id, role: e.target.value }, `Role updated for ${u.name}.`)}
                     style={{ ...input, height: 32 }}>
                     {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
+                  <select value={u.department || ""}
+                    onChange={(e) => post({ action: "set-department", userId: u.id, department: e.target.value || null }, `Department updated for ${u.name}.`)}
+                    style={{ ...input, height: 32 }}>
+                    <option value="">—</option>
+                    {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </td>
                 <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>

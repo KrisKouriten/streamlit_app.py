@@ -479,21 +479,27 @@ Budget & Forecasts Deck each planning cycle. The board deck (§5.13) and trade d
 a P.O after generating the number in Xero. The build:
 
 1. **Generate the number in Xero first**, then record the P.O here — date, supplier,
-   payment terms & date, currency, payment value, VAT, category, **Xero P.O number**,
-   fulfilment date & period, and the **department** (departmental spend tag).
+   payment terms & date, currency, **net value** (£), category, **Xero P.O number**,
+   **fulfilment start date**, **fulfilment period in days**, and the **department**
+   (a dropdown of the governed departments — the same list assignable per user in
+   GOVERN → Users & Roles).
 2. **Marketing spend** asks one extra question — *is it part of the marketing levy?*
    **Yes** → allocate to stores with **no invoice**; **No** → **finance issues an
    invoice**. The chosen outcome is recorded on the P.O.
-3. **Recharge to stores** (optional): tick **all stores** or pick individually, then
-   set each store's **% of the total P.O value**. An **Equal split** button spreads it
-   evenly across the selected stores; the running total is shown live and **must equal
-   100%** — a P.O cannot go to sign-off until it does.
+3. **Recharge** (optional): either tick **Head Office only** (allocates 100% to Head
+   Office — no store split), or recharge to **stores** — tick **all stores** or pick
+   individually, then set each store's **% of the net value**. An **Equal split**
+   button spreads it evenly; the running total is shown live and **must equal 100%** —
+   a P.O cannot go to sign-off until it does.
 4. **Save draft** at any point; **Create & submit for sign-off** once complete. A
    submitted P.O rests at **awaiting department-head sign-off** — the sign-off itself
    is enforced by the forthcoming **user controls**.
 
 The P.O and its recharge allocation are governed data (`finance.purchase_order` +
-`finance.purchase_order_recharge`, migration 046), audited on every change.
+`finance.purchase_order_recharge`, migrations 046/047), audited on every change. The
+seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
+Logistics, Architecture & Build) are governed in `core.dim_department` and assignable
+per user in **GOVERN → Users & Roles**.
 
 ---
 
