@@ -17,9 +17,9 @@ const STATUS_TONE = { DRAFT: "var(--muted)", PENDING_SIGNOFF: "var(--amber)", AP
 
 const EMPTY = {
   po_date: "", supplier: "", payment_terms: "", payment_date: "", currency: "GBP",
-  payment_value: "", vat_amount: "", po_category: "", xero_po_number: "",
-  fulfilment_date: "", fulfilment_period: "", department: "", notes: "",
-  is_marketing: false, marketing_levy: null, recharge_enabled: false,
+  payment_value: "", po_category: "", xero_po_number: "",
+  fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
+  is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
 };
 
 export default function PoUI({ initialPos, departments, stores, me }) {
@@ -102,15 +102,16 @@ export default function PoUI({ initialPos, departments, stores, me }) {
           <label style={field}><span style={labelSt}>Payment terms</span><input style={inputSt} placeholder="e.g. 30 days" value={f.payment_terms} onChange={set("payment_terms")} /></label>
           <label style={field}><span style={labelSt}>Payment date</span><input type="date" style={inputSt} value={f.payment_date} onChange={set("payment_date")} /></label>
           <label style={field}><span style={labelSt}>Currency *</span><select style={inputSt} value={f.currency} onChange={set("currency")}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-          <label style={field}><span style={labelSt}>Payment value *</span><input type="number" min="0" step="0.01" style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
-          <label style={field}><span style={labelSt}>VAT amount</span><input type="number" min="0" step="0.01" style={inputSt} value={f.vat_amount} onChange={set("vat_amount")} /></label>
+          <label style={field}><span style={labelSt}>Net value (£) *</span><input type="number" min="0" step="0.01" style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
           <label style={field}><span style={labelSt}>P.O category *</span><select style={inputSt} value={f.po_category} onChange={set("po_category")}><option value="">—</option>{PO_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Xero P.O number *</span><input style={inputSt} placeholder="e.g. PO-1042" value={f.xero_po_number} onChange={set("xero_po_number")} /></label>
-          <label style={field}><span style={labelSt}>Fulfilment date</span><input type="date" style={inputSt} value={f.fulfilment_date} onChange={set("fulfilment_date")} /></label>
-          <label style={field}><span style={labelSt}>Fulfilment period</span><input style={inputSt} placeholder="e.g. 2026-08" value={f.fulfilment_period} onChange={set("fulfilment_period")} /></label>
+          <label style={field}><span style={labelSt}>Fulfilment start date</span><input type="date" style={inputSt} value={f.fulfilment_start_date} onChange={set("fulfilment_start_date")} /></label>
+          <label style={field}><span style={labelSt}>Fulfilment period (days)</span><input type="number" min="0" step="1" style={inputSt} placeholder="e.g. 30" value={f.fulfilment_days} onChange={set("fulfilment_days")} /></label>
           <label style={field}><span style={labelSt}>Department *</span>
-            <input list="po-departments" style={inputSt} value={f.department} onChange={set("department")} placeholder="Choose or type" />
-            <datalist id="po-departments">{departments.map((d) => <option key={d} value={d} />)}</datalist>
+            <select style={inputSt} value={f.department} onChange={set("department")}>
+              <option value="">— choose —</option>
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
           </label>
         </div>
 
@@ -139,6 +140,14 @@ export default function PoUI({ initialPos, departments, stores, me }) {
           </label>
           {f.recharge_enabled && (
             <div style={{ marginTop: 12 }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, marginBottom: 12 }}>
+                <input type="checkbox" checked={f.recharge_ho_only} onChange={(e) => setF((s) => ({ ...s, recharge_ho_only: e.target.checked }))} />
+                Head Office only — allocate 100% to Head Office (no store split)
+              </label>
+              {f.recharge_ho_only ? (
+                <div style={{ fontSize: 12.5, color: "var(--muted)" }}>The full P.O value is recharged to <strong>Head Office</strong>. {outcome.label}.</div>
+              ) : (
+              <>
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
                 <label style={{ display: "inline-flex", gap: 6, fontSize: 12.5 }}>
                   <input type="checkbox" checked={stores.length > 0 && selected.size === stores.length} onChange={(e) => toggleAll(e.target.checked)} />
@@ -166,6 +175,8 @@ export default function PoUI({ initialPos, departments, stores, me }) {
               </div>
               {rErr && <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 8 }}>⚠ {rErr}</div>}
               <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8 }}>{outcome.label}. Percentages must total 100% before this P.O can go to sign-off.</div>
+              </>
+              )}
             </div>
           )}
         </div>
