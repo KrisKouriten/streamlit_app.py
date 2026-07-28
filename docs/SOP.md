@@ -599,8 +599,9 @@ change the underlying figures.
 ### 6.9 The Data Uploads hub (one intake)
 **FINANCE DATA → Data Uploads** (`/data/uploads`) is the single home for every
 governed input that drives the platform — so there is one place to look for "where
-do I load X?". It does not replace the individual uploaders; it routes to them and
-shows what each feed drives.
+do I load X?". Live feeds upload **in place, right on this page** (no redirect); a secondary link
+opens the fuller screen for advanced controls (year view, Joiin refresh, nominal
+mapping).
 
 - **Connected (live) feeds** — link straight to their uploader:
   **Financial Statements Upload & Refresh** (§6.2/§6.8), **Management Accounts —
