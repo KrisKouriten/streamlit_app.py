@@ -6,6 +6,10 @@ import {
   budgetDepartment, getUserDepartment, getApproverEmails,
 } from "../../../../lib/dept-budget";
 import { BUDGET_TRANSITIONS } from "../../../../lib/dept-budget-rules";
+import {
+  listInitiatives, createInitiative, updateInitiative, deleteInitiative,
+  saveInitiativeCosts, budgetIdOfInitiative,
+} from "../../../../lib/dept-initiative";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +64,8 @@ export async function GET(request) {
     for (const action of Object.keys(BUDGET_TRANSITIONS)) {
       allowed[action] = await canTransition(session, dept, action);
     }
-    return NextResponse.json({ ...loaded, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
+    const initiatives = await listInitiatives(Number(id));
+    return NextResponse.json({ ...loaded, initiatives, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
   }
 
   const department = url.searchParams.get("department") || null;
@@ -106,6 +111,23 @@ export async function POST(request) {
         return NextResponse.json({ error: "You are not authorised to run that step" }, { status: 403 });
       }
       return NextResponse.json(await transitionBudget(budgetId, t, { note: body.note || null }, session));
+    }
+
+    // ---- Operational planning: initiatives & their cost items ----
+    if (action === "initiative-create") {
+      if (!(await canEditDept(session, dept))) return NextResponse.json({ error: "You cannot edit this department's budget" }, { status: 403 });
+      return NextResponse.json({ ok: true, ...(await createInitiative(budgetId, body.initiative || {}, session)) });
+    }
+    if (action === "initiative-update" || action === "initiative-delete" || action === "initiative-costs") {
+      const initiativeId = Number(body.initiativeId);
+      if (!Number.isInteger(initiativeId)) return NextResponse.json({ error: "Invalid initiative" }, { status: 400 });
+      // The budget for the row we're editing must match, and the user must own it.
+      const initBudget = await budgetIdOfInitiative(initiativeId);
+      if (initBudget !== budgetId) return NextResponse.json({ error: "Initiative not found" }, { status: 404 });
+      if (!(await canEditDept(session, dept))) return NextResponse.json({ error: "You cannot edit this department's budget" }, { status: 403 });
+      if (action === "initiative-update") return NextResponse.json(await updateInitiative(initiativeId, body.patch || {}, session));
+      if (action === "initiative-delete") return NextResponse.json(await deleteInitiative(initiativeId, session));
+      return NextResponse.json(await saveInitiativeCosts(initiativeId, body.costs || [], session));
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

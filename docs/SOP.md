@@ -594,11 +594,24 @@ The top-down **target** is set by Finance/Admin. Budgets are governed data
 timeline, seeded from `finance.dept_budget_template`, migrations 049–050) and audited
 on every change.
 
-*Coming next (Phase 2):* an **operational planning view** — build the budget around
-campaigns, projects and contracts (with expected incremental margin / contribution),
-and have the system generate the cost lines and phasing automatically. The grid above
-becomes the Finance output view. Phase 3 adds AI suggestions, scenarios and driver-based
-planning.
+**Operational planning (the Campaigns & initiatives tab).** Instead of keying cost
+lines directly, a department builds its budget in its own language — **campaigns**
+(Marketing), **projects** (Architecture & Build), **contracts** (Logistics),
+**programmes/initiatives** (others). Each initiative carries an objective, owner,
+active **month range**, scope, an expenditure **classification** (committed / BAU /
+growth / strategic / discretionary / contingency) and its expected commercial outcome
+(**incremental sales, incremental margin** → **contribution** = margin less
+investment). Under it you list **cost items**, each with a **phasing** method (even
+across the active months · one-off month · quarterly · manual). The system then
+**generates the financial cost lines and monthly phasing automatically** and pushes
+them into the grid, where they appear badged **&ldquo;from plan&rdquo;** (read-only,
+with their classification) alongside any hand-entered lines. Edit an initiative and
+the generated lines re-sync. This is the change that makes the module a planning
+platform rather than a form: build in the department&rsquo;s language, control and
+report in Finance&rsquo;s (`finance.dept_budget_initiative` + `_cost`, migration 051).
+
+*Coming next (Phase 3):* AI suggestions (suggested phasing from history,
+missing-cost warnings), scenario generation, and driver-based planning.
 
 ---
 
