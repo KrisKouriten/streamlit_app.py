@@ -28,7 +28,7 @@ export default async function PlFormatsPage() {
 
   return (
     <div className="fos-shell">
-      <PageHeader crumb="Govern · Reporting" title="P&L Formats"
+      <PageHeader crumb="Finance Data · Uploads" title="Financial Statements — Upload & Refresh"
         right={ready ? `${formats.filter((f) => f.spec.length).length} layouts` : "Setup"} />
       <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20, maxWidth: "72ch", lineHeight: 1.55 }}>
         The board-pack P&L layouts for Miniso UK — Store, Franchise, Head Office and Consolidated. Each line maps one or
