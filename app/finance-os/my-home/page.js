@@ -4,6 +4,7 @@ import { getSession } from "../../../lib/auth";
 import { getMyHome, greeting } from "../../../lib/my-home";
 import { HeroBand, Panel, Badge } from "../ui";
 import PageIntel from "../../page-intel";
+import RecentFavourites from "./recent-favourites";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function MyFinanceHome() {
       </header>
 
       <HeroBand stats={data.counts} />
+      <RecentFavourites />
       <PageIntel pageName="My Finance Home" report={null}
         related={[
           ["My Finance Week", "/perform/my-week"],

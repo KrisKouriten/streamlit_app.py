@@ -114,6 +114,11 @@ Each **section header is itself a link** to a mini exec hub (`/section/<key>`) t
 lists every subsection as a Live or Planned card; the chevron beside it still
 toggles the group open/closed.
 
+**Recently viewed & favourites.** The sidebar and My Finance Home remember the pages
+you visit (a personal convenience kept only in your browser). On My Finance Home,
+**Recently viewed** lists where you've been; **★ pin** any page to add it to
+**Favourites**, which then sit at the top of the sidebar for one-click access.
+
 **Every hub leads with a hero and page intelligence.** Each section and pillar hub
 now opens with a **hero KPI band** — the headline figures for that area (drawn from
 the same governed feeds as the Executive Hub, each tile source-chipped and linking
