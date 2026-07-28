@@ -8,6 +8,7 @@ import {
 import {
   PERSPECTIVES, isPerspective, defaultIncludeFor, buildReportContext,
   renderContextPreamble, DETAIL_LEVELS,
+  AUDIENCES, isAudience, resolveAudience, audienceBanner,
 } from "../lib/reporting/commentary-perspectives.js";
 
 test("every transition target is a known status", () => {
@@ -125,4 +126,28 @@ test("renderContextPreamble is deterministic text", () => {
   assert.match(out, /REPORT CONTEXT/);
   assert.match(out, /Perspective: Risk/);
   assert.match(out, /downside exposure/);
+});
+
+test("audience registers resolve to a valid perspective + tone", () => {
+  for (const key of Object.keys(AUDIENCES)) {
+    assert.ok(isAudience(key));
+    const a = resolveAudience(key);
+    assert.ok(isPerspective(a.perspective), `${key} → known perspective`);
+    assert.ok(a.tone && a.label, `${key} has tone + label`);
+    assert.ok(Array.isArray(a.focus) && a.focus.length > 0);
+  }
+  assert.equal(resolveAudience("NOPE"), null);
+  assert.equal(isAudience("NOPE"), false);
+});
+
+test("sensitive audiences carry a governance banner; internal ones do not", () => {
+  const inv = resolveAudience("INVESTOR");
+  assert.equal(inv.sensitive, true);
+  const banner = audienceBanner(inv);
+  assert.match(banner, /DRAFT/);
+  assert.match(banner, /LISTING-RULES SENSITIVE/i);
+  assert.equal(audienceBanner(resolveAudience("EXECUTIVE")), null);
+  assert.equal(audienceBanner(resolveAudience("MANAGEMENT")), null);
+  // Board, Bank, CEO are all sensitive
+  for (const k of ["BOARD", "BANK", "CEO"]) assert.ok(audienceBanner(resolveAudience(k)));
 });
