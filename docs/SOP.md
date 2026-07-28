@@ -114,6 +114,14 @@ Each **section header is itself a link** to a mini exec hub (`/section/<key>`) t
 lists every subsection as a Live or Planned card; the chevron beside it still
 toggles the group open/closed.
 
+**Every hub leads with a hero and page intelligence.** Each section and pillar hub
+now opens with a **hero KPI band** — the headline figures for that area (drawn from
+the same governed feeds as the Executive Hub, each tile source-chipped and linking
+to its owning module), so a page tells you something before you navigate. Beneath it
+sits a standard **page-intelligence strip**: **Ask Finance Buddy**, and — on data
+pages — **AI Perspective**, **Add to Report** and a **Related** rail of onward links.
+Hero tiles degrade to "Awaiting feed" rather than inventing a number.
+
 Modules not yet built are marked **soon** and open an honest **Planned** page
 (`/module/<slug>`) describing their purpose, module kind, milestone, dependencies and
 the closest live modules — no broken links anywhere. Flipping a slug live in

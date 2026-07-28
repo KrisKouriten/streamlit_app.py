@@ -139,6 +139,71 @@ export function SubNav({ items, active }) {
 // The standard KPI card (alias of Stat — one component, one look everywhere).
 export const KpiCard = Stat;
 
+// Short source label for a hero tile's provenance chip.
+const HERO_SRC = {
+  STORE: "Store feed", XERO: "Joiin", JOIIN: "Joiin", FEED: "Governed feed",
+  TASKS: "Workflow", AGENTS: "Agents", ACTIONS: "Actions", KPI: "KPIs",
+};
+function heroValue(unit, value) {
+  if (value === null || value === undefined) return "—";
+  if (unit === "GBP") return money(value, { compact: true });
+  if (unit === "PCT") return pct(value);
+  if (unit === "NUM") return num(value);
+  return String(value);
+}
+
+/*
+ * HeroBand — the headline-KPI band that gives every hub/landing page a "hero" so
+ * the page tells you something before you navigate. stats: array of
+ * { key,label,unit,value,sub,subTone,tone,source,href }. Formats by unit, shows a
+ * source chip, links each tile to its owning module, and degrades to "—" with the
+ * sub note when a value is not loaded — never invents a figure.
+ */
+export function HeroBand({ stats = [], caption = null }) {
+  if (!stats.length) return null;
+  return (
+    <section style={{ marginBottom: 22 }}>
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(178px,1fr))", gap: 12 }}>
+        {stats.map((s, i) => {
+          const src = HERO_SRC[s.source];
+          const inner = (
+            <div className="fos-card hover" style={{ padding: "15px 17px 14px", height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 9 }}>
+                <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)" }}>{s.label}</span>
+                {src && <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 5px", flex: "none", height: "fit-content" }}>{src}</span>}
+              </div>
+              <div className="fos-num" style={{ fontSize: 26, fontWeight: 650, lineHeight: 1, letterSpacing: "-.025em", color: s.tone ? TONE[s.tone] : "var(--ink)" }}>{heroValue(s.unit, s.value)}</div>
+              {s.sub && <div style={{ fontSize: 11.5, color: s.subTone ? TONE[s.subTone] : "var(--faint)", marginTop: 7 }}>{s.sub}</div>}
+            </div>
+          );
+          return s.href
+            ? <Link key={s.key || i} href={s.href} style={{ textDecoration: "none", color: "inherit" }}>{inner}</Link>
+            : <div key={s.key || i}>{inner}</div>;
+        })}
+      </div>
+      {caption && <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8 }}>{caption}</div>}
+    </section>
+  );
+}
+
+/*
+ * RelatedRail — cross-page connective tissue. A compact row of "related / jump to"
+ * chips so a page points onward to the modules it connects with. links: array of
+ * { label, href }. Renders nothing when empty. Server-safe (plain links).
+ */
+export function RelatedRail({ label = "Related", links = [] }) {
+  const items = (links || []).filter((l) => l && l.href && l.label);
+  if (!items.length) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0 22px" }}>
+      <span style={{ fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)", flex: "none" }}>{label}</span>
+      {items.map((l) => (
+        <Link key={l.href} href={l.href} style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", textDecoration: "none", padding: "5px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)" }}>{l.label} →</Link>
+      ))}
+    </div>
+  );
+}
+
 // Reusable filter bar: a labelled row of controls above tables/dashboards.
 // Server-safe; pass links, forms or client controls as children.
 export function FilterBar({ label = "Filters", children, right }) {

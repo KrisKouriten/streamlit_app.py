@@ -2,7 +2,9 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "../../../lib/auth";
 import { findSection, resolveHref } from "../../../lib/nav-registry";
-import { Badge } from "../../finance-os/ui";
+import { Badge, HeroBand } from "../../finance-os/ui";
+import { getSectionHero } from "../../../lib/section-hero";
+import PageIntel from "../../page-intel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +21,11 @@ export default async function SectionHub({ params }) {
   const [kindLabel, kindBlurb] = section.kind || ["Section", ""];
   const items = section.items.filter((it) => !it.action);
   const live = items.filter((it) => !resolveHref(it).startsWith("/module/")).length;
+  const hero = await getSectionHero(key);
 
   return (
     <div className="fos-shell">
-      <header style={{ margin: "0.5rem 0 1.6rem" }}>
+      <header style={{ margin: "0.5rem 0 1.4rem" }}>
         <div style={{ fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 600, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 7 }}>
           Section overview
         </div>
@@ -34,6 +37,9 @@ export default async function SectionHub({ params }) {
           {kindBlurb}. {live} of {items.length} modules are live; the rest are scheduled and shown with their status.
         </p>
       </header>
+
+      <HeroBand stats={hero.stats} caption={hero.caption} />
+      <PageIntel pageName={section.label} />
 
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 12 }}>
         {items.map((it) => {
