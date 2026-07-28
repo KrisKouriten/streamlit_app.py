@@ -212,6 +212,18 @@ switch and sign out — without touching the mouse.
 
 ## 5. Module procedures
 
+### 5.0 My Finance Home (HOME)
+
+**HOME → My Finance Home** (`/finance-os/my-home`) is your personal landing page —
+"here's your day" in one screen. A greeting and a **today's position** band of live
+counts (Critical items, Open actions, Approvals awaiting you, AI recommendations,
+Reports in progress, unread Notifications), then: **Needs you** (the ranked
+cross-platform attention feed), **Your approvals** (task and agent reviews waiting on
+your sign-off), **Your week** (your open tasks), the **Latest brief** (the governed
+proactive briefing) and **Recent reports**. Every figure is a slice of an existing
+governed feed — nothing is keyed here — so it always agrees with the module it links
+to, and it degrades quietly when a feed is empty.
+
 ### 5.1 Executive Intelligence Hub (HOME)
 Two truths, kept visibly separate by source chips so they're never confused:
 - **Trading — all stores** (green *Store · all* chip): revenue & gross margin from
