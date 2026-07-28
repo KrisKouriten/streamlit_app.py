@@ -18,16 +18,21 @@ export default function Sidebar({ hiddenNav = [] } = {}) {
   const [open, setOpen] = useState({});
   const [drawer, setDrawer] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [favs, setFavs] = useState([]);
   const active = activeHref(path);
 
   useEffect(() => {
     try { const s = JSON.parse(localStorage.getItem("fos-nav") || "{}"); setOpen(s); } catch {}
+    const loadFavs = () => { try { setFavs(JSON.parse(localStorage.getItem("fos-favourites") || "[]")); } catch { setFavs([]); } };
+    loadFavs();
     const mq = window.matchMedia("(max-width: 940px)");
     const on = () => setNarrow(mq.matches);
     on(); mq.addEventListener("change", on);
     const toggle = () => setDrawer((d) => !d);
     window.addEventListener("fos:sidebar", toggle);
-    return () => { mq.removeEventListener("change", on); window.removeEventListener("fos:sidebar", toggle); };
+    window.addEventListener("fos:favourites", loadFavs);
+    window.addEventListener("storage", loadFavs);
+    return () => { mq.removeEventListener("change", on); window.removeEventListener("fos:sidebar", toggle); window.removeEventListener("fos:favourites", loadFavs); window.removeEventListener("storage", loadFavs); };
   }, []);
   useEffect(() => { setDrawer(false); }, [path]);
 
@@ -49,6 +54,22 @@ export default function Sidebar({ hiddenNav = [] } = {}) {
 
   const body = (
     <nav aria-label="Primary" style={{ width: 246, flex: "none", height: "100%", overflowY: "auto", padding: "14px 10px 40px", display: "flex", flexDirection: "column", gap: 2 }}>
+      {favs.length > 0 && (
+        <div style={{ marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--hairline)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px 5px 28px" }}>
+            <span aria-hidden="true" style={{ color: "var(--amber)", fontSize: 10 }}>★</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" }}>Favourites</span>
+          </div>
+          {favs.map((f) => {
+            const on = f.href === active;
+            return (
+              <Link key={f.href} href={f.href} aria-current={on ? "page" : undefined} style={itemStyle(on)}>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
       {sections.map((s) => {
         const opened = isOpen(open, s.key);
         const hasActive = s.items.some((it) => resolveHref(it) === active);

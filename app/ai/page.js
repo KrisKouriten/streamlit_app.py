@@ -11,6 +11,15 @@ export const dynamic = "force-dynamic";
 const RISK = { LOW: "var(--green)", MEDIUM: "var(--amber)", HIGH: "var(--red)" };
 const fmt = (d) => (d ? new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "never");
 
+// A "colleague" status for an agent card: a dot + word from its recent activity.
+function agentStatus(a) {
+  if (Number(a.pending_reviews) > 0) return ["var(--amber)", `${a.pending_reviews} awaiting you`];
+  if (!a.last_run_at) return ["var(--faint)", "Not yet run"];
+  if (a.last_status === "FAILED") return ["var(--red)", "Last run failed"];
+  if (a.last_status === "RUNNING") return ["var(--accent)", "Working now"];
+  return ["var(--green)", "Active"];
+}
+
 export default async function AgentCentre() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -39,21 +48,30 @@ export default async function AgentCentre() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 12, marginBottom: 26 }}>
-        {agents.map((a) => (
+        {agents.map((a) => {
+          const [dot, statusLabel] = agentStatus(a);
+          return (
           <div key={a.agent_code} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
               <Link href={`/ai/agents/${a.agent_code}`} style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", textDecoration: "none" }}>{a.agent_name}</Link>
               <span style={{ fontSize: 10.5, fontWeight: 700, color: RISK[a.risk_rating] }}>{a.risk_rating} RISK</span>
             </div>
+            {/* Colleague status line: a dot + a plain-language state. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+              <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: dot, boxShadow: `0 0 7px ${dot}`, flex: "none" }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{statusLabel}</span>
+              <span style={{ fontSize: 11, color: "var(--faint)" }}>· active {fmt(a.last_run_at)}</span>
+            </div>
             <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: 10 }}>{a.purpose}</div>
             <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 10 }}>
-              Owner {a.owner_name} · Reviewer {a.reviewer_name} · v{a.current_version} · {a.runner_type}
-              <br />Last run: {fmt(a.last_run_at)} {a.last_status ? `(${a.last_status})` : ""}
-              {Number(a.pending_reviews) > 0 && <span style={{ color: "var(--amber)" }}> · {a.pending_reviews} pending review</span>}
+              {Number(a.total_outputs || 0)} insights · {Number(a.approved_outputs || 0)} approved · {Number(a.total_runs || 0)} runs
+              {Number(a.pending_reviews) > 0 && <span style={{ color: "var(--amber)" }}> · {a.pending_reviews} awaiting you</span>}
+              <br />Owner {a.owner_name} · Reviewer {a.reviewer_name} · v{a.current_version}
             </div>
             <RunAgentButton agentCode={a.agent_code} canRun={canRun} />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <Panel title="Agent performance" note="cumulative since first run">
