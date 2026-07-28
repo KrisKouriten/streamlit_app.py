@@ -6,6 +6,10 @@ import {
   categoryGroups, variance, budgetSummary, quarterTotals, lineMovers, budgetValidation,
   availableTransitions, STAGE_LABEL, BUDGET_STAGES,
 } from "../../../lib/dept-budget-rules";
+import {
+  KINDS, KIND_LABEL, CLASSIFICATIONS, CLASSIFICATION_LABEL, PHASINGS, PHASING_LABEL,
+  defaultKindFor, initiativeInvestment, commercialSummary,
+} from "../../../lib/dept-initiative-rules";
 
 /* Departmental Budgets — the budget control centre. A budget opens with an
    executive summary (target · proposed · remaining · vs prior year · completion ·
@@ -115,7 +119,9 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   }
 
   async function save() {
-    const payload = lines.map((l, i) => ({
+    // Only MANUAL lines are saved here; INITIATIVE-generated lines are owned by
+    // the operational-planning layer and re-synced server-side.
+    const payload = lines.filter((l) => l.source !== "INITIATIVE").map((l, i) => ({
       category: l.category || "General", line_label: l.line_label, sort_order: i * 10,
       prior_year: Number(l.prior_year) || 0, commentary: l.commentary || "",
       ...Object.fromEntries(MONTH_KEYS.map((k) => [k, Number(l[k]) || 0])),
@@ -153,7 +159,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
     }
   }
 
-  const TABS = [["overview", "Overview"], ["financial", "Financial View"], ["review", "Review & Submit"]];
+  const TABS = [["overview", "Overview"], ["campaigns", "Campaigns & initiatives"], ["financial", "Financial View"], ["review", "Review & Submit"]];
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18, alignItems: "start" }}>
@@ -241,6 +247,11 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
             </div>
 
             {tab === "overview" && <Overview lines={lines} monthly={monthly} groups={groups} movers={movers} issues={issues} summary={summary} events={loaded.events || []} approvers={loaded.approvers || []} onGoFinancial={() => setTab("financial")} />}
+
+            {tab === "campaigns" && (
+              <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
+                budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")} />
+            )}
 
             {tab === "financial" && (
               <FinancialView
@@ -425,20 +436,24 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
       {group.lines.map((line) => {
         const total = lineTotal(line), v = variance(total, line.prior_year), q = quarterTotals(line);
         const open = expanded === line._key;
+        const fromInit = line.source === "INITIATIVE";      // generated — read-only here
+        const lineEdit = editing && !fromInit;
         return (
           <FragmentRow key={line._key}>
             <tr style={{ borderBottom: open ? "none" : "1px solid var(--hairline)" }}>
               <td style={{ ...td, textAlign: "left" }}>
-                {editing
+                {lineEdit
                   ? <input value={line.line_label} onChange={(e) => upd(line._key, "line_label", e.target.value)} placeholder="Cost line" style={{ ...inputSt, width: 172, padding: "4px 7px", fontSize: 12 }} />
                   : <span style={{ fontSize: 12.5 }}>{line.line_label}</span>}
                 {String(line.commentary || "").trim() && <span title={line.commentary} style={{ marginLeft: 6, fontSize: 10, color: "var(--accent)" }}>✎</span>}
+                {fromInit && <span title="Generated from an initiative" style={{ marginLeft: 6, fontFamily: "var(--mono)", fontSize: 8, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 4px" }}>from plan</span>}
+                {fromInit && line.classification && <span style={{ marginLeft: 4, fontSize: 9, color: "var(--muted)" }}>{line.classification.toLowerCase()}</span>}
               </td>
               <td style={{ ...td, color: "var(--muted)" }}>{Number(line.prior_year) ? money0(line.prior_year) : "—"}</td>
               {viewMode === "annual" && (
                 <>
                   <td style={{ ...td }}>
-                    {editing
+                    {lineEdit
                       ? <input value={total === 0 ? "" : total} onChange={(e) => setAnnual(line._key, e.target.value)} inputMode="decimal" style={{ ...cellIn, width: 84 }} title="Full-year — spreads evenly across months" />
                       : <span style={{ fontWeight: 700 }}>{money0(total)}</span>}
                   </td>
@@ -451,7 +466,7 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
                 <>
                   {MONTH_KEYS.map((k) => (
                     <td key={k} style={{ ...td, padding: "2px 3px" }}>
-                      {editing ? <input value={line[k] === 0 ? "" : line[k]} onChange={(e) => upd(line._key, k, e.target.value)} inputMode="decimal" style={cellIn} /> : <span>{Number(line[k]) ? money0(line[k]) : "—"}</span>}
+                      {lineEdit ? <input value={line[k] === 0 ? "" : line[k]} onChange={(e) => upd(line._key, k, e.target.value)} inputMode="decimal" style={cellIn} /> : <span>{Number(line[k]) ? money0(line[k]) : "—"}</span>}
                     </td>
                   ))}
                   <td style={{ ...td, fontWeight: 700 }}>{money0(total)}</td>
@@ -459,15 +474,17 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
               )}
               {editing && (
                 <td style={{ ...td, padding: "2px 4px" }}>
-                  <span style={{ display: "inline-flex", gap: 3 }}>
-                    <button title="Detail: months + commentary" onClick={() => setExpanded(open ? null : line._key)} style={{ ...ghost, padding: "2px 6px" }}>{open ? "▾" : "▸"}</button>
-                    {viewMode !== "monthly" && <button title="Spread a full-year amount" onClick={() => spread(line._key)} style={{ ...ghost, padding: "2px 6px" }}>≡</button>}
-                    <button title="Remove line" onClick={() => removeLine(line._key)} style={{ ...ghost, padding: "2px 6px", color: "var(--red)" }}>×</button>
-                  </span>
+                  {lineEdit ? (
+                    <span style={{ display: "inline-flex", gap: 3 }}>
+                      <button title="Detail: months + commentary" onClick={() => setExpanded(open ? null : line._key)} style={{ ...ghost, padding: "2px 6px" }}>{open ? "▾" : "▸"}</button>
+                      {viewMode !== "monthly" && <button title="Spread a full-year amount" onClick={() => spread(line._key)} style={{ ...ghost, padding: "2px 6px" }}>≡</button>}
+                      <button title="Remove line" onClick={() => removeLine(line._key)} style={{ ...ghost, padding: "2px 6px", color: "var(--red)" }}>×</button>
+                    </span>
+                  ) : <span style={{ fontSize: 10, color: "var(--faint)" }}>·</span>}
                 </td>
               )}
             </tr>
-            {open && editing && (
+            {open && lineEdit && (
               <tr style={{ borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                 <td colSpan={2 + cols + 1} style={{ padding: "8px 10px" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -547,6 +564,184 @@ function ReviewSubmit({ status, issues, summary, allowed, approvers, dirty, busy
           {canEdit && <button onClick={onDelete} disabled={busy} style={{ ...ghost, color: "var(--red)", borderColor: "var(--red)", marginLeft: "auto" }}>Delete</button>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Operational planning: campaigns / projects / contracts ----
+
+function Initiatives({ initiatives, editing, busy, department, budgetId, api, reload, onGoFinancial }) {
+  const c = commercialSummary(initiatives);
+  const [adding, setAdding] = useState(false);
+  const [openId, setOpenId] = useState(null);
+  const kind = defaultKindFor(department);
+  const noun = KIND_LABEL[kind].toLowerCase();
+
+  async function create(fields) {
+    const r = await api({ action: "initiative-create", budgetId, initiative: fields });
+    if (r) { setAdding(false); reload(); }
+  }
+
+  return (
+    <div>
+      <div style={{ ...card }}>
+        <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 4 }}>Commercial view</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Build the budget around {noun}s; the system generates the financial cost lines and phasing, which appear (badged &ldquo;from plan&rdquo;) in the Financial View.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+          <SummaryTile label="Planned investment" value={moneyC(c.investment)} sub={`${initiatives.length} ${noun}${initiatives.length === 1 ? "" : "s"}`} />
+          <SummaryTile label="Expected incremental sales" value={moneyC(c.incrementalSales)} sub="from these initiatives" />
+          <SummaryTile label="Expected incremental margin" value={moneyC(c.incrementalMargin)} sub="gross" />
+          <SummaryTile label="Expected contribution" value={moneyC(c.contribution)} sub="margin less investment" tone={c.contribution >= 0 ? "var(--green)" : "var(--red)"} />
+        </div>
+      </div>
+
+      {editing && !adding && <button onClick={() => setAdding(true)} style={btn("var(--accent)")}>+ New {noun}</button>}
+      {editing && adding && <InitiativeForm kind={kind} onCancel={() => setAdding(false)} onSave={create} busy={busy} />}
+
+      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+        {initiatives.length === 0 && !adding && <div style={{ fontSize: 13, color: "var(--faint)" }}>No {noun}s yet.{editing ? ` Add one to start planning ${department}'s budget operationally.` : ""}</div>}
+        {initiatives.map((init) => (
+          <InitiativeCard key={init.initiative_id} init={init} noun={noun} editing={editing} busy={busy} budgetId={budgetId} api={api} reload={reload}
+            open={openId === init.initiative_id} setOpen={(v) => setOpenId(v ? init.initiative_id : null)} />
+        ))}
+      </div>
+      {initiatives.length > 0 && <button onClick={onGoFinancial} style={{ ...ghost, marginTop: 14 }}>See the generated financial lines →</button>}
+    </div>
+  );
+}
+
+function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open, setOpen }) {
+  const invest = initiativeInvestment(init);
+  const contribution = (Number(init.incremental_margin) || 0) - invest;
+  async function del() {
+    if (!window.confirm(`Delete ${noun} "${init.name}"? Its generated cost lines will be removed.`)) return;
+    const r = await api({ action: "initiative-delete", budgetId, initiativeId: init.initiative_id });
+    if (r) reload();
+  }
+  return (
+    <div style={{ ...card, marginBottom: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 14, fontWeight: 650 }}>{init.name}
+            <span style={{ marginLeft: 8, fontFamily: "var(--mono)", fontSize: 9, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 6px" }}>{KIND_LABEL[init.kind] || init.kind}</span>
+            <span style={{ marginLeft: 6, fontSize: 10.5, color: "var(--muted)" }}>{CLASSIFICATION_LABEL[init.classification] || init.classification}</span>
+          </div>
+          {init.objective && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>{init.objective}</div>}
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>
+            {MONTHS[(init.start_month || 1) - 1]}–{MONTHS[(init.end_month || 12) - 1]}{init.owner ? ` · ${init.owner}` : ""}{init.scope ? ` · ${init.scope}` : ""}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", fontSize: 12 }}>
+          <div><span style={{ color: "var(--faint)" }}>Invest </span><strong>{moneyC(invest)}</strong></div>
+          <div><span style={{ color: "var(--faint)" }}>Inc. margin </span>{moneyC(init.incremental_margin)}</div>
+          <div style={{ color: contribution >= 0 ? "var(--green)" : "var(--red)" }}>Contribution {moneyC(contribution)}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => setOpen(!open)} style={ghost}>{open ? "Close" : editing ? "Edit" : "View"} costs & detail</button>
+        {editing && <button onClick={del} disabled={busy} style={{ ...ghost, color: "var(--red)", borderColor: "var(--red)" }}>Delete</button>}
+      </div>
+      {open && <InitiativeEditor init={init} editing={editing} busy={busy} budgetId={budgetId} api={api} reload={reload} />}
+    </div>
+  );
+}
+
+const FIELD = { display: "flex", flexDirection: "column", gap: 4 };
+function InitiativeForm({ kind, onCancel, onSave, busy }) {
+  const [f, setF] = useState({ name: "", kind, objective: "", owner: "", scope: "", classification: "GROWTH", start_month: 1, end_month: 12, incremental_sales: "", incremental_margin: "" });
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  return (
+    <div style={{ ...card, marginTop: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+        <label style={FIELD}><span style={labelSt}>Name</span><input value={f.name} onChange={set("name")} style={inputSt} /></label>
+        <label style={FIELD}><span style={labelSt}>Kind</span><select value={f.kind} onChange={set("kind")} style={inputSt}>{KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></label>
+        <label style={FIELD}><span style={labelSt}>Classification</span><select value={f.classification} onChange={set("classification")} style={inputSt}>{CLASSIFICATIONS.map((k) => <option key={k} value={k}>{CLASSIFICATION_LABEL[k]}</option>)}</select></label>
+        <label style={FIELD}><span style={labelSt}>Owner</span><input value={f.owner} onChange={set("owner")} style={inputSt} /></label>
+        <label style={FIELD}><span style={labelSt}>Scope</span><input value={f.scope} onChange={set("scope")} placeholder="e.g. All stores" style={inputSt} /></label>
+        <label style={FIELD}><span style={labelSt}>Start month</span><select value={f.start_month} onChange={set("start_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
+        <label style={FIELD}><span style={labelSt}>End month</span><select value={f.end_month} onChange={set("end_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
+        <label style={FIELD}><span style={labelSt}>Exp. incremental sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
+        <label style={FIELD}><span style={labelSt}>Exp. incremental margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
+      </div>
+      <label style={{ ...FIELD, marginTop: 10 }}><span style={labelSt}>Objective</span><input value={f.objective} onChange={set("objective")} style={inputSt} /></label>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={() => onSave(f)} disabled={busy || !f.name.trim()} style={btn("var(--accent)")}>Create</button>
+        <button onClick={onCancel} style={ghost}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
+  const [f, setF] = useState({
+    name: init.name, kind: init.kind, objective: init.objective || "", owner: init.owner || "", scope: init.scope || "",
+    classification: init.classification, start_month: init.start_month, end_month: init.end_month,
+    incremental_sales: init.incremental_sales, incremental_margin: init.incremental_margin,
+  });
+  const [costs, setCosts] = useState((init.costs || []).map((c) => ({ ...c })));
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const setCost = (i, k, v) => setCosts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
+  const addCost = () => setCosts((cs) => [...cs, { category: "General", line_label: "", amount: "", phasing: "EVEN", one_off_month: "" }]);
+  const rmCost = (i) => setCosts((cs) => cs.filter((_, j) => j !== i));
+
+  async function save() {
+    const patch = { ...f, start_month: Number(f.start_month), end_month: Number(f.end_month), incremental_sales: Number(f.incremental_sales) || 0, incremental_margin: Number(f.incremental_margin) || 0 };
+    const r1 = await api({ action: "initiative-update", budgetId, initiativeId: init.initiative_id, patch });
+    if (!r1) return;
+    const payload = costs.filter((c) => String(c.line_label || "").trim()).map((c) => ({
+      category: c.category || "General", line_label: c.line_label, amount: Number(c.amount) || 0, phasing: c.phasing || "EVEN",
+      one_off_month: c.one_off_month ? Number(c.one_off_month) : null,
+    }));
+    const r2 = await api({ action: "initiative-costs", budgetId, initiativeId: init.initiative_id, costs: payload });
+    if (r2) reload();
+  }
+
+  const ro = !editing;
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
+      {!ro && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 12 }}>
+          <label style={FIELD}><span style={labelSt}>Name</span><input value={f.name} onChange={set("name")} style={inputSt} /></label>
+          <label style={FIELD}><span style={labelSt}>Classification</span><select value={f.classification} onChange={set("classification")} style={inputSt}>{CLASSIFICATIONS.map((k) => <option key={k} value={k}>{CLASSIFICATION_LABEL[k]}</option>)}</select></label>
+          <label style={FIELD}><span style={labelSt}>Start</span><select value={f.start_month} onChange={set("start_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
+          <label style={FIELD}><span style={labelSt}>End</span><select value={f.end_month} onChange={set("end_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
+          <label style={FIELD}><span style={labelSt}>Inc. sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
+          <label style={FIELD}><span style={labelSt}>Inc. margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
+        </div>
+      )}
+      <div style={{ ...labelSt, marginBottom: 6 }}>Cost items → financial lines</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 560 }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--line)" }}>
+            {["Category", "Cost line", "Amount £", "Phasing", ""].map((h) => <th key={h} style={{ ...th, textAlign: h === "Amount £" ? "right" : "left" }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {costs.map((c, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid var(--hairline)" }}>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? c.category : <input value={c.category || ""} onChange={(e) => setCost(i, "category", e.target.value)} style={{ ...inputSt, width: 120, padding: "4px 6px", fontSize: 12 }} />}</td>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? c.line_label : <input value={c.line_label || ""} onChange={(e) => setCost(i, "line_label", e.target.value)} style={{ ...inputSt, width: 150, padding: "4px 6px", fontSize: 12 }} />}</td>
+                <td style={{ ...td, padding: "3px 4px" }}>{ro ? money0(c.amount) : <input value={c.amount ?? ""} onChange={(e) => setCost(i, "amount", e.target.value)} inputMode="decimal" style={{ ...cellIn, width: 90 }} />}</td>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>
+                  {ro ? PHASING_LABEL[c.phasing] : (
+                    <span style={{ display: "inline-flex", gap: 4 }}>
+                      <select value={c.phasing || "EVEN"} onChange={(e) => setCost(i, "phasing", e.target.value)} style={{ ...inputSt, padding: "4px 6px", fontSize: 12 }}>{PHASINGS.filter((p) => p !== "MANUAL").map((p) => <option key={p} value={p}>{PHASING_LABEL[p]}</option>)}</select>
+                      {c.phasing === "ONEOFF" && <select value={c.one_off_month || 1} onChange={(e) => setCost(i, "one_off_month", e.target.value)} style={{ ...inputSt, padding: "4px 6px", fontSize: 12 }}>{MONTHS.map((m, j) => <option key={m} value={j + 1}>{m}</option>)}</select>}
+                    </span>
+                  )}
+                </td>
+                <td style={{ ...td, padding: "3px 4px" }}>{!ro && <button onClick={() => rmCost(i)} style={{ ...ghost, padding: "2px 7px", color: "var(--red)" }}>×</button>}</td>
+              </tr>
+            ))}
+            {costs.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "left", color: "var(--faint)" }}>No cost items.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {!ro && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={addCost} style={ghost}>+ Cost item</button>
+          <button onClick={save} disabled={busy} style={btn("var(--accent)")}>Save {KIND_LABEL[init.kind]?.toLowerCase() || "initiative"}</button>
+        </div>
+      )}
     </div>
   );
 }
