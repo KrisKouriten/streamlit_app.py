@@ -29,7 +29,7 @@ agent.
 2. Access, roles & permissions
 3. Navigation
 4. The operating rhythm (daily / weekly / monthly / quarterly)
-5. Module procedures — including **5.13 Building the board deck** and **5.14 Building the trade deck**
+5. Module procedures — including the numbered month-end close (**5.6**), **5.13 Building the board deck**, **5.14 Building the trade deck** and **5.15 Corporate Reporting Centre**
 6. Data feeds, refresh & how it all maps (the lineage map)
 7. Governance & controls
 8. Roles & responsibilities
@@ -111,11 +111,11 @@ route-preservation record and the documented overlaps live in
 
 | Section | What lives here (live modules in **bold**) |
 |---|---|
-| **HOME** | **Executive Intelligence Hub** (position & attention); My Finance Home, Notifications, Global Search (⌘K). |
+| **HOME** | **Executive Intelligence Hub** (position & attention) **· Corporate Reporting Centre** (governed reporting decks, §5.15); My Finance Home, Notifications, Global Search (⌘K). |
 | **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, PO & Procurement, Department/Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
 | **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects**; planned Budget Builder, Store/Wholesale/Franchise planning, Department/Project budgets, Consolidated P&L. |
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
-| **OPERATE** | **My Finance Week · Finance Team Schedule · Month-End Close · Management Accounts Close · Close Cockpit · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library**; planned PO Tracker, WAC, Finance Projects. |
+| **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library**; planned PO Tracker, WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
 | **FINANCE DATA** | **Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master **· Report Builder** self-serve reports across the finance datasets); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
 | **GOVERN** | **Users & Roles · SOP Library** (this Handbook) **· P&L Formats** (board-pack layout governance + the Joiin refresh controls); planned Permissions, Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. |
@@ -246,16 +246,46 @@ required) — **only a reviewer's decision** moves it to Complete or Returned.
 - **Task Library** — the task templates (weekly & monthly) that generate the work.
 Overdue tasks escalate automatically and surface on HOME.
 
-### 5.6 The two closes (OPERATE)
-- **Month-End Close** (`/operate/month-end`) — a status board: every entity's close
-  tasks with an assignable **finance owner** and Open/Done chips, under a **summary
-  strip** (overall status + per-stage rollups). This is the single place month-end
-  work is tracked; the standalone legacy tracker is retired.
-- **Management Accounts Close** (`/operate/management-close`) — assurance before the
-  numbers are relied on: **pre-close checks** (completeness/accrual, variable & fixed
-  cost drift vs the forecast, sign) each with a **confirm · correct · explain**
-  decision, plus a reference model and an 18-step reconciliation playbook. Status
-  (the board) and assurance (the checks) are deliberately different jobs.
+### 5.6 The month-end close — one process, three steps (OPERATE)
+
+The close is **one process across three screens**, numbered so the order is
+unambiguous. They are named **1 · … / 2 · … / 3 · …** in the sidebar so everyone
+follows the same sequence: **1 = do the per-entity work, 2 = reconcile and decide
+accruals, 3 = confirm readiness and lock.**
+
+**1 · Month-End Close** (`/operate/month-end`) — the **execution board**. Every
+entity's close tasks with an assignable **finance owner** and Open/Done chips, under
+a **summary strip** (overall status + per-stage rollups). This is the single place the
+per-entity month-end work is tracked and ticked off; the standalone legacy tracker is
+retired.
+
+**2 · Management Accounts Close** (`/operate/management-close`) — the **hands-on
+reconciliation engine**. It takes the period's actuals, runs them against a reference
+model, and produces **exceptions across four checks — completeness, variable drift,
+fixed drift, sign** — each with a **confirm · correct · explain** review, plus a
+per-period assurance playbook (the 18-step reconciliation). **This is where the
+variance work actually happens and where accruals are decided.**
+
+**3 · Close Cockpit** (`/operate/close`) — the **control tower / readiness view**.
+Each period is a tracked "run" whose machine-checkable gates (actuals loaded, feeds
+fresh, **pre-close exceptions cleared**, playbook done, tasks done, commentary
+drafted) go green on their own; only genuine human sign-offs wait on a person. It is
+the one-glance **"is this period ready to lock?"** screen **and the lock / reopen
+control**.
+
+**How they fit together.** *2 · MA Close finds and clears the variances; 3 · Close
+Cockpit consumes "exceptions cleared" as one gate and owns the lock.* Step **1 ·
+Month-End Close** tracks the per-entity task ticks that also feed the cockpit's "tasks
+done" gate. The overlap is deliberate and the division is clean: **cockpit = status +
+lock, MA Close = the detailed reconciliation.**
+
+**Planned evolution.** As store-level P&Ls (the Miniso UK operating company and the
+Franchise entity) move to an uploaded final-accounts pack, step **2 · Management
+Accounts Close** will run its checks on that upload and gain a governed **AI accrual
+recommendation** — variances split fixed vs variable, with suggested accruals put
+forward as a draft for human sign-off (never auto-posted). The Joiin-based
+three-statement model moves to OPERATE as the reconciliation tool (management accounts
+vs statutory). Parked until the upstream input tools are finalised.
 
 ### 5.7 Forecast Builder (PLAN)
 The store-level forecast is built here from a **3-tab store workbook** (upload via
@@ -324,6 +354,11 @@ agent, board, control, audit, manual).
 > Joiin-sourced view. If you mean a different artefact by "board deck", tell Finance
 > and this section will be adjusted.*
 
+> **Now also available through the Corporate Reporting Centre (§5.15)** — the
+> **Finance Board Deck** template produces this pack end-to-end (sections, governed
+> figures, reviewed AI commentary, validation, approval, PowerPoint/PDF/Excel). The
+> steps below remain the module-by-module route and the source of the figures.
+
 The board deck is **assembled from live modules, not rebuilt by hand** — the app
 holds Joiin's own board-pack layout and renders it verbatim. The build:
 
@@ -364,6 +399,12 @@ not circulate externally without the sign-off in §12.
 > export yet; it is assembled from the trading modules and the reviewed AI
 > commentary. Tell Finance if you mean a different artefact.*
 
+> **Now also available through the Corporate Reporting Centre (§5.15)** — the
+> **Weekly Trade Pack** template assembles trading, margin, inventory, franchise and
+> priority-action sections with reviewed AI commentary and one-click
+> PowerPoint/PDF/Excel export. The steps below remain the module route and the source
+> of the figures.
+
 The build:
 
 1. **Prerequisite refresh (trading).** Load the latest **store sales** export
@@ -388,6 +429,49 @@ The build:
 **Cadence:** weekly. Trading figures are *store* figures (the green *Store · all*
 source chip), kept deliberately separate from the statutory Joiin feed — see the two
 truths in §5.1.
+
+### 5.15 Corporate Reporting Centre (HOME)
+
+The Reporting Centre (`HOME → Corporate Reporting Centre`, `/finance-os/home/reports`)
+is **one governed engine** that produces corporate reporting decks from live Finance
+OS data — replacing the old routine of screenshotting dashboards into PowerPoint.
+Five templates ship: **Weekly Trade Pack · Management Accounting Report · Finance
+Board Deck · Budget & Forecasts Deck · Franchise Deck**. It is one engine with five
+templates, not five separate generators — new templates can be added without a
+rebuild.
+
+**The process (each report):**
+**Select template → set period & scope → choose sections → pick data sources → choose
+AI commentary → generate → review → validate → approve → export → archive.**
+
+- **Governed figures.** Sections pull through **source adapters** — the same governed
+  services behind the dashboards — so a report **reconciles to its source**. Where a
+  feed isn't connected the section says *"Awaiting …"* rather than inventing a number
+  (e.g. Treasury today).
+- **AI commentary** reuses the Finance Intelligence Layer: ten perspectives
+  (Executive, Finance Director, FP&A, Commercial Finance, Financial Controller, Cash &
+  Treasury, Operational, Risk, Opportunity, Action). Every draft is labelled **AI
+  DRAFT** with its perspective, confidence, data-through date and sources, and **must
+  be reviewed**; unreviewed commentary can never enter an issued report.
+- **Validation** runs a **PASSED / WARNING / FAILED** checklist (required sections,
+  data availability & freshness, commentary reviewed, confidentiality set, reviewer &
+  approver assigned). **A FAILED report cannot be approved or issued.**
+- **Roles / segregation of duties.** Finance **creates, edits and reviews**;
+  **approval and issue are an admin (Finance Director) right**. Executives view
+  approved reports.
+- **Versions.** Approving **freezes and locks a version snapshot** — an approved
+  report never changes when the underlying data later moves.
+- **Export.** Native **PowerPoint** (styled to the Finance OS identity), **PDF**
+  (print view → Save as PDF) and an **Excel appendix**; every export is recorded with
+  a checksum. Confidentiality/DRAFT watermarks apply until approved.
+- **Add to Report.** On a dashboard, **+ Add to Report** drops a chart/KPI/table into
+  a draft (new or existing), keeping its **source and current filters** so it
+  refreshes from governed data — never a screenshot.
+
+**Cadence:** per template — Weekly Trade Pack weekly; Management Accounting Report and
+Franchise Deck monthly after MA close (§5.6); Finance Board Deck monthly/quarterly;
+Budget & Forecasts Deck each planning cycle. The board deck (§5.13) and trade deck
+(§5.14) are now produced here via their templates.
 
 ---
 
