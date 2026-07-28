@@ -8,6 +8,16 @@ const PERSPECTIVES = [
   ["OPPORTUNITY", "Opportunity"], ["ACTION", "Action-oriented"],
 ];
 const DETAILS = ["HEADLINE", "CONCISE", "STANDARD", "DETAILED", "TECHNICAL"];
+// Audience registers. ⚠ = externally-facing / board-level (listing-rules sensitive):
+// the draft is stamped with a governance notice and, like all commentary, needs
+// human sign-off before it can be issued.
+const AUDIENCES = [
+  ["", "— by perspective —"],
+  ["EXECUTIVE", "Executive (internal)"], ["MANAGEMENT", "Management (internal)"],
+  ["OPERATIONAL", "Operational (internal)"], ["TECHNICAL", "Technical / Controller"],
+  ["CEO", "CEO ⚠"], ["BOARD", "Board ⚠"], ["INVESTOR", "Investor / Group ⚠"], ["BANK", "Bank / Lender ⚠"],
+];
+const SENSITIVE_AUD = new Set(["CEO", "BOARD", "INVESTOR", "BANK"]);
 const LEVEL_TONE = { PASSED: "var(--green)", WARNING: "var(--amber)", FAILED: "var(--red)" };
 const STATUS_TONE = { READY: "var(--green)", PARTIAL: "var(--amber)", PENDING: "var(--amber)", MISSING: "var(--red)" };
 
@@ -35,6 +45,7 @@ export default function Builder({ reportId, initial, canEdit, canApprove = false
   const [msg, setMsg] = useState(null);
   const [perspective, setPerspective] = useState("EXECUTIVE");
   const [detail, setDetail] = useState("STANDARD");
+  const [audience, setAudience] = useState("");
 
   const included = data.sections || [];
   const all = (data.allSections || []).slice().sort((a, b) => a.position - b.position);
@@ -195,14 +206,24 @@ export default function Builder({ reportId, initial, canEdit, canApprove = false
           {canEdit && selected.base?.included && (
             <div style={card}>
               <div style={{ ...mono, marginBottom: 8 }}>AI commentary</div>
-              <select value={perspective} onChange={(e) => setPerspective(e.target.value)} style={{ width: "100%", fontSize: 12.5, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", marginBottom: 8 }}>
-                {PERSPECTIVES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              <select value={audience} onChange={(e) => setAudience(e.target.value)} title="Audience register" style={{ width: "100%", fontSize: 12.5, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", marginBottom: 8 }}>
+                {AUDIENCES.map(([k, l]) => <option key={k || "none"} value={k}>{k ? `Audience: ${l}` : l}</option>)}
               </select>
+              {!audience && (
+                <select value={perspective} onChange={(e) => setPerspective(e.target.value)} style={{ width: "100%", fontSize: 12.5, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", marginBottom: 8 }}>
+                  {PERSPECTIVES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              )}
               <select value={detail} onChange={(e) => setDetail(e.target.value)} style={{ width: "100%", fontSize: 12.5, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", marginBottom: 8 }}>
                 {DETAILS.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
+              {SENSITIVE_AUD.has(audience) && (
+                <div style={{ fontSize: 11, color: "var(--amber)", marginBottom: 8, lineHeight: 1.45 }}>
+                  ⚠ Listing-rules sensitive. The draft is stamped as external/board material and must be reviewed and signed off before any external use.
+                </div>
+              )}
               <button style={{ ...btn("var(--accent)"), width: "100%" }} disabled={busy}
-                onClick={() => op({ op: "commentary-generate", sectionInstId: selected.base.section_inst_id, perspective, detailLevel: detail }, "AI draft generated")}>
+                onClick={() => op({ op: "commentary-generate", sectionInstId: selected.base.section_inst_id, perspective, detailLevel: detail, audience: audience || undefined }, "AI draft generated")}>
                 {busy ? "Generating…" : "Generate AI draft"}
               </button>
               <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 6 }}>Governed draft over the section's figures — for human sign-off.</div>

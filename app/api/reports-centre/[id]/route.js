@@ -58,7 +58,7 @@ export async function POST(request, { params }) {
       case "commentary-generate":
         return NextResponse.json(await generateReportCommentary({
           reportId: id, sectionInstId: body.sectionInstId, componentId: body.componentId || null,
-          perspective: body.perspective, detailLevel: body.detailLevel, tone: body.tone, actor: session,
+          perspective: body.perspective, detailLevel: body.detailLevel, tone: body.tone, audience: body.audience || null, actor: session,
         }));
       case "commentary-edit":
         return NextResponse.json(await editReportCommentary(body.componentId, body.text || "", session));

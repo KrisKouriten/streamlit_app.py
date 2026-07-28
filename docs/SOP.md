@@ -485,6 +485,16 @@ AI commentary → generate → review → validate → approve → export → ar
   Treasury, Operational, Risk, Opportunity, Action). Every draft is labelled **AI
   DRAFT** with its perspective, confidence, data-through date and sources, and **must
   be reviewed**; unreviewed commentary can never enter an issued report.
+- **Audience registers.** Instead of picking a perspective by hand you can draft for a
+  named **audience** — *Executive · Management · Operational · Technical* (internal),
+  or *CEO · Board · Investor / Group · Bank / Lender*. Each resolves to the right
+  perspective, tone and emphasis. The four external/board-level registers are
+  **listing-rules sensitive**: their drafts are **stamped with a governance banner**
+  (e.g. *"⚠ DRAFT — Investor / Group … may contain inside / price-sensitive
+  information; requires human sign-off and disclosure review before any external
+  use"*) that travels into every export, and — like all commentary — they remain a
+  **draft that a human must approve** before the report can be issued. The AI never
+  releases anything.
 - **Validation** runs a **PASSED / WARNING / FAILED** checklist (required sections,
   data availability & freshness, commentary reviewed, confidentiality set, reviewer &
   approver assigned). **A FAILED report cannot be approved or issued.**
