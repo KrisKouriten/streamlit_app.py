@@ -117,8 +117,8 @@ route-preservation record and the documented overlaps live in
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
 | **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library**; planned PO Tracker, WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
-| **FINANCE DATA** | **Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master **· Report Builder** self-serve reports across the finance datasets); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
-| **GOVERN** | **Users & Roles · SOP Library** (this Handbook) **· P&L Formats** (board-pack layout governance + the Joiin refresh controls); planned Permissions, Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. |
+| **FINANCE DATA** | **Data Uploads** (one home for every governed input — see §6.9) **· Financial Statements Upload & Refresh** (board-pack layout + the Joiin statutory refresh) **· Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
+| **GOVERN** | **Users & Roles · SOP Library** (this Handbook) **· Report Builder**; planned Permissions, Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. *(Govern is controls-only — the finance-data feeds moved to FINANCE DATA.)* |
 
 The **legacy section hubs** (`/dashboards`, `/plan`, `/operate`, `/perform`,
 `/govern`, `/ai`) remain reachable at their original routes as breadcrumb roots —
@@ -159,7 +159,7 @@ switch and sign out — without touching the mouse.
    narrative, and pair it with the Store Sales & KPI screens (see §5.14).
 
 ### Monthly
-- **Refresh the consolidation** — GOVERN → P&L Formats → **Refresh (this month)**
+- **Refresh the consolidation** — FINANCE DATA → Financial Statements Upload & Refresh → **Refresh (this month)**
   (or **Full year**) pulls the month's per-entity P&L, the four board packs and the
   balance sheet from Joiin into the database. The monthly cron does this
   automatically on the 5th; run it by hand for an early or corrected close. **This
@@ -362,7 +362,7 @@ agent, board, control, audit, manual).
 The board deck is **assembled from live modules, not rebuilt by hand** — the app
 holds Joiin's own board-pack layout and renders it verbatim. The build:
 
-1. **Prerequisite refresh (statutory).** GOVERN → P&L Formats → **Refresh (this
+1. **Prerequisite refresh (statutory).** FINANCE DATA → Financial Statements Upload & Refresh → **Refresh (this
    month)** so the month is loaded into `finance.joiin_boardpack` (all four scopes),
    `finance.joiin_pl_entity` and `finance.joiin_bs`. Without this the pack is empty
    and the feed banner stays on the Xero fallback (§6.2, §11).
@@ -371,7 +371,7 @@ holds Joiin's own board-pack layout and renders it verbatim. The build:
    Actual-vs-Forecast dashboard and drift checks have something to compare against.
 3. **Layout governance (set once, reused).** The board-pack structure — sections,
    subtotals, derived lines (Gross Profit, EBITDA, margins) — is the governed **P&L
-   format** per scope (GOVERN → P&L Formats). Joiin computes the layout and the
+   format** per scope (FINANCE DATA → Financial Statements Upload & Refresh). Joiin computes the layout and the
    intercompany wholesale elimination; the app renders it.
 4. **Review on screen.** DASHBOARDS / PERFORM → **Management Accounts** — the four
    tabs **Store · Head Office · Franchise · Consolidated**, plus the Actual-vs-Forecast
@@ -492,9 +492,9 @@ until the refresh runs.
 | Input (source) | Refresh / load action & where | Stored in | Drives (output) | Cadence |
 |---|---|---|---|---|
 | **Store sales** (trading export) | Regenerate the load SQL and run it in the DB (§6.1) | `core`/`finance` store-sales facts | Store Sales & KPI, HOME trading tiles, Trading Commentary agent → **trade deck** | Weekly (≤ 9-day freshness) |
-| **Joiin consolidation** (statutory, 26 companies) | **App-side API refresh** — GOVERN → P&L Formats → *Refresh (this month)* / *Full year*; monthly cron (§6.2) | `finance.joiin_pl_entity`, `finance.joiin_boardpack` (4 scopes), `finance.joiin_bs` | Feed source flips to Joiin; Management Accounts (4-tab board pack + Actual-vs-Forecast), Three-statement model, scope banner, Executive Hub finance tiles → **board deck** | Monthly (cron 5th) + on demand |
-| **Joiin by-company P&L** (workbook) | Manual alternative to the API — GOVERN → P&L Formats → *Upload workbook* (one sheet per month, entities in columns) (§6.2) | `finance.joiin_pl_entity` | Per-entity board-pack P&L, entity drill-down | As needed (API is the default) |
-| **P&L format template** (board-pack layout) | GOVERN → P&L Formats → *Upload format* (§6.8) | `finance.pl_format` (migration 022) | The **layout** of every board pack — sections, subtotals, derived lines, nominal mapping | On change |
+| **Joiin consolidation** (statutory, 26 companies) | **App-side API refresh** — FINANCE DATA → Financial Statements Upload & Refresh → *Refresh (this month)* / *Full year*; monthly cron (§6.2) | `finance.joiin_pl_entity`, `finance.joiin_boardpack` (4 scopes), `finance.joiin_bs` | Feed source flips to Joiin; Management Accounts (4-tab board pack + Actual-vs-Forecast), Three-statement model, scope banner, Executive Hub finance tiles → **board deck** | Monthly (cron 5th) + on demand |
+| **Joiin by-company P&L** (workbook) | Manual alternative to the API — FINANCE DATA → Financial Statements Upload & Refresh → *Upload workbook* (one sheet per month, entities in columns) (§6.2) | `finance.joiin_pl_entity` | Per-entity board-pack P&L, entity drill-down | As needed (API is the default) |
+| **P&L format template** (board-pack layout) | FINANCE DATA → Financial Statements Upload & Refresh → *Upload format* (§6.8) | `finance.pl_format` (migration 022) | The **layout** of every board pack — sections, subtotals, derived lines, nominal mapping | On change |
 | **Forecast** (3-tab store workbook) | PLAN → Forecast Builder → *Upload workbook* (§6.4) | `finance.forecast_input` (013/018) | Budget & Forecast, Scenario Planning, MA Actual-vs-Forecast comparatives, MA-close drift checks | Quarterly / planning |
 | **Management actuals** (store × nominal workbook) | DASHBOARDS/PERFORM → Management Accounts → *Excel upload* (§6.7) | `finance.mgmt_actual` (019) | MA Actual/Forecast/Budget blend | Monthly (where used) |
 | **Procurement** (CSV) | OPERATE → Procurement → upload (§6.5) | procurement tables (016) | Procurement cash-budget-vs-terms | Monthly |
@@ -522,7 +522,7 @@ and otherwise falls back to `XERO`. So the whole deck flips to the Joiin
 consolidation the moment a refresh has loaded data — and *only* then.
 
 **How to refresh (the normal path — app-side API):**
-1. Go to **GOVERN → P&L Formats** and click **Refresh (this month)** (current month,
+1. Go to **FINANCE DATA → Financial Statements Upload & Refresh** and click **Refresh (this month)** (current month,
    fast) or **Full year** (year-to-date).
 2. The browser drives the refresh in **small chunks** — per month: the per-entity
    P&L, then one board pack per scope (Store / Head Office / Franchise /
@@ -550,7 +550,7 @@ consolidation the moment a refresh has loaded data — and *only* then.
   repo**.
 
 **Manual fallback (no API):** if the API is unavailable, the same per-entity P&L can
-be loaded from a **Joiin by-company workbook** — GOVERN → P&L Formats → *Upload
+be loaded from a **Joiin by-company workbook** — FINANCE DATA → Financial Statements Upload & Refresh → *Upload
 workbook* (one sheet per month, entities across the columns). It upserts the months
 in the file into `finance.joiin_pl_entity`.
 
@@ -591,10 +591,32 @@ Joiin-laid-out P&L); the two are complementary.
 ### 6.8 P&L format templates (board-pack layout)
 The **shape** of every board pack — sections, subtotals, derived lines (Gross Profit,
 EBITDA, margins) and how each nominal maps to a line — is governed data, not code.
-Upload a template per scope via **GOVERN → P&L Formats → Upload format** →
+Upload a template per scope via **FINANCE DATA → Financial Statements Upload & Refresh → Upload format** →
 `finance.pl_format`. Friendly-named lines that don't map by name are flagged to map
 by hand. Changing a format re-lays the board pack without a deploy; it does not
 change the underlying figures.
+
+### 6.9 The Data Uploads hub (one intake)
+**FINANCE DATA → Data Uploads** (`/data/uploads`) is the single home for every
+governed input that drives the platform — so there is one place to look for "where
+do I load X?". It does not replace the individual uploaders; it routes to them and
+shows what each feed drives.
+
+- **Connected (live) feeds** — link straight to their uploader:
+  **Financial Statements Upload & Refresh** (§6.2/§6.8), **Management Accounts —
+  Actuals** (§6.7; current-year and prior-year workbooks uploaded separately, by
+  month), and **Budget & Forecast** (§6.4). Other in-app inputs (Forecast, SKU,
+  Intercompany, Procurement) are linked too.
+- **Planned feeds** — shown honestly as *awaiting format* until the layout is pinned:
+  **Sales data** (self-serve store-sales uploader), **Inventory**, **Treasury**
+  (bank-facility / forward-cash feed) and **Fixed & Variable cost tagging**. The
+  cost split will benchmark the **Management Accounts Close** analysis — variances
+  split fixed vs variable, feeding the AI accrual recommendations (§5.6).
+
+Every load updates the same governed tables the dashboards, management accounts, the
+month-end close and the Corporate Reporting Centre read from, so one upload flows
+through the whole platform. Govern is left as controls-only; the data feeds live
+here.
 
 ---
 
@@ -713,7 +735,7 @@ then ship.
 |---|---|---|
 | A screen shows a "run migration NNN" setup card | That migration hasn't run in this database | Run the named migration in Neon (§9); refresh. |
 | A dashboard says "Awaiting … feed" | That feed isn't loaded in this database | Run the relevant load (§6). |
-| **Feed banner still says "Real Xero feed … Cambridge"; board pack / three-statement empty** | The Joiin tables have no rows for that period — the refresh hasn't run (a page reload can't fix this) | GOVERN → P&L Formats → **Refresh (this month)** / **Full year** (§6.2), then reload. |
+| **Feed banner still says "Real Xero feed … Cambridge"; board pack / three-statement empty** | The Joiin tables have no rows for that period — the refresh hasn't run (a page reload can't fix this) | FINANCE DATA → Financial Statements Upload & Refresh → **Refresh (this month)** / **Full year** (§6.2), then reload. |
 | **Refresh reports "JOIIN_API_KEY is not set"** | The Joiin API secret is missing in this environment | Add `JOIIN_API_KEY` in Vercel → Environment Variables, redeploy, retry (§9). |
 | **Refresh warns "… empty board pack" for a scope** | Joiin's custom report returned no rows for that scope/month | Check the month is closed in Joiin; other scopes still load. |
 | **Trading Commentary agent fails** | `ANTHROPIC_API_KEY` not set | Add it in Vercel (Sensitive, all environments); the rest of the app is unaffected (§5.11, §9). |
