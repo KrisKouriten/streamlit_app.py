@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { getForecast } from "../../../lib/forecast";
 import { computeNominalPnl, SCOPES } from "../../../lib/forecast-rules.js";
-import { PageHeader } from "../../finance-os/ui";
+import { PageHeader, RelatedRail } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
 import ForecastUI from "./forecast-ui";
 
@@ -53,6 +53,12 @@ export default async function OperateForecast({ searchParams }) {
         <PerspectivePanel pageId="forecast" pageName="Forecast Builder"
           filters={{ store: (payload && payload.selectedStore) || undefined }} />
       </div>
+      <RelatedRail links={[
+        { label: "Scenario Planning", href: "/plan/scenarios" },
+        { label: "Budget & Forecast", href: "/finance-os/budget-forecast" },
+        { label: "Management Accounts", href: "/finance-os/management-accounts" },
+        { label: "Departmental Budgets", href: "/plan/dept-budget" },
+      ]} />
       <ForecastUI data={payload} ready={fc.ready} canManage={canManage} />
     </div>
   );

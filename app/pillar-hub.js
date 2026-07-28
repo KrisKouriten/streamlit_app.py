@@ -3,6 +3,12 @@ import Link from "next/link";
 import { getSession } from "../lib/auth";
 import { getDashboards } from "../lib/finance-os";
 import { getFreshness } from "../lib/governance";
+import { getSectionHero } from "../lib/section-hero";
+import { HeroBand } from "./finance-os/ui";
+import PageIntel from "./page-intel";
+
+// Pillar route → the nav section key whose hero stats fit this landing page.
+const HERO_KEY = { PLAN: "plan-finance", PERFORM: "perform", OPERATE: "operate", GOVERN: "govern", DASHBOARDS: "dashboards" };
 
 /*
  * Shared server component for the pillar hub pages (PLAN / PERFORM / OPERATE /
@@ -30,7 +36,12 @@ export default async function PillarHub({ pillar, title, intro, extras = [] }) {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [dashboards, freshness] = await Promise.all([getDashboards(), getFreshness(null)]);
+  const heroKey = HERO_KEY[pillar];
+  const [dashboards, freshness, hero] = await Promise.all([
+    getDashboards(),
+    getFreshness(null),
+    heroKey ? getSectionHero(heroKey) : Promise.resolve({ stats: [], caption: null }),
+  ]);
   // pillar=null → fixed-content hub: only the extras, no registry cards.
   const cards = (pillar ? dashboards.filter((d) => d.nav_pillar === pillar) : [])
     .map((d) => ({
@@ -46,6 +57,8 @@ export default async function PillarHub({ pillar, title, intro, extras = [] }) {
         <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: "-.022em", lineHeight: 1.15 }}>{title}</div>
         <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 8, maxWidth: 640, lineHeight: 1.6 }}>{intro}</p>
       </header>
+      <HeroBand stats={hero.stats} caption={hero.caption} />
+      <PageIntel pageName={title} />
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
         {[...cards, ...visibleExtras].map((c) => <Card key={c.title} {...c} />)}
       </div>

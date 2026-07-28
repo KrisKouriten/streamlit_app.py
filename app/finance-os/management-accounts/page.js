@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { resolveTab, TAB_LABEL, SCOPE_NOTE, PERIODS } from "../../../lib/ma-boardpack-view";
 import { applyPeriod } from "../../../lib/ma-export-rules";
-import { PageHeader, money } from "../ui";
+import { PageHeader, RelatedRail, money } from "../ui";
 import PerspectivePanel from "../../perspective-panel";
 import McControls from "./mc-controls";
 
@@ -32,6 +32,12 @@ export default async function ManagementAccounts({ searchParams }) {
         <PerspectivePanel pageId="management-accounts" pageName="Management Accounts"
           filters={{ tab, period, store: data.selected || undefined, year: data.year || undefined }} />
       </div>
+      <RelatedRail links={[
+        { label: "Three-Statement Model", href: "/finance-os/three-statement" },
+        { label: "Cash Flow", href: "/finance-os/cashflow" },
+        { label: "Budget & Forecast", href: "/finance-os/budget-forecast" },
+        { label: "Store Performance", href: "/finance-os/store-sales/league" },
+      ]} />
 
       <McControls tab={tab} years={data.years || []} year={data.year} period={period} storeList={data.storeList} store={data.selected} />
 
