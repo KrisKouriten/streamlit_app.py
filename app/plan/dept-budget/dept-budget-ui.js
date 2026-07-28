@@ -33,7 +33,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const thisYear = new Date().getFullYear();
   const editableDepts = isAdminFinance ? departments : departments.filter((d) => d === myDept);
 
-  const [budgets] = useState(initialBudgets);
+  const [budgets, setBudgets] = useState(initialBudgets);
   const [selId, setSelId] = useState(null);
   const [loaded, setLoaded] = useState(null);
   const [lines, setLines] = useState([]);
@@ -137,7 +137,20 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   async function del() {
     if (!window.confirm("Delete this budget version? This cannot be undone.")) return;
     const r = await api({ action: "delete", budgetId: selId });
-    if (r) { setSelId(null); setLoaded(null); setLines([]); router.refresh(); }
+    if (r) { setBudgets((bs) => bs.filter((b) => b.budget_id !== selId)); setSelId(null); setLoaded(null); setLines([]); router.refresh(); }
+  }
+
+  // Delete straight from the budget list (without opening it first).
+  async function deleteFromList(id, e) {
+    e.stopPropagation();
+    const b = budgets.find((x) => x.budget_id === id);
+    if (!window.confirm(`Delete ${b ? `${b.department} ${b.budget_year} — ${b.version_label}` : "this budget"}? This cannot be undone.`)) return;
+    const r = await api({ action: "delete", budgetId: id });
+    if (r) {
+      setBudgets((bs) => bs.filter((x) => x.budget_id !== id));
+      if (selId === id) { setSelId(null); setLoaded(null); setLines([]); }
+      router.refresh();
+    }
   }
 
   const TABS = [["overview", "Overview"], ["financial", "Financial View"], ["review", "Review & Submit"]];
@@ -171,14 +184,17 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
           {!budgets.length && <div style={{ fontSize: 12.5, color: "var(--faint)" }}>None yet.</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {budgets.map((b) => (
-              <button key={b.budget_id} onClick={() => loadBudget(b.budget_id)}
-                style={{ textAlign: "left", padding: "8px 10px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selId === b.budget_id ? "var(--accent)" : "var(--line)"}`, background: selId === b.budget_id ? "var(--accent-bg)" : "transparent" }}>
+              <div key={b.budget_id} onClick={() => loadBudget(b.budget_id)} role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter") loadBudget(b.budget_id); }}
+                style={{ position: "relative", textAlign: "left", padding: "8px 30px 8px 10px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selId === b.budget_id ? "var(--accent)" : "var(--line)"}`, background: selId === b.budget_id ? "var(--accent-bg)" : "transparent" }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600 }}>{b.department} · {b.budget_year}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", justifyContent: "space-between", marginTop: 2 }}>
                   <span>{b.version_label}</span>
                   <span style={{ color: STAGE_TONE[b.status] || "var(--muted)", fontWeight: 600 }}>{STAGE_LABEL[b.status] || b.status}</span>
                 </div>
-              </button>
+                <button onClick={(e) => deleteFromList(b.budget_id, e)} disabled={busy} title="Delete budget" aria-label={`Delete ${b.department} ${b.budget_year}`}
+                  style={{ position: "absolute", top: 6, right: 6, border: "none", background: "none", cursor: "pointer", color: "var(--faint)", fontSize: 15, lineHeight: 1, padding: 2 }}>×</button>
+              </div>
             ))}
           </div>
         </div>
