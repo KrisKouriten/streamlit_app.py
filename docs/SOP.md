@@ -115,7 +115,7 @@ route-preservation record and the documented overlaps live in
 | **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, PO & Procurement, Department/Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
 | **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects**; planned Budget Builder, Store/Wholesale/Franchise planning, Department/Project budgets, Consolidated P&L. |
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
-| **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library**; planned PO Tracker, WAC, Finance Projects. |
+| **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · Purchase Order Tracker**; planned WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
 | **FINANCE DATA** | **Data Uploads** (one home for every governed input — see §6.9) **· Financial Statements Upload & Refresh** (board-pack layout + the Joiin statutory refresh) **· Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
 | **GOVERN** | **Users & Roles · SOP Library** (this Handbook) **· Report Builder**; planned Permissions, Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. *(Govern is controls-only — the finance-data feeds moved to FINANCE DATA.)* |
@@ -472,6 +472,28 @@ AI commentary → generate → review → validate → approve → export → ar
 Franchise Deck monthly after MA close (§5.6); Finance Board Deck monthly/quarterly;
 Budget & Forecasts Deck each planning cycle. The board deck (§5.13) and trade deck
 (§5.14) are now produced here via their templates.
+
+### 5.16 Purchase Order Tracker (OPERATE)
+
+**OPERATE → Purchase Order Tracker** (`/operate/po-tracker`) lets a department raise
+a P.O after generating the number in Xero. The build:
+
+1. **Generate the number in Xero first**, then record the P.O here — date, supplier,
+   payment terms & date, currency, payment value, VAT, category, **Xero P.O number**,
+   fulfilment date & period, and the **department** (departmental spend tag).
+2. **Marketing spend** asks one extra question — *is it part of the marketing levy?*
+   **Yes** → allocate to stores with **no invoice**; **No** → **finance issues an
+   invoice**. The chosen outcome is recorded on the P.O.
+3. **Recharge to stores** (optional): tick **all stores** or pick individually, then
+   set each store's **% of the total P.O value**. An **Equal split** button spreads it
+   evenly across the selected stores; the running total is shown live and **must equal
+   100%** — a P.O cannot go to sign-off until it does.
+4. **Save draft** at any point; **Create & submit for sign-off** once complete. A
+   submitted P.O rests at **awaiting department-head sign-off** — the sign-off itself
+   is enforced by the forthcoming **user controls**.
+
+The P.O and its recharge allocation are governed data (`finance.purchase_order` +
+`finance.purchase_order_recharge`, migration 046), audited on every change.
 
 ---
 
