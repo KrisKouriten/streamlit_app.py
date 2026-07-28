@@ -64,7 +64,9 @@ Design principles that everything else follows:
 
 Sign in at the app URL with your Miniso UK email and password. Sessions last 12
 hours; **Sign out** is in the top-right of every screen, beside your name. There is
-no self-registration — an ADMIN creates accounts under **GOVERN → Users & roles**.
+no self-registration — an ADMIN creates accounts under **GOVERN → Users, Roles &
+Permissions**. That one screen carries three things: **Users & roles** (who can
+sign in, their role, their department), **Department sign-off**, and **Access**.
 
 **Roles** (a user can hold more than one; new users default to FINANCE):
 
@@ -83,8 +85,18 @@ no self-registration — an ADMIN creates accounts under **GOVERN → Users & ro
 - **Load forecast inputs / procurement budgets:** ADMIN or FINANCE.
 - **Manage users:** ADMIN only.
 
-Everyone signed in can view all dashboards; the controls above gate *actions*, not
-*visibility*.
+**Department sign-off.** Each department has one or more named approvers — the
+people who sign off that department's budgets and purchase orders (e.g. Operations
+= its department head; Finance can hold more than one). Set them under **GOVERN →
+Users, Roles & Permissions → Department sign-off**; a department may have several.
+
+**Access (who sees what).** By default everyone signed in sees every navigation
+section. An ADMIN can narrow that per department under **Users, Roles & Permissions
+→ Access**: pick a department, then tick the navigation headers and sub-headers it
+should see. Unticking a header hides the whole section; with the header ticked you
+can still hide individual sub-headers. Admins always see everything regardless.
+The controls in the table above gate *actions*; Access gates *visibility* per
+department, so the two work together.
 
 ---
 
@@ -118,7 +130,7 @@ route-preservation record and the documented overlaps live in
 | **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · Purchase Order Tracker**; planned WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
 | **FINANCE DATA** | **Data Uploads** (one home for every governed input — see §6.9) **· Financial Statements Upload & Refresh** (board-pack layout + the Joiin statutory refresh) **· Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
-| **GOVERN** | **Users & Roles · SOP Library** (this Handbook) **· Report Builder**; planned Permissions, Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. *(Govern is controls-only — the finance-data feeds moved to FINANCE DATA.)* |
+| **GOVERN** | **Users, Roles & Permissions** (users, roles, department sign-off and per-department page access) **· SOP Library** (this Handbook) **· Report Builder**; planned Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. *(Govern is controls-only — the finance-data feeds moved to FINANCE DATA.)* |
 
 The **legacy section hubs** (`/dashboards`, `/plan`, `/operate`, `/perform`,
 `/govern`, `/ai`) remain reachable at their original routes as breadcrumb roots —

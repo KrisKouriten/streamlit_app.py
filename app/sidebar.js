@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NAV_SECTIONS, activeHref, resolveHref } from "../lib/nav-registry";
+import { visibleNav } from "../lib/nav-visibility-rules";
 
 /* Persistent left navigation — every section and module, always present, so
    moving between dashboards and operational modules never routes through a
@@ -11,8 +12,9 @@ import { NAV_SECTIONS, activeHref, resolveHref } from "../lib/nav-registry";
    Planned modules carry a "soon" chip and open their planned page. Narrow
    screens get a drawer (the top-bar menu button dispatches "fos:sidebar"). */
 
-export default function Sidebar() {
+export default function Sidebar({ hiddenNav = [] } = {}) {
   const path = usePathname();
+  const sections = visibleNav(NAV_SECTIONS, hiddenNav);
   const [open, setOpen] = useState({});
   const [drawer, setDrawer] = useState(false);
   const [narrow, setNarrow] = useState(false);
@@ -47,7 +49,7 @@ export default function Sidebar() {
 
   const body = (
     <nav aria-label="Primary" style={{ width: 246, flex: "none", height: "100%", overflowY: "auto", padding: "14px 10px 40px", display: "flex", flexDirection: "column", gap: 2 }}>
-      {NAV_SECTIONS.map((s) => {
+      {sections.map((s) => {
         const opened = isOpen(open, s.key);
         const hasActive = s.items.some((it) => resolveHref(it) === active);
         return (
