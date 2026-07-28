@@ -552,28 +552,53 @@ per user in **GOVERN → Users, Roles & Permissions**.
 
 ### 5.17 Departmental Budgets (PLAN — HO)
 
-**PLAN — HO → Departmental Budgets** (`/plan/dept-budget`) is where a department head
-builds their department's budget for the year. The build:
+**PLAN — HO → Departmental Budgets** (`/plan/dept-budget`) is a **budget control
+centre**, not just a grid. A department head doesn't land in a wall of input cells —
+they open on a summary of where the budget stands, then work through a guided journey.
 
-1. **Create a budget** — pick the **department**, the **budget year** and a **version
-   label** (versions are kept, never overwritten). It opens seeded with a **starter set
-   of cost lines** for that department (editable), so nobody starts from a blank sheet.
-2. **Build the grid** — cost lines are grouped into **categories** down the side and
-   the **12 months (Jan–Dec)** run across the top. Enter each line's monthly phasing;
-   the **full-year total**, the **category subtotals**, the **monthly column totals** and
-   the **grand total** all calculate live, alongside a **prior-year** comparison and the
-   **variance**. Add or remove lines and categories; the **≡** button spreads a full-year
-   figure evenly across the 12 months.
-3. **Save** while it is a **Draft**. **Submit for sign-off** when it is ready — it moves
-   to **Submitted** and locks. The department's **sign-off approvers** (set in GOVERN →
-   Users, Roles & Permissions → Department sign-off), or an admin, then **Approve** it.
-   **Reopen** returns an approved/submitted budget to Draft for further edits.
+**Create a budget** — pick the **department**, **budget year** and a **version label**
+(versions are kept, never overwritten). It opens seeded with a **starter set of cost
+lines** for that department (editable).
 
-Who can do what: **Admins and Finance** can build any department's budget; a department
-member can build **their own** department's. **Approval** is limited to that department's
-listed sign-off approvers (or an admin). Budgets are governed data
-(`finance.dept_budget` + `finance.dept_budget_line`, seeded from
-`finance.dept_budget_template`, migration 049) and audited on every change.
+**The executive summary** (top of every budget): **Target** (the top-down envelope
+Finance sets) · **Proposed** (entered so far) · **Remaining to allocate** · **Prior
+year** · **vs prior year** (£ and %) · **Completion %** · and the **workflow stage**.
+
+**The guided journey** has three tabs:
+- **Overview** — the monthly spend profile, spend by category, the top increases and
+  reductions vs prior year, outstanding validation issues, and the approval timeline.
+- **Financial View** — the grid, now with an **Annual / Quarterly / Monthly** toggle
+  (it no longer forces all twelve months on screen). In Annual view you type a
+  full-year figure and it spreads evenly; expand a line for month-by-month phasing,
+  its prior-year actual and its **commentary**. This is the Finance detail view.
+- **Review & Submit** — pre-submission checks (completion, commentary on material
+  lines, within target, all lines named) and the approval workflow.
+
+**Validation & commentary.** A line is *material* when its full-year value is ≥£10,000
+or it moves ≥10% vs prior year; material lines **require commentary** (business purpose
+/ explanation of change), and the summary flags anything outstanding.
+
+**Approval workflow** — five stages: **Draft → Finance Review → Department Approval →
+SLT Approval → Locked**, and any review stage can **return to Draft** with a note.
+Each transition is recorded on the budget's timeline. Who runs each step:
+- *Submit for Finance review* — the department owner (or Admin/Finance).
+- *Finance Review* — Admin/Finance.
+- *Department Approval* — the department's **sign-off approvers** (GOVERN → Users,
+  Roles & Permissions → Department sign-off), or an admin.
+- *SLT Approval & lock* — an admin.
+- *Reopen* a locked budget — Admin/Finance.
+
+Only a **Draft** is editable; later stages are read-only until returned or reopened.
+The top-down **target** is set by Finance/Admin. Budgets are governed data
+(`finance.dept_budget` + `finance.dept_budget_line` + the `dept_budget_event`
+timeline, seeded from `finance.dept_budget_template`, migrations 049–050) and audited
+on every change.
+
+*Coming next (Phase 2):* an **operational planning view** — build the budget around
+campaigns, projects and contracts (with expected incremental margin / contribution),
+and have the system generate the cost lines and phasing automatically. The grid above
+becomes the Finance output view. Phase 3 adds AI suggestions, scenarios and driver-based
+planning.
 
 ---
 
