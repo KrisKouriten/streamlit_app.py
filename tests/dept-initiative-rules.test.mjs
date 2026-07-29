@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   MONTH_KEYS, defaultKindFor, phaseCost, costAnnual, generateLines,
   initiativeInvestment, commercialSummary, validateInitiative,
-  costAmount, zeroBasedDetail,
+  costAmount, zeroBasedDetail, objectiveOutcome,
 } from "../lib/dept-initiative-rules.js";
 
 const sumP = (arr) => arr.reduce((a, b) => a + Math.round(b * 100), 0);
@@ -13,6 +13,17 @@ test("defaultKindFor maps departments to their operational unit", () => {
   assert.equal(defaultKindFor("Architecture & Build"), "PROJECT");
   assert.equal(defaultKindFor("Logistics"), "CONTRACT");
   assert.equal(defaultKindFor("Nowhere"), "INITIATIVE");
+});
+
+test("objectiveOutcome — maps objective to its expected-outcome metric", () => {
+  assert.deepEqual(objectiveOutcome("Increase Sales"), { key: "sales", label: "Expected incremental sales", unit: "£", kind: "money" });
+  assert.equal(objectiveOutcome("Increase Margin").kind, "money");
+  assert.equal(objectiveOutcome("Increase Footfall").unit, "visits");
+  assert.equal(objectiveOutcome("Increase Conversion").unit, "ppt");
+  assert.equal(objectiveOutcome("Increase ECOM Traffic").kind, "count");
+  // Internal / Other / a custom-added objective → free text
+  assert.equal(objectiveOutcome("Internal business objective").kind, "text");
+  assert.equal(objectiveOutcome("Something bespoke").kind, "text");
 });
 
 test("costAmount — quantity × unit cost when both present, else the lump sum", () => {

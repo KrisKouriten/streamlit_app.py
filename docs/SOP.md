@@ -677,8 +677,12 @@ from a shared dropdown — *Increase Sales / Margin / Footfall / Conversion / Cu
 Engagement / Brand Awareness / ECOM Traffic / Internal business objective / Other*,
 with **+ Add new…** to extend the list), owner, active **month range**, scope, an
 expenditure **classification** (committed / BAU / growth / strategic / discretionary /
-contingency) and its expected commercial outcome (**incremental sales, incremental
-margin** → **contribution** = margin less investment). Under it you list **cost
+contingency) and a single **expected outcome that follows the objective** — £ for
+*Increase Sales / Margin*, a unit figure for *Footfall* (visits), *Conversion* (ppt),
+*Engagement / Brand Awareness* (%) and *ECOM Traffic* (sessions), or free text for
+*Internal business objective / Other*. For £-margin objectives this still yields a
+**contribution** (= margin less investment); the commercial tiles adapt to whichever
+objectives are in play. Under it you list **cost
 items**, each with a **phasing** method (even across the active months · one-off month
 · quarterly · manual). The system then **generates the financial cost lines and
 monthly phasing automatically** and pushes them into the grid, where they appear
