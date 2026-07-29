@@ -76,7 +76,9 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
       const res = await fetch(`/api/purchase-orders/${poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Action failed");
-      setRowMsg((s) => ({ ...s, [poId]: successMsg }));
+      let msg = successMsg;
+      if (j.recharge?.created) msg += ` ${j.recharge.created} recharge row${j.recharge.created === 1 ? "" : "s"} posted to Intercompany${j.recharge.unmatched ? ` (${j.recharge.unmatched} need an entity)` : ""}.`;
+      setRowMsg((s) => ({ ...s, [poId]: msg }));
       router.refresh();
     } catch (e) { setRowErr((s) => ({ ...s, [poId]: e.message })); }
     finally { setBusy(null); }
@@ -168,7 +170,15 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                         <td style={{ padding: "8px 8px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           <input type="checkbox" checked={selected.has(String(p.po_id))} onChange={(e) => toggleRow(p.po_id, e.target.checked)} />
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{p.xero_po_number}</td>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                          {p.xero_po_number}
+                          {p.recharge_enabled && (
+                            <div title={p.finance_status === "CLOSED" ? "Recharge auto-posted to Intercompany · Inventory & Recharges on close" : "Set up to be recharged — posts to Intercompany on close"}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "var(--accent)", background: "var(--accent-bg)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)", whiteSpace: "nowrap" }}>
+                              ⇄ Recharge · {p.recharge_ho_only ? "HO only" : "stores"}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{p.department}</td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{p.supplier}</td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>{money(p.payment_value, p.currency)}</td>

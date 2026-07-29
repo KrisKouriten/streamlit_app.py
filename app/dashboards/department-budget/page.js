@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "../../../lib/auth";
+import { getSession, isAdmin, hasRole } from "../../../lib/auth";
 import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
@@ -26,7 +26,10 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
 
   const departments = await departmentList();
   const myDept = await getUserDepartment(session.id);
-  const department = sp?.dept || myDept || departments[0] || null;
+  // Finance/Exec/Admin may view any department; everyone else is locked to their
+  // own — a ?dept for another department is ignored, not shown.
+  const canViewAll = isAdmin(session) || hasRole(session, "FINANCE", "EXEC");
+  const department = canViewAll ? (sp?.dept || myDept || departments[0] || null) : (myDept || null);
   const thisYear = new Date().getFullYear();
   const year = Number(sp?.year) || thisYear;
   const years = [thisYear + 1, thisYear, thisYear - 1];
@@ -52,7 +55,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
         <EmptyState title="No departments yet">Seed the governed departments (migration 047) to use this dashboard.</EmptyState>
       ) : (
         <>
-          <DeptDashControls departments={departments} department={department} year={year} years={years} />
+          <DeptDashControls departments={departments} department={department} year={year} years={years} canViewAll={canViewAll} />
 
           <StatRow>
             <Stat label="Budget (proposed)" value={d.hasBudget ? money(proposed, { compact: true }) : "—"}

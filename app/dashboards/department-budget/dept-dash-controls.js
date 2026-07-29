@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 
 /* Department + year picker for the Departmental Budget Dashboard. Navigates via
    query params so the page stays a server component. */
-export default function DeptDashControls({ departments, department, year, years }) {
+export default function DeptDashControls({ departments, department, year, years, canViewAll = true }) {
   const router = useRouter();
   const go = (d, y) => router.push(`/dashboards/department-budget?dept=${encodeURIComponent(d)}&year=${y}`);
   const sel = { fontSize: 13, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
@@ -11,9 +11,13 @@ export default function DeptDashControls({ departments, department, year, years 
   return (
     <div className="fos-card" style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "10px 14px", marginBottom: 18 }}>
       <span style={lab}>Department</span>
-      <select value={department || ""} onChange={(e) => go(e.target.value, year)} style={{ ...sel, minWidth: 200 }}>
-        {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-      </select>
+      {canViewAll ? (
+        <select value={department || ""} onChange={(e) => go(e.target.value, year)} style={{ ...sel, minWidth: 200 }}>
+          {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+      ) : (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{department || "—"}</span>
+      )}
       <span style={lab}>Year</span>
       <select value={year} onChange={(e) => go(department, e.target.value)} style={sel}>
         {years.map((y) => <option key={y} value={y}>{y}</option>)}
