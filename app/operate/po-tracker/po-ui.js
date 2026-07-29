@@ -1,10 +1,12 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
-  invoiceOutcome, canSubmitForSignoff,
+  invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, challengeReasonLabels,
+  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
 } from "../../../lib/po-rules";
+import DateField from "../../finance-os/date-field";
 
 const field = { display: "flex", flexDirection: "column", gap: 5 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -13,16 +15,27 @@ const card = { background: "var(--surface)", border: "1px solid var(--line)", bo
 const btn = (bg, fg = "#fff") => ({ fontSize: 13, fontWeight: 650, padding: "8px 16px", borderRadius: 9, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const money = (v, c = "GBP") => (v == null || v === "" ? "—" : `${c === "GBP" ? "£" : c + " "}${Number(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`);
-const STATUS_TONE = { DRAFT: "var(--muted)", PENDING_SIGNOFF: "var(--amber)", APPROVED: "var(--green)", REJECTED: "var(--red)", CANCELLED: "var(--faint)" };
+const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
+const TONE_BG = { muted: "var(--raise)", red: "var(--red-bg)", amber: "var(--amber-bg)", green: "var(--green-bg)", accent: "var(--accent-bg)" };
+
+function StatusPill({ po }) {
+  const st = displayStatus(po);
+  return (
+    <span style={{ display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: TONE_FG[st.tone], background: TONE_BG[st.tone], border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+      {st.label}
+    </span>
+  );
+}
 
 const EMPTY = {
   po_date: "", supplier: "", payment_terms: "", payment_date: "", currency: "GBP",
   payment_value: "", po_category: "", xero_po_number: "",
   fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
+  marketing_budget_category: "", marketing_campaign: "",
 };
 
-export default function PoUI({ initialPos, departments, stores, me }) {
+export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [] }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -30,9 +43,25 @@ export default function PoUI({ initialPos, departments, stores, me }) {
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
   const [rowErr, setRowErr] = useState({}); // per-PO submit errors
+  const [dueTouched, setDueTouched] = useState(false); // has the user hand-set the due date?
+
+  const approverSet = useMemo(() => new Set((approverDepts || []).map((d) => (d || "").toLowerCase())), [approverDepts]);
+  const canApprove = (po) => isAdmin || approverSet.has((po.department || "").toLowerCase());
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const setDate = (k) => (iso) => setF((s) => ({ ...s, [k]: iso }));
   const setChk = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.checked }));
+
+  // Due date = P.O date + payment-term days, unless the user has set it by hand.
+  useEffect(() => {
+    if (dueTouched) return;
+    const days = termDaysFrom(f.payment_terms);
+    const due = dueDateFrom(f.po_date, days);
+    if (due && due !== f.payment_date) setF((s) => ({ ...s, payment_date: due }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.po_date, f.payment_terms, dueTouched]);
+
+  const isMarketingDept = (f.department || "").toLowerCase() === "marketing";
 
   const total = rechargeTotal(recharge);
   const rErr = f.recharge_enabled ? rechargeError(recharge) : null;
@@ -73,7 +102,7 @@ export default function PoUI({ initialPos, departments, stores, me }) {
         if (!r2.ok) throw new Error(j2.error || "Created, but could not submit for sign-off");
       }
       setMsg(submitAfter ? "P.O created and submitted for department-head sign-off." : "P.O saved as draft.");
-      setF(EMPTY); setRecharge([]);
+      setF(EMPTY); setRecharge([]); setDueTouched(false);
       router.refresh();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -89,6 +118,11 @@ export default function PoUI({ initialPos, departments, stores, me }) {
     } catch (e) { setRowErr((s) => ({ ...s, [poId]: e.message })); }
   }
 
+  function deletePo(p) {
+    if (!window.confirm(`Delete P.O ${p.xero_po_number || p.po_id}? This removes the request and its store allocations. This cannot be undone.`)) return;
+    poOp(p.po_id, "delete");
+  }
+
   return (
     <div>
       {/* ---- New P.O ---- */}
@@ -97,15 +131,17 @@ export default function PoUI({ initialPos, departments, stores, me }) {
         <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 16 }}>Generate the P.O number in Xero first, then record it here. All fields marked are required.</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
-          <label style={field}><span style={labelSt}>Date *</span><input type="date" style={inputSt} value={f.po_date} onChange={set("po_date")} /></label>
+          <label style={field}><span style={labelSt}>Date *</span><DateField value={f.po_date} onChange={setDate("po_date")} /></label>
           <label style={field}><span style={labelSt}>Supplier *</span><input style={inputSt} value={f.supplier} onChange={set("supplier")} /></label>
           <label style={field}><span style={labelSt}>Payment terms</span><input style={inputSt} placeholder="e.g. 30 days" value={f.payment_terms} onChange={set("payment_terms")} /></label>
-          <label style={field}><span style={labelSt}>Payment date</span><input type="date" style={inputSt} value={f.payment_date} onChange={set("payment_date")} /></label>
+          <label style={field}><span style={labelSt}>Due date</span><DateField value={f.payment_date} onChange={(iso) => { setDueTouched(true); setDate("payment_date")(iso); }} />
+            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{dueTouched ? "set manually" : "auto: P.O date + payment terms"}</span>
+          </label>
           <label style={field}><span style={labelSt}>Currency *</span><select style={inputSt} value={f.currency} onChange={set("currency")}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Net value (£) *</span><input type="number" min="0" step="0.01" style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
           <label style={field}><span style={labelSt}>P.O category *</span><select style={inputSt} value={f.po_category} onChange={set("po_category")}><option value="">—</option>{PO_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Xero P.O number *</span><input style={inputSt} placeholder="e.g. PO-1042" value={f.xero_po_number} onChange={set("xero_po_number")} /></label>
-          <label style={field}><span style={labelSt}>Fulfilment start date</span><input type="date" style={inputSt} value={f.fulfilment_start_date} onChange={set("fulfilment_start_date")} /></label>
+          <label style={field}><span style={labelSt}>Fulfilment start date</span><DateField value={f.fulfilment_start_date} onChange={setDate("fulfilment_start_date")} /></label>
           <label style={field}><span style={labelSt}>Fulfilment period (days)</span><input type="number" min="0" step="1" style={inputSt} placeholder="e.g. 30" value={f.fulfilment_days} onChange={set("fulfilment_days")} /></label>
           <label style={field}><span style={labelSt}>Department *</span>
             <select style={inputSt} value={f.department} onChange={set("department")}>
@@ -114,6 +150,29 @@ export default function PoUI({ initialPos, departments, stores, me }) {
             </select>
           </label>
         </div>
+
+        {/* Marketing budget link — only when the department is Marketing */}
+        {isMarketingDept && (
+          <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 10, border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--line))", background: "var(--accent-bg)" }}>
+            <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 3 }}>Marketing budget link</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 12 }}>Tie this P.O to the Marketing budget so spend reports against plan on the Marketing dashboard.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+              <label style={field}><span style={labelSt}>Budget area</span>
+                <select style={inputSt} value={f.marketing_budget_category} onChange={set("marketing_budget_category")}>
+                  <option value="">— choose —</option>
+                  {MARKETING_BUDGET_LINKS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label style={field}><span style={labelSt}>Campaign / initiative</span>
+                <input style={inputSt} list="mk-campaigns" placeholder="e.g. Star Wars, Toy Story 5" value={f.marketing_campaign} onChange={set("marketing_campaign")} />
+                <datalist id="mk-campaigns">
+                  {marketingCampaigns.map((c) => <option key={c} value={c} />)}
+                </datalist>
+                <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{marketingCampaigns.length ? "Pick a live campaign from the Marketing budget, or type a new one." : "Type the campaign name (no budget campaigns set up yet)."}</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Marketing → levy */}
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--hairline)" }}>
@@ -207,7 +266,10 @@ export default function PoUI({ initialPos, departments, stores, me }) {
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
-                {initialPos.map((p) => (
+                {initialPos.map((p) => {
+                  const del = canDeletePo(p, { isAdmin });
+                  const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
+                  return (
                   <tr key={p.po_id}>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.xero_po_number}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
@@ -215,20 +277,44 @@ export default function PoUI({ initialPos, departments, stores, me }) {
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.po_category}{p.is_marketing ? (p.marketing_levy ? " · levy" : " · invoice") : ""}</td>
                     <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{money(p.payment_value, p.currency)}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.recharge_enabled ? "Yes" : "—"}</td>
-                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", color: STATUS_TONE[p.status], fontWeight: 600 }}>{p.status.replace(/_/g, " ")}</td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>
+                      <StatusPill po={p} />
+                      {challengeLabels.length > 0 && (
+                        <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 200, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeLabels.join(" · ")}</div>
+                      )}
+                    </td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>
-                      {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
-                      {p.status === "PENDING_SIGNOFF" && <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department-head sign-off <button style={{ ...ghost, marginLeft: 6 }} onClick={() => poOp(p.po_id, "return")}>Return to draft</button></span>}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
+                        {p.status === "PENDING_SIGNOFF" && canApprove(p) && (
+                          <>
+                            <button style={btn("var(--green)")} onClick={() => poOp(p.po_id, "approve")}>Approve</button>
+                            <button style={ghost} onClick={() => poOp(p.po_id, "reject")}>Reject</button>
+                          </>
+                        )}
+                        {p.status === "PENDING_SIGNOFF" && !canApprove(p) && (
+                          <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department-head sign-off
+                            <button style={{ ...ghost, marginLeft: 6 }} onClick={() => poOp(p.po_id, "return")}>Return to draft</button>
+                          </span>
+                        )}
+                        {p.status === "APPROVED" && p.finance_status !== "CLOSED" && p.finance_status !== "CHALLENGED" && (
+                          <span style={{ fontSize: 11.5, color: "var(--faint)" }}>With Finance</span>
+                        )}
+                        {del.ok
+                          ? <button style={{ ...ghost, color: "var(--red)", borderColor: "color-mix(in srgb, var(--red) 40%, var(--line))" }} onClick={() => deletePo(p)}>Delete</button>
+                          : <span title={del.reason} style={{ fontSize: 11, color: "var(--faint)" }}>🔒 admin-only delete</span>}
+                      </div>
                       {rowErr[p.po_id] && <div style={{ color: "var(--red)", fontSize: 11.5, marginTop: 4 }}>{rowErr[p.po_id]}</div>}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12 }}>
-          Department-head sign-off is enforced by user controls (coming soon); for now a P.O rests at “awaiting sign-off”.
+        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
+          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red until resolved.
         </div>
       </div>
     </div>

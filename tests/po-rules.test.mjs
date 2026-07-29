@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   validatePo, rechargeTotal, rechargeError, equalSplit, rechargeAmounts,
   invoiceOutcome, canSubmitForSignoff, poTransitionError, isEditablePo, PO_STATUSES, PO_TRANSITIONS,
+  displayStatus, canDeletePo, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
+  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -93,4 +95,65 @@ test("isEditablePo", () => {
   assert.equal(isEditablePo("REJECTED"), true);
   assert.equal(isEditablePo("PENDING_SIGNOFF"), false);
   assert.equal(isEditablePo("APPROVED"), false);
+});
+
+test("displayStatus reflects request lifecycle before sign-off, finance after", () => {
+  assert.equal(displayStatus({ status: "DRAFT" }).label, "Draft");
+  assert.equal(displayStatus({ status: "PENDING_SIGNOFF" }).label, "Awaiting sign-off");
+  assert.equal(displayStatus({ status: "REJECTED" }).code, "REJECTED");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "OPEN" }).label, "Open");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "CHALLENGED" }).label, "Challenged");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "CLOSED" }).label, "Closed");
+});
+
+test("canDeletePo: pre-signoff anyone; post-signoff admin only", () => {
+  assert.equal(canDeletePo({ status: "DRAFT" }, { isAdmin: false }).ok, true);
+  assert.equal(canDeletePo({ status: "PENDING_SIGNOFF" }, { isAdmin: false }).ok, true);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "OPEN" }, { isAdmin: false }).ok, false);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "OPEN" }, { isAdmin: true }).ok, true);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "CLOSED" }, { isAdmin: false }).ok, false);
+});
+
+test("financeActionError requires a signed-off P.O; blocks double-close", () => {
+  assert.match(financeActionError("close", { status: "PENDING_SIGNOFF" }), /not been signed off/);
+  assert.equal(financeActionError("close", { status: "APPROVED", finance_status: "OPEN" }), null);
+  assert.match(financeActionError("close", { status: "APPROVED", finance_status: "CLOSED" }), /already closed/);
+  assert.equal(isSignedOff({ status: "APPROVED" }), true);
+});
+
+test("committedAmount uses invoice net if present, else P.O value", () => {
+  assert.equal(committedAmount({ payment_value: 1000, invoice_amount: 950 }), 950);
+  assert.equal(committedAmount({ payment_value: 1000 }), 1000);
+  assert.equal(committedAmount({ payment_value: 1000, invoice_amount: "" }), 1000);
+});
+
+test("challengeReasonLabels maps codes (string or array) to labels", () => {
+  assert.deepEqual(challengeReasonLabels(["INVOICE_VALUE"]), ["Invoice value — different to the P.O"]);
+  assert.equal(challengeReasonLabels("PO_DETAILS,SPEND_VS_BUDGET").length, 2);
+  assert.deepEqual(challengeReasonLabels([]), []);
+});
+
+test("termDaysFrom parses the number of days from free text", () => {
+  assert.equal(termDaysFrom("30"), 30);
+  assert.equal(termDaysFrom("30 days"), 30);
+  assert.equal(termDaysFrom("Net 45"), 45);
+  assert.equal(termDaysFrom("net-60"), 60);
+  assert.equal(termDaysFrom(""), null);
+  assert.equal(termDaysFrom(null), null);
+  assert.equal(termDaysFrom("on receipt"), null);
+});
+
+test("dueDateFrom adds term days to the P.O date (UTC, date-only)", () => {
+  assert.equal(dueDateFrom("2026-07-01", 30), "2026-07-31");
+  assert.equal(dueDateFrom("2026-07-01", 0), "2026-07-01");
+  assert.equal(dueDateFrom("2026-01-31", 1), "2026-02-01");   // month rollover
+  assert.equal(dueDateFrom("2026-12-15", 30), "2027-01-14");  // year rollover
+  assert.equal(dueDateFrom("", 30), null);
+  assert.equal(dueDateFrom("2026-07-01", null), null);
+});
+
+test("MARKETING_BUDGET_LINKS covers the expected budget parts", () => {
+  assert.ok(MARKETING_BUDGET_LINKS.includes("Campaign costs"));
+  assert.ok(MARKETING_BUDGET_LINKS.includes("One-off projects"));
+  assert.ok(MARKETING_BUDGET_LINKS.includes("New store openings"));
 });
