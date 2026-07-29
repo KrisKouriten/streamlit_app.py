@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
-import { getSession } from "../../../lib/auth";
-import { getUserDepartment } from "../../../lib/dept-budget";
+import { getSession, isAdmin } from "../../../lib/auth";
+import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
-import { challengeReasonLabels } from "../../../lib/po-rules";
+import { challengeReasonLabels, displayStatus, committedAmount } from "../../../lib/po-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
+import DeptApprovals from "./dept-approvals";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,10 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
 
   const d = department ? await getDepartmentDashboard(department, year) : { ready: true, hasBudget: false };
 
+  // Can this viewer sign off the department's P.Os? (approver for the dept, or admin)
+  const approverEmails = department ? (await getApproverEmails(department).catch(() => [])).map((e) => (e || "").toLowerCase()) : [];
+  const canApprove = isAdmin(session) || approverEmails.includes((session.email || "").toLowerCase());
+
   const s = d.summary;
   const committed = d.pos?.ytdCommitted || 0;
   const proposed = s?.proposed || 0;
@@ -40,8 +45,8 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
 
   return (
     <div className="fos-shell">
-      <PageHeader crumb="Departmental Budget" title="Departmental Budget Dashboard"
-        right={department ? `${department} · ${year}` : "No department"} />
+      <PageHeader crumb="Department Dashboards" title={department ? `${department} Dashboard` : "Department Dashboard"}
+        right={department ? `Budget & purchase orders · ${year}` : "No department"} />
 
       {!departments.length ? (
         <EmptyState title="No departments yet">Seed the governed departments (migration 047) to use this dashboard.</EmptyState>
@@ -66,6 +71,13 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
             &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
           </div>
+
+          {/* Awaiting sign-off — the budget-holder's action queue */}
+          {d.pos?.awaitingCount > 0 && (
+            <Panel title={canApprove ? "Awaiting your sign-off" : "Awaiting department-head sign-off"} note={`${d.pos.awaitingCount} P.O${d.pos.awaitingCount === 1 ? "" : "s"}`}>
+              <DeptApprovals pos={d.pos.awaiting} canApprove={canApprove} />
+            </Panel>
+          )}
 
           {/* Budget by category */}
           <Panel title="Budget by category" note={d.hasBudget ? `${STAGE_LABEL[d.budget.status] || d.budget.status} · ${d.budget.version_label}` : undefined}>
@@ -118,6 +130,24 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               ]}
               rows={d.pos?.open || []}
               empty={`No open purchase orders for ${department}.`}
+            />
+          </Panel>
+
+          {/* P.O register — every signed-off P.O for this department */}
+          <Panel title="P.O register" note={`${d.pos?.registerCount || 0} signed off`}>
+            <Table
+              columns={[
+                { label: "Xero P.O", render: (r) => r.xero_po_number || "—" },
+                { label: "Approved", render: (r) => (r.approved_at ? new Date(r.approved_at).toLocaleDateString("en-GB") : "—") },
+                { label: "Supplier", render: (r) => r.supplier || "—" },
+                { label: department === "Marketing" ? "Campaign" : "Category", render: (r) => (department === "Marketing" ? (r.marketing_campaign || r.po_category || "—") : (r.po_category || "—")) },
+                { label: "Net value", align: "right", render: (r) => money(r.payment_value) },
+                { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
+                { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(committedAmount(r)) : "—") },
+                { label: "Status", render: (r) => { const st = displayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
+              ]}
+              rows={d.pos?.register || []}
+              empty={`No signed-off purchase orders for ${department} yet.`}
             />
           </Panel>
         </>

@@ -34,6 +34,8 @@ export async function GET(request) {
       "Committed £": st.code === "CLOSED" ? committedAmount(p) : "",
       Challenge: p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons).join("; ") : "",
       "Marketing levy": p.is_marketing ? (p.marketing_levy ? "Levy" : "Non-levy (invoice)") : "",
+      "Budget area": p.marketing_budget_category || "",
+      Campaign: p.marketing_campaign || "",
       "Invoice action": p.invoice_action || "",
     };
     if (p.recharge && p.recharge.length) {

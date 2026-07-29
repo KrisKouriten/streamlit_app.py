@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, isAdmin } from "../../../lib/auth";
-import { listPos, getDepartments } from "../../../lib/purchase-orders";
+import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
 import { getStoreList } from "../../../lib/store-sales";
 import { listSignoffs } from "../../../lib/governance";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
@@ -20,11 +20,12 @@ export default async function PurchaseOrderRequests() {
   const admin = isAdmin(session);
   const email = (session.email || "").toLowerCase();
 
-  const [list, departments, stores, signoffs] = await Promise.all([
+  const [list, departments, stores, signoffs, marketingCampaigns] = await Promise.all([
     listPos({ limit: 100 }),
     getDepartments(),
     getStoreList().catch(() => []),
     listSignoffs().catch(() => []),
+    marketingCampaignSuggestions().catch(() => []),
   ]);
 
   // Departments this user can sign off for (from governance.department_signoff).
@@ -50,6 +51,7 @@ export default async function PurchaseOrderRequests() {
           me={session.email || session.name}
           isAdmin={admin}
           approverDepts={approverDepts}
+          marketingCampaigns={marketingCampaigns}
         />
       )}
     </div>

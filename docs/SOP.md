@@ -137,7 +137,7 @@ route-preservation record and the documented overlaps live in
 | Section | What lives here (live modules in **bold**) |
 |---|---|
 | **HOME** | **Executive Intelligence Hub** (position & attention) **· Corporate Reporting Centre** (governed reporting decks, §5.15); My Finance Home, Notifications, Global Search (⌘K). |
-| **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · Departmental Budget · Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
+| **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · a Department Dashboard per department** (Marketing, Finance, Merchandising, Operations, HR, Logistics, Architecture & Build — budget + P.O register + approvals, §5.16/§5.17) **· Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
 | **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects · Departmental Budgets · Purchase Order Requests** (raise + department-head sign-off, §5.16); planned Budget Builder, Store/Wholesale/Franchise planning, Project budgets, Consolidated P&L. |
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
 | **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · P.O Summary + Close** (Finance: record invoices, close/challenge, §5.16); planned WAC, Finance Projects. |
@@ -574,10 +574,43 @@ The seven operating departments (Finance, Marketing, Merchandising, Operations, 
 Logistics, Architecture & Build) are governed in `core.dim_department`. The finance
 lifecycle (`finance_status` OPEN → CHALLENGED / CLOSED, plus invoice, approval, close
 and challenge stamps) is added by migration **052**. **Committed spend** on the
-Departmental Budget Dashboard is **P.O-committed** (closed P.Os) — not GL actuals — and
-is labelled as such.
+department dashboard is **P.O-committed** (closed P.Os) — not GL actuals — and is
+labelled as such.
 
-### 5.17 Departmental Budgets (PLAN — HO)
+**C. Request-form aids (migration 053)**
+
+- **Due date** — the old "Payment date" field is now **Due date**, auto-computed as
+  **P.O date + payment-term days** (parsed from the payment-terms text, e.g. "30 days").
+  It stays editable — set it by hand and the auto-calc steps aside.
+- **Typeable dates** — all P.O date fields are DD/MM/YYYY text boxes you can freely
+  type, backspace and correct anywhere, with a calendar button for pointer entry
+  (replacing the segmented native picker where a mis-typed digit couldn't be deleted).
+- **Marketing budget link** — when the department is **Marketing**, an extra box
+  captures the **budget area** (Campaign costs / One-off projects / New store openings /
+  BAU / Other) and the **campaign / initiative** (e.g. *Star Wars*, *Toy Story 5*). The
+  campaign list is suggested live from the Marketing budget's campaigns (Plan — HO →
+  Departmental Budgets initiatives); a new name can always be typed. Stored on the P.O
+  and shown in the Excel export and on the Marketing dashboard.
+
+### 5.17 Department Dashboards (DASHBOARDS)
+
+Each operating department has its **own dashboard** — the current screen renamed to
+**"{Department} Dashboard"** (Marketing, Finance, Merchandising, Operations, HR,
+Logistics, Architecture & Build), one nav entry each under **Dashboards**. It is one
+engine keyed by `?dept=`, so every department reads the same way. All of a
+department's P.O activity — requests **and** the Summary + Close outcomes — rolls up
+here from the department chosen when each P.O was raised:
+
+- **Headline tiles** — budget (proposed & target), YTD committed spend (closed P.Os),
+  under challenge, open P.Os, budget remaining.
+- **Awaiting sign-off** — the budget holder's action queue: P.Os pending
+  department-head sign-off, with inline **Approve / Reject** for that department's
+  sign-off approvers (or an admin); read-only for everyone else.
+- **P.Os under challenge** — the challenged P.Os and their reasons, in red.
+- **P.O register** — every **signed-off** P.O for the department, with supplier,
+  campaign/category, net value, invoice net, committed £ and status.
+
+### 5.18 Departmental Budgets (PLAN — HO)
 
 **PLAN — HO → Departmental Budgets** (`/plan/dept-budget`) is a **budget control
 centre**, not just a grid. A department head doesn't land in a wall of input cells —
