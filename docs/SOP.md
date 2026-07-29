@@ -672,21 +672,41 @@ on every change.
 **Operational planning (the Campaigns & initiatives tab).** Instead of keying cost
 lines directly, a department builds its budget in its own language — **campaigns**
 (Marketing), **projects** (Architecture & Build), **contracts** (Logistics),
-**programmes/initiatives** (others). Each initiative carries an objective, owner,
-active **month range**, scope, an expenditure **classification** (committed / BAU /
-growth / strategic / discretionary / contingency) and its expected commercial outcome
-(**incremental sales, incremental margin** → **contribution** = margin less
-investment). Under it you list **cost items**, each with a **phasing** method (even
-across the active months · one-off month · quarterly · manual). The system then
-**generates the financial cost lines and monthly phasing automatically** and pushes
-them into the grid, where they appear badged **&ldquo;from plan&rdquo;** (read-only,
-with their classification) alongside any hand-entered lines. Edit an initiative and
-the generated lines re-sync. This is the change that makes the module a planning
-platform rather than a form: build in the department&rsquo;s language, control and
-report in Finance&rsquo;s (`finance.dept_budget_initiative` + `_cost`, migration 051).
+**programmes/initiatives** (others). Each initiative carries an **objective** (chosen
+from a shared dropdown — *Increase Sales / Margin / Footfall / Conversion / Customer
+Engagement / Brand Awareness / ECOM Traffic / Internal business objective / Other*,
+with **+ Add new…** to extend the list), owner, active **month range**, scope, an
+expenditure **classification** (committed / BAU / growth / strategic / discretionary /
+contingency) and its expected commercial outcome (**incremental sales, incremental
+margin** → **contribution** = margin less investment). Under it you list **cost
+items**, each with a **phasing** method (even across the active months · one-off month
+· quarterly · manual). The system then **generates the financial cost lines and
+monthly phasing automatically** and pushes them into the grid, where they appear
+badged **&ldquo;from plan&rdquo;** (read-only, with their classification) alongside any
+hand-entered lines. Edit an initiative and the generated lines re-sync. This is the
+change that makes the module a planning platform rather than a form: build in the
+department&rsquo;s language, control and report in Finance&rsquo;s
+(`finance.dept_budget_initiative` + `_cost`, migrations 051 & 059).
 
-*Coming next (Phase 3):* AI suggestions (suggested phasing from history,
-missing-cost warnings), scenario generation, and driver-based planning.
+**Cost lines are zero-based.** A cost item&rsquo;s **Category** and **Cost line** are
+chosen from dropdowns populated by the budget&rsquo;s own **Financial View** — the
+master chart of cost lines. *Need a category or cost line that isn&rsquo;t listed? Add
+it in the **Financial View** tab first; it then appears in the picker.* The **amount**
+is built up from the bottom: an **Activity / driver** (e.g. *No. of campaigns*), a
+**Quantity** and a **Unit cost**, with **Amount = Quantity × Unit cost** computed for
+you. Where a line has no natural driver you can leave those blank and enter a lump-sum
+amount instead. This build-up is stored and carried through to the report as the audit
+trail behind every number (`driver` / `quantity` / `unit_cost`, migration 059).
+
+**Into the Reporting Centre for SLT sign-off.** A department&rsquo;s budget is a source
+in the **Corporate Reporting Centre** (§5.15) via the **Departmental Budget Pack**
+template (`DEPT_BUDGET_PACK`): a summary (target · planned · variance · expected
+contribution), the initiatives and their objectives, and the full **zero-based cost
+detail** (driver × qty × unit cost → annual). Pull it into a report and export it
+(PowerPoint / PDF / Word / Excel) to present to the SLT for approval.
+
+*Coming next:* AI suggestions (suggested phasing from history, missing-cost warnings),
+scenario generation, and driver-based planning.
 
 ---
 

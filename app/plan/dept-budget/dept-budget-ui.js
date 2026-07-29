@@ -31,7 +31,7 @@ const money0 = (v) => `£${Math.round(Number(v) || 0).toLocaleString("en-GB")}`;
 const moneyC = (v) => { const a = Math.abs(Number(v) || 0); const s = (Number(v) || 0) < 0 ? "−" : ""; if (a >= 1e6) return `${s}£${(a / 1e6).toFixed(2)}m`; if (a >= 1e3) return `${s}£${Math.round(a / 1e3)}k`; return `${s}£${Math.round(a)}`; };
 const dmy = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
 
-export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me }) {
+export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me, initialObjectives = [] }) {
   const router = useRouter();
   const keyRef = useRef(1);
   const thisYear = new Date().getFullYear();
@@ -49,6 +49,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const [viewMode, setViewMode] = useState("annual");
   const [expanded, setExpanded] = useState(null); // line _key with months open
   const [targetDraft, setTargetDraft] = useState("");
+  const [objectives, setObjectives] = useState(initialObjectives);
 
   // Create form
   const [nd, setNd] = useState(editableDepts[0] || "");
@@ -64,6 +65,30 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const monthly = useMemo(() => monthlyTotals(lines), [lines]);
   const movers = useMemo(() => lineMovers(lines), [lines]);
   const issues = useMemo(() => budgetValidation(target, lines), [target, lines]);
+
+  // Category & cost-line options for initiatives, drawn from the Financial View's
+  // own (manual/template) lines — the master chart. Initiative-generated lines are
+  // excluded so the picker never offers back what it produced.
+  const lineOptions = useMemo(() => {
+    const byCategory = {};
+    for (const l of lines) {
+      if ((l.source || "MANUAL") === "INITIATIVE") continue;
+      const cat = (l.category || "General").trim();
+      const lab = String(l.line_label || "").trim();
+      (byCategory[cat] ||= new Set()); if (lab) byCategory[cat].add(lab);
+    }
+    const categories = Object.keys(byCategory).sort();
+    const out = { categories, byCategory: {} };
+    for (const c of categories) out.byCategory[c] = [...byCategory[c]].sort();
+    return out;
+  }, [lines]);
+
+  // Append a new objective to the shared list ("+ Add new"). Returns the label.
+  async function addObjectiveOpt(label) {
+    const r = await api({ action: "objective-add", label });
+    if (r?.objectives) setObjectives(r.objectives);
+    return r?.label || null;
+  }
 
   async function api(body) {
     setError(null); setMsg(null); setBusy(true);
@@ -250,7 +275,8 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
 
             {tab === "campaigns" && (
               <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
-                budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")} />
+                budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")}
+                objectives={objectives} onAddObjective={addObjectiveOpt} lineOptions={lineOptions} />
             )}
 
             {tab === "financial" && (
@@ -570,7 +596,30 @@ function ReviewSubmit({ status, issues, summary, allowed, approvers, dirty, busy
 
 // ---- Operational planning: campaigns / projects / contracts ----
 
-function Initiatives({ initiatives, editing, busy, department, budgetId, api, reload, onGoFinancial }) {
+// A dropdown of shared objectives with an inline "+ Add new…" that persists.
+function ObjectiveField({ value, objectives = [], onAddObjective, onChange }) {
+  const opts = value && !objectives.includes(value) ? [value, ...objectives] : objectives;
+  return (
+    <select
+      value={value || ""}
+      onChange={async (e) => {
+        if (e.target.value === "__add__") {
+          const label = window.prompt("New objective");
+          if (label && label.trim()) { const added = await onAddObjective(label.trim()); if (added) onChange(added); }
+          return;
+        }
+        onChange(e.target.value);
+      }}
+      style={inputSt}
+    >
+      <option value="">— Select objective —</option>
+      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+      <option value="__add__">+ Add new…</option>
+    </select>
+  );
+}
+
+function Initiatives({ initiatives, editing, busy, department, budgetId, api, reload, onGoFinancial, objectives, onAddObjective, lineOptions }) {
   const c = commercialSummary(initiatives);
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState(null);
@@ -596,13 +645,14 @@ function Initiatives({ initiatives, editing, busy, department, budgetId, api, re
       </div>
 
       {editing && !adding && <button onClick={() => setAdding(true)} style={btn("var(--accent)")}>+ New {noun}</button>}
-      {editing && adding && <InitiativeForm kind={kind} onCancel={() => setAdding(false)} onSave={create} busy={busy} />}
+      {editing && adding && <InitiativeForm kind={kind} onCancel={() => setAdding(false)} onSave={create} busy={busy} objectives={objectives} onAddObjective={onAddObjective} />}
 
       <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         {initiatives.length === 0 && !adding && <div style={{ fontSize: 13, color: "var(--faint)" }}>No {noun}s yet.{editing ? ` Add one to start planning ${department}'s budget operationally.` : ""}</div>}
         {initiatives.map((init) => (
           <InitiativeCard key={init.initiative_id} init={init} noun={noun} editing={editing} busy={busy} budgetId={budgetId} api={api} reload={reload}
-            open={openId === init.initiative_id} setOpen={(v) => setOpenId(v ? init.initiative_id : null)} />
+            open={openId === init.initiative_id} setOpen={(v) => setOpenId(v ? init.initiative_id : null)}
+            objectives={objectives} onAddObjective={onAddObjective} lineOptions={lineOptions} />
         ))}
       </div>
       {initiatives.length > 0 && <button onClick={onGoFinancial} style={{ ...ghost, marginTop: 14 }}>See the generated financial lines →</button>}
@@ -610,7 +660,7 @@ function Initiatives({ initiatives, editing, busy, department, budgetId, api, re
   );
 }
 
-function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open, setOpen }) {
+function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open, setOpen, objectives, onAddObjective, lineOptions }) {
   const invest = initiativeInvestment(init);
   const contribution = (Number(init.incremental_margin) || 0) - invest;
   async function del() {
@@ -641,13 +691,14 @@ function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open
         <button onClick={() => setOpen(!open)} style={ghost}>{open ? "Close" : editing ? "Edit" : "View"} costs & detail</button>
         {editing && <button onClick={del} disabled={busy} style={{ ...ghost, color: "var(--red)", borderColor: "var(--red)" }}>Delete</button>}
       </div>
-      {open && <InitiativeEditor init={init} editing={editing} busy={busy} budgetId={budgetId} api={api} reload={reload} />}
+      {open && <InitiativeEditor init={init} editing={editing} busy={busy} budgetId={budgetId} api={api} reload={reload}
+        objectives={objectives} onAddObjective={onAddObjective} lineOptions={lineOptions} />}
     </div>
   );
 }
 
 const FIELD = { display: "flex", flexDirection: "column", gap: 4 };
-function InitiativeForm({ kind, onCancel, onSave, busy }) {
+function InitiativeForm({ kind, onCancel, onSave, busy, objectives, onAddObjective }) {
   const [f, setF] = useState({ name: "", kind, objective: "", owner: "", scope: "", classification: "GROWTH", start_month: 1, end_month: 12, incremental_sales: "", incremental_margin: "" });
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   return (
@@ -663,7 +714,9 @@ function InitiativeForm({ kind, onCancel, onSave, busy }) {
         <label style={FIELD}><span style={labelSt}>Exp. incremental sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
         <label style={FIELD}><span style={labelSt}>Exp. incremental margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
       </div>
-      <label style={{ ...FIELD, marginTop: 10 }}><span style={labelSt}>Objective</span><input value={f.objective} onChange={set("objective")} style={inputSt} /></label>
+      <label style={{ ...FIELD, marginTop: 10, maxWidth: 340 }}><span style={labelSt}>Objective</span>
+        <ObjectiveField value={f.objective} objectives={objectives} onAddObjective={onAddObjective} onChange={(v) => setF((s) => ({ ...s, objective: v }))} />
+      </label>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button onClick={() => onSave(f)} disabled={busy || !f.name.trim()} style={btn("var(--accent)")}>Create</button>
         <button onClick={onCancel} style={ghost}>Cancel</button>
@@ -672,7 +725,7 @@ function InitiativeForm({ kind, onCancel, onSave, busy }) {
   );
 }
 
-function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
+function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectives, onAddObjective, lineOptions }) {
   const [f, setF] = useState({
     name: init.name, kind: init.kind, objective: init.objective || "", owner: init.owner || "", scope: init.scope || "",
     classification: init.classification, start_month: init.start_month, end_month: init.end_month,
@@ -681,7 +734,7 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
   const [costs, setCosts] = useState((init.costs || []).map((c) => ({ ...c })));
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const setCost = (i, k, v) => setCosts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
-  const addCost = () => setCosts((cs) => [...cs, { category: "General", line_label: "", amount: "", phasing: "EVEN", one_off_month: "" }]);
+  const addCost = () => setCosts((cs) => [...cs, { category: (lineOptions?.categories?.[0]) || "General", line_label: "", driver: "", quantity: "", unit_cost: "", amount: "", phasing: "EVEN", one_off_month: "" }]);
   const rmCost = (i) => setCosts((cs) => cs.filter((_, j) => j !== i));
 
   async function save() {
@@ -689,13 +742,18 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
     const r1 = await api({ action: "initiative-update", budgetId, initiativeId: init.initiative_id, patch });
     if (!r1) return;
     const payload = costs.filter((c) => String(c.line_label || "").trim()).map((c) => ({
-      category: c.category || "General", line_label: c.line_label, amount: Number(c.amount) || 0, phasing: c.phasing || "EVEN",
+      category: c.category || "General", line_label: c.line_label, phasing: c.phasing || "EVEN",
       one_off_month: c.one_off_month ? Number(c.one_off_month) : null,
+      driver: c.driver || null,
+      quantity: c.quantity === "" || c.quantity == null ? null : Number(c.quantity),
+      unit_cost: c.unit_cost === "" || c.unit_cost == null ? null : Number(c.unit_cost),
+      amount: Number(c.amount) || 0,
     }));
     const r2 = await api({ action: "initiative-costs", budgetId, initiativeId: init.initiative_id, costs: payload });
     if (r2) reload();
   }
 
+  const cats = lineOptions?.categories || [];
   const ro = !editing;
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
@@ -707,20 +765,50 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
           <label style={FIELD}><span style={labelSt}>End</span><select value={f.end_month} onChange={set("end_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
           <label style={FIELD}><span style={labelSt}>Inc. sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
           <label style={FIELD}><span style={labelSt}>Inc. margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
+          <label style={FIELD}><span style={labelSt}>Objective</span>
+            <ObjectiveField value={f.objective} objectives={objectives} onAddObjective={onAddObjective} onChange={(v) => setF((s) => ({ ...s, objective: v }))} />
+          </label>
         </div>
       )}
-      <div style={{ ...labelSt, marginBottom: 6 }}>Cost items → financial lines</div>
+      <div style={{ ...labelSt, marginBottom: 6 }}>Cost items → financial lines <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, color: "var(--faint)" }}>· zero-based: activity × unit cost</span></div>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 560 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
           <thead><tr style={{ borderBottom: "1px solid var(--line)" }}>
-            {["Category", "Cost line", "Amount £", "Phasing", ""].map((h) => <th key={h} style={{ ...th, textAlign: h === "Amount £" ? "right" : "left" }}>{h}</th>)}
+            {["Category", "Cost line", "Activity / driver", "Qty", "Unit cost £", "Amount £", "Phasing", ""].map((h) => <th key={h} style={{ ...th, textAlign: (h === "Amount £" || h === "Qty" || h === "Unit cost £") ? "right" : "left" }}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {costs.map((c, i) => (
+            {costs.map((c, i) => {
+              const hasBuild = c.quantity !== "" && c.quantity != null && c.unit_cost !== "" && c.unit_cost != null;
+              const eff = hasBuild ? (Number(c.quantity) || 0) * (Number(c.unit_cost) || 0) : (Number(c.amount) || 0);
+              const lineOpts = (lineOptions?.byCategory?.[c.category] || []);
+              return (
               <tr key={i} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? c.category : <input value={c.category || ""} onChange={(e) => setCost(i, "category", e.target.value)} style={{ ...inputSt, width: 120, padding: "4px 6px", fontSize: 12 }} />}</td>
-                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? c.line_label : <input value={c.line_label || ""} onChange={(e) => setCost(i, "line_label", e.target.value)} style={{ ...inputSt, width: 150, padding: "4px 6px", fontSize: 12 }} />}</td>
-                <td style={{ ...td, padding: "3px 4px" }}>{ro ? money0(c.amount) : <input value={c.amount ?? ""} onChange={(e) => setCost(i, "amount", e.target.value)} inputMode="decimal" style={{ ...cellIn, width: 90 }} />}</td>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>
+                  {ro ? c.category : (
+                    <select value={c.category || ""} onChange={(e) => { setCost(i, "category", e.target.value); setCost(i, "line_label", ""); }} style={{ ...inputSt, width: 130, padding: "4px 6px", fontSize: 12 }}>
+                      {!cats.includes(c.category) && c.category && <option value={c.category}>{c.category}</option>}
+                      {cats.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  )}
+                </td>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>
+                  {ro ? c.line_label : (
+                    <select value={c.line_label || ""} onChange={(e) => setCost(i, "line_label", e.target.value)} style={{ ...inputSt, width: 170, padding: "4px 6px", fontSize: 12 }}>
+                      <option value="">— Select cost line —</option>
+                      {c.line_label && !lineOpts.includes(c.line_label) && <option value={c.line_label}>{c.line_label}</option>}
+                      {lineOpts.map((lab) => <option key={lab} value={lab}>{lab}</option>)}
+                    </select>
+                  )}
+                </td>
+                <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? (c.driver || "—") : <input value={c.driver || ""} onChange={(e) => setCost(i, "driver", e.target.value)} placeholder="e.g. No. of campaigns" style={{ ...inputSt, width: 150, padding: "4px 6px", fontSize: 12 }} />}</td>
+                <td style={{ ...td, padding: "3px 4px" }}>{ro ? (c.quantity ?? "—") : <input value={c.quantity ?? ""} onChange={(e) => setCost(i, "quantity", e.target.value)} inputMode="decimal" placeholder="0" style={{ ...cellIn, width: 58 }} />}</td>
+                <td style={{ ...td, padding: "3px 4px" }}>{ro ? (c.unit_cost != null && c.unit_cost !== "" ? money0(c.unit_cost) : "—") : <input value={c.unit_cost ?? ""} onChange={(e) => setCost(i, "unit_cost", e.target.value)} inputMode="decimal" placeholder="0" style={{ ...cellIn, width: 78 }} />}</td>
+                <td style={{ ...td, padding: "3px 4px" }}>
+                  {ro ? money0(c.amount)
+                    : hasBuild
+                      ? <span title="Quantity × Unit cost" style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{money0(eff)}</span>
+                      : <input value={c.amount ?? ""} onChange={(e) => setCost(i, "amount", e.target.value)} inputMode="decimal" placeholder="lump sum" style={{ ...cellIn, width: 90 }} />}
+                </td>
                 <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>
                   {ro ? PHASING_LABEL[c.phasing] : (
                     <span style={{ display: "inline-flex", gap: 4 }}>
@@ -731,11 +819,18 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload }) {
                 </td>
                 <td style={{ ...td, padding: "3px 4px" }}>{!ro && <button onClick={() => rmCost(i)} style={{ ...ghost, padding: "2px 7px", color: "var(--red)" }}>×</button>}</td>
               </tr>
-            ))}
-            {costs.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "left", color: "var(--faint)" }}>No cost items.</td></tr>}
+              );
+            })}
+            {costs.length === 0 && <tr><td colSpan={8} style={{ ...td, textAlign: "left", color: "var(--faint)" }}>No cost items.</td></tr>}
           </tbody>
         </table>
       </div>
+      {!ro && (
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 6, lineHeight: 1.5 }}>
+          <strong>Category</strong> and <strong>Cost line</strong> come from this budget&rsquo;s Financial View. Need a new one? Add it in the <strong>Financial View</strong> tab first — it then appears here.
+          {" "}<strong>Amount = Quantity × Unit cost</strong> (zero-based). Leave Qty / Unit cost blank to enter a lump-sum amount instead.
+        </div>
+      )}
       {!ro && (
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={addCost} style={ghost}>+ Cost item</button>
