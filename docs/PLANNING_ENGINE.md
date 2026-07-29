@@ -81,6 +81,22 @@ entity/region derived from the Store Master. Planning scope is one of
     total), each component posting to its own nominal, rates from the register.
 - **Phase 3 — scope planning:** company-store, Head Office, franchise-store plans;
   scope P&Ls via existing templates.
+  - **3a (done, no migration):** `getScopePL(versionId, {scenario, scope, storeCode?,
+    entityId?})` — aggregates `planning.plan_line` by nominal × period into the
+    `{ account → { period → amount } }` map and renders it through the **same
+    governed `pl_format` template** the actuals board packs use (`getFormatSpec` +
+    `renderFormat`), so a plan and an actual of the same scope render identically.
+    Returns `unmapped` — present nominals no template line claims (they'd silently
+    drop out of the P&L) — the seam's honesty check. Pure helpers `mappedAccountsOf`
+    / `unmappedNominals` in planning-rules.js.
+    - **Note surfaced by 3a:** the Phase 2c payroll *default* component nominals
+      (`ST: Wages & Salaries`, `ST: Holiday Pay`, `ST: Employer Pension`,
+      `ST: Employer NI`) do **not** match the `STORE_FORMAT` account names
+      (`ST: Salaries - Basic Pay`, `ST: Salaries - Holiday Pay`, `ST: Pensions Costs`,
+      `ST: Employers National Insurance`), so out-of-the-box they render as
+      `unmapped`. Payroll rules must set the component nominals to the template's
+      account names (or the defaults be aligned) for staff costs to land in the
+      subtotal. Follow-up for the Phase 5 UI / a defaults tidy-up.
 - **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
   + scope-readiness; consolidated P&L via existing template.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
