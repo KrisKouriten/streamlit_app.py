@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
-  invoiceOutcome, canSubmitForSignoff,
+  invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, challengeReasonLabels,
 } from "../../../lib/po-rules";
 
 const field = { display: "flex", flexDirection: "column", gap: 5 };
@@ -13,7 +13,17 @@ const card = { background: "var(--surface)", border: "1px solid var(--line)", bo
 const btn = (bg, fg = "#fff") => ({ fontSize: 13, fontWeight: 650, padding: "8px 16px", borderRadius: 9, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const money = (v, c = "GBP") => (v == null || v === "" ? "—" : `${c === "GBP" ? "£" : c + " "}${Number(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`);
-const STATUS_TONE = { DRAFT: "var(--muted)", PENDING_SIGNOFF: "var(--amber)", APPROVED: "var(--green)", REJECTED: "var(--red)", CANCELLED: "var(--faint)" };
+const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
+const TONE_BG = { muted: "var(--raise)", red: "var(--red-bg)", amber: "var(--amber-bg)", green: "var(--green-bg)", accent: "var(--accent-bg)" };
+
+function StatusPill({ po }) {
+  const st = displayStatus(po);
+  return (
+    <span style={{ display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: TONE_FG[st.tone], background: TONE_BG[st.tone], border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+      {st.label}
+    </span>
+  );
+}
 
 const EMPTY = {
   po_date: "", supplier: "", payment_terms: "", payment_date: "", currency: "GBP",
@@ -22,7 +32,7 @@ const EMPTY = {
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
 };
 
-export default function PoUI({ initialPos, departments, stores, me }) {
+export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [] }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -30,6 +40,9 @@ export default function PoUI({ initialPos, departments, stores, me }) {
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
   const [rowErr, setRowErr] = useState({}); // per-PO submit errors
+
+  const approverSet = useMemo(() => new Set((approverDepts || []).map((d) => (d || "").toLowerCase())), [approverDepts]);
+  const canApprove = (po) => isAdmin || approverSet.has((po.department || "").toLowerCase());
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const setChk = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.checked }));
@@ -87,6 +100,11 @@ export default function PoUI({ initialPos, departments, stores, me }) {
       if (!res.ok) throw new Error(j.error || "Action failed");
       router.refresh();
     } catch (e) { setRowErr((s) => ({ ...s, [poId]: e.message })); }
+  }
+
+  function deletePo(p) {
+    if (!window.confirm(`Delete P.O ${p.xero_po_number || p.po_id}? This removes the request and its store allocations. This cannot be undone.`)) return;
+    poOp(p.po_id, "delete");
   }
 
   return (
@@ -207,7 +225,10 @@ export default function PoUI({ initialPos, departments, stores, me }) {
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
-                {initialPos.map((p) => (
+                {initialPos.map((p) => {
+                  const del = canDeletePo(p, { isAdmin });
+                  const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
+                  return (
                   <tr key={p.po_id}>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.xero_po_number}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
@@ -215,20 +236,44 @@ export default function PoUI({ initialPos, departments, stores, me }) {
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.po_category}{p.is_marketing ? (p.marketing_levy ? " · levy" : " · invoice") : ""}</td>
                     <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{money(p.payment_value, p.currency)}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.recharge_enabled ? "Yes" : "—"}</td>
-                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", color: STATUS_TONE[p.status], fontWeight: 600 }}>{p.status.replace(/_/g, " ")}</td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>
+                      <StatusPill po={p} />
+                      {challengeLabels.length > 0 && (
+                        <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 200, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeLabels.join(" · ")}</div>
+                      )}
+                    </td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>
-                      {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
-                      {p.status === "PENDING_SIGNOFF" && <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department-head sign-off <button style={{ ...ghost, marginLeft: 6 }} onClick={() => poOp(p.po_id, "return")}>Return to draft</button></span>}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
+                        {p.status === "PENDING_SIGNOFF" && canApprove(p) && (
+                          <>
+                            <button style={btn("var(--green)")} onClick={() => poOp(p.po_id, "approve")}>Approve</button>
+                            <button style={ghost} onClick={() => poOp(p.po_id, "reject")}>Reject</button>
+                          </>
+                        )}
+                        {p.status === "PENDING_SIGNOFF" && !canApprove(p) && (
+                          <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department-head sign-off
+                            <button style={{ ...ghost, marginLeft: 6 }} onClick={() => poOp(p.po_id, "return")}>Return to draft</button>
+                          </span>
+                        )}
+                        {p.status === "APPROVED" && p.finance_status !== "CLOSED" && p.finance_status !== "CHALLENGED" && (
+                          <span style={{ fontSize: 11.5, color: "var(--faint)" }}>With Finance</span>
+                        )}
+                        {del.ok
+                          ? <button style={{ ...ghost, color: "var(--red)", borderColor: "color-mix(in srgb, var(--red) 40%, var(--line))" }} onClick={() => deletePo(p)}>Delete</button>
+                          : <span title={del.reason} style={{ fontSize: 11, color: "var(--faint)" }}>🔒 admin-only delete</span>}
+                      </div>
                       {rowErr[p.po_id] && <div style={{ color: "var(--red)", fontSize: 11.5, marginTop: 4 }}>{rowErr[p.po_id]}</div>}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12 }}>
-          Department-head sign-off is enforced by user controls (coming soon); for now a P.O rests at “awaiting sign-off”.
+        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
+          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red until resolved.
         </div>
       </div>
     </div>

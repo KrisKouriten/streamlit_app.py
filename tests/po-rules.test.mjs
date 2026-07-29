@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   validatePo, rechargeTotal, rechargeError, equalSplit, rechargeAmounts,
   invoiceOutcome, canSubmitForSignoff, poTransitionError, isEditablePo, PO_STATUSES, PO_TRANSITIONS,
+  displayStatus, canDeletePo, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -93,4 +94,40 @@ test("isEditablePo", () => {
   assert.equal(isEditablePo("REJECTED"), true);
   assert.equal(isEditablePo("PENDING_SIGNOFF"), false);
   assert.equal(isEditablePo("APPROVED"), false);
+});
+
+test("displayStatus reflects request lifecycle before sign-off, finance after", () => {
+  assert.equal(displayStatus({ status: "DRAFT" }).label, "Draft");
+  assert.equal(displayStatus({ status: "PENDING_SIGNOFF" }).label, "Awaiting sign-off");
+  assert.equal(displayStatus({ status: "REJECTED" }).code, "REJECTED");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "OPEN" }).label, "Open");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "CHALLENGED" }).label, "Challenged");
+  assert.equal(displayStatus({ status: "APPROVED", finance_status: "CLOSED" }).label, "Closed");
+});
+
+test("canDeletePo: pre-signoff anyone; post-signoff admin only", () => {
+  assert.equal(canDeletePo({ status: "DRAFT" }, { isAdmin: false }).ok, true);
+  assert.equal(canDeletePo({ status: "PENDING_SIGNOFF" }, { isAdmin: false }).ok, true);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "OPEN" }, { isAdmin: false }).ok, false);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "OPEN" }, { isAdmin: true }).ok, true);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "CLOSED" }, { isAdmin: false }).ok, false);
+});
+
+test("financeActionError requires a signed-off P.O; blocks double-close", () => {
+  assert.match(financeActionError("close", { status: "PENDING_SIGNOFF" }), /not been signed off/);
+  assert.equal(financeActionError("close", { status: "APPROVED", finance_status: "OPEN" }), null);
+  assert.match(financeActionError("close", { status: "APPROVED", finance_status: "CLOSED" }), /already closed/);
+  assert.equal(isSignedOff({ status: "APPROVED" }), true);
+});
+
+test("committedAmount uses invoice net if present, else P.O value", () => {
+  assert.equal(committedAmount({ payment_value: 1000, invoice_amount: 950 }), 950);
+  assert.equal(committedAmount({ payment_value: 1000 }), 1000);
+  assert.equal(committedAmount({ payment_value: 1000, invoice_amount: "" }), 1000);
+});
+
+test("challengeReasonLabels maps codes (string or array) to labels", () => {
+  assert.deepEqual(challengeReasonLabels(["INVOICE_VALUE"]), ["Invoice value — different to the P.O"]);
+  assert.equal(challengeReasonLabels("PO_DETAILS,SPEND_VS_BUDGET").length, 2);
+  assert.deepEqual(challengeReasonLabels([]), []);
 });

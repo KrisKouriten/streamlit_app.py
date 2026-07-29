@@ -3,6 +3,7 @@ import { getSession } from "../../../lib/auth";
 import { getUserDepartment } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
+import { challengeReasonLabels } from "../../../lib/po-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 
@@ -51,7 +52,10 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <StatRow>
             <Stat label="Budget (proposed)" value={d.hasBudget ? money(proposed, { compact: true }) : "—"}
               sub={d.hasBudget ? (s.target != null ? `target ${money(s.target, { compact: true })}` : "no target set") : "no budget for this year"} />
-            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub="approved POs, this year" />
+            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed POs, this year`} />
+            <Stat label="Under challenge" value={String(d.pos?.challengedCount || 0)}
+              sub={d.pos?.challengedCount ? `${money(d.pos.challengedValue || 0, { compact: true })} in query` : "none"}
+              tone={d.pos?.challengedCount ? "red" : undefined} />
             <Stat label="Open purchase orders" value={String(d.pos?.openCount || 0)}
               sub={`${money(d.pos?.openValue || 0, { compact: true })}${d.pos?.pending ? ` · ${d.pos.pending} awaiting sign-off` : ""}`}
               tone={d.pos?.pending ? "amber" : undefined} />
@@ -60,7 +64,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           </StatRow>
 
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
-            &ldquo;Committed spend&rdquo; is the net value of <strong>approved purchase orders</strong> for this department this year — the governed proxy for spend. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is commitment, not booked actuals.
+            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
           </div>
 
           {/* Budget by category */}
@@ -85,6 +89,22 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               </EmptyState>
             )}
           </Panel>
+
+          {/* Under challenge */}
+          {d.pos?.challengedCount > 0 && (
+            <Panel title="P.Os under challenge" note={`${d.pos.challengedCount} in query`}>
+              <div className="fos-card" style={{ padding: "6px 16px", borderColor: "color-mix(in srgb, var(--red) 30%, var(--line))" }}>
+                {d.pos.challenged.map((p) => (
+                  <div key={p.po_id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{p.xero_po_number}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
+                    <span className="fos-num" style={{ fontSize: 12.5 }}>{money(p.payment_value)}</span>
+                    <span style={{ flex: 1, fontSize: 11.5, color: "var(--red)" }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
 
           {/* Open POs */}
           <Panel title="Open purchase orders" note={`${d.pos?.openCount || 0} open`}>

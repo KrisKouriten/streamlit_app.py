@@ -138,9 +138,9 @@ route-preservation record and the documented overlaps live in
 |---|---|
 | **HOME** | **Executive Intelligence Hub** (position & attention) **· Corporate Reporting Centre** (governed reporting decks, §5.15); My Finance Home, Notifications, Global Search (⌘K). |
 | **DASHBOARDS** | **Management Accounts** (four-scope board pack + Actual-vs-Forecast dashboard) **· Three-statement model** (P&L · Balance Sheet · Cash Flow) **· Budget & Forecast · Store Sales & KPI · Franchise · Inventory · SKU Analysis · Cash Flow · Fixed Assets · Departmental Budget · Month-End Close** (status board); plus planned reference dashboards (Master, Company Store Performance, Wholesale, Treasury, Project Budget, WAC, Digital Finance Team, Data Quality, Controls). |
-| **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects · Departmental Budgets**; planned Budget Builder, Store/Wholesale/Franchise planning, Project budgets, Consolidated P&L. |
+| **PLAN** | **Forecast Builder · Scenario Planning · HO Business Projects · Departmental Budgets · Purchase Order Requests** (raise + department-head sign-off, §5.16); planned Budget Builder, Store/Wholesale/Franchise planning, Project budgets, Consolidated P&L. |
 | **PERFORM** | **Management Accounts · Three-statement model · Store Performance (league) · Franchise · Inventory · Cash Flow · Fixed Assets** — the against-plan read; planned Wholesale/Treasury/Procurement performance. |
-| **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · Purchase Order Tracker**; planned WAC, Finance Projects. |
+| **OPERATE** | **My Finance Week · Finance Team Schedule · the numbered close (1 · Month-End Close → 2 · Management Accounts Close → 3 · Close Cockpit, see §5.6) · Procurement · Action Centre · Intercompany · Task Review Queue · Task Library · P.O Summary + Close** (Finance: record invoices, close/challenge, §5.16); planned WAC, Finance Projects. |
 | **DIGITAL FINANCE TEAM** | **Agent Activity · Agent Reviews · AI Benefits** — three agents live: Store Priorities, Data Quality and **Trading Commentary** (the first LLM agent); the seven planned "master" agents (Chief Finance Intelligence, FP&A, Finance Operations, Commercial, Governance, Data, Executive Reporting) and Agent Exceptions. |
 | **FINANCE DATA** | **Data Uploads** (one home for every governed input — see §6.9) **· Financial Statements Upload & Refresh** (board-pack layout + the Joiin statutory refresh) **· Entities** (the legal-entity register) **· Master Data Management** (lineage + KPI master); planned masters — Chart of Accounts, Stores, Departments, Projects, Cost Centres, Suppliers, Customers, Franchisees, Budget/Forecast Versions, Exchange Rates, KPI Definitions, Allocation Rules. |
 | **GOVERN** | **Users, Roles & Permissions** (users, roles, department sign-off and per-department page access) **· SOP Library** (this Handbook) **· Report Builder**; planned Approvals (one inbox over the review queues), Controls, Data Quality, Audit Trail, System Settings. *(Govern is controls-only — the finance-data feeds moved to FINANCE DATA.)* |
@@ -522,33 +522,60 @@ Franchise Deck monthly after MA close (§5.6); Finance Board Deck monthly/quarte
 Budget & Forecasts Deck each planning cycle. The board deck (§5.13) and trade deck
 (§5.14) are now produced here via their templates.
 
-### 5.16 Purchase Order Tracker (OPERATE)
+### 5.16 Purchase Order process — Requests (PLAN — HO) + Summary & Close (OPERATE)
 
-**OPERATE → Purchase Order Tracker** (`/operate/po-tracker`) lets a department raise
-a P.O after generating the number in Xero. The build:
+The purchase-order process runs across two screens: departments **raise and sign off**
+requests under **Plan — HO**, and Finance **records the invoice and closes or challenges**
+them under **Operate**. Both read the same governed record (`finance.purchase_order` +
+`finance.purchase_order_recharge`, migrations 046/047/052), audited on every change.
 
-1. **Generate the number in Xero first**, then record the P.O here — date, supplier,
+**A. Purchase Order Requests — PLAN → HO** (`/operate/po-tracker`)
+
+1. **Generate the number in Xero first**, then record the P.O — date, supplier,
    payment terms & date, currency, **net value** (£), category, **Xero P.O number**,
    **fulfilment start date**, **fulfilment period in days**, and the **department**
-   (a dropdown of the governed departments — the same list assignable per user in
-   GOVERN → Users & Roles).
+   (the governed departments assignable per user in GOVERN → Users & Roles).
 2. **Marketing spend** asks one extra question — *is it part of the marketing levy?*
    **Yes** → allocate to stores with **no invoice**; **No** → **finance issues an
    invoice**. The chosen outcome is recorded on the P.O.
-3. **Recharge** (optional): either tick **Head Office only** (allocates 100% to Head
-   Office — no store split), or recharge to **stores** — tick **all stores** or pick
-   individually, then set each store's **% of the net value**. An **Equal split**
-   button spreads it evenly; the running total is shown live and **must equal 100%** —
-   a P.O cannot go to sign-off until it does.
-4. **Save draft** at any point; **Create & submit for sign-off** once complete. A
-   submitted P.O rests at **awaiting department-head sign-off** — the sign-off itself
-   is enforced by the forthcoming **user controls**.
+3. **Recharge** (optional): tick **Head Office only** (100% to Head Office — no split),
+   or recharge to **stores** — tick **all** or pick individually, then set each store's
+   **% of the net value**. **Equal split** spreads it evenly; the running total must
+   equal **100%** before a P.O can go to sign-off.
+4. **Save draft**, then **Create & submit for sign-off**. A department's **sign-off
+   approvers** (governance.department_signoff — GOVERN → Users, Roles & Permissions), or
+   any **admin**, then **Approve** or **Reject** it on this screen.
+5. **Status** is shown against every P.O: **Draft → Awaiting sign-off → Open** (signed
+   off, with Finance) → **Challenged** or **Closed**. A challenged P.O shows its
+   **reason(s)** in red here until Finance resolves it.
+6. **Deletion:** before sign-off, the requester (or an admin) can delete a P.O; **once
+   signed off, only an admin can delete it** — everyone else sees a locked, admin-only
+   control.
 
-The P.O and its recharge allocation are governed data (`finance.purchase_order` +
-`finance.purchase_order_recharge`, migrations 046/047), audited on every change. The
-seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
-Logistics, Architecture & Build) are governed in `core.dim_department` and assignable
-per user in **GOVERN → Users, Roles & Permissions**.
+**B. P.O Summary + Close — OPERATE** (`/operate/po-summary`, Finance/Admin only)
+
+1. Every signed-off P.O lands on Finance's review desk, filterable by **Needs Finance /
+   Open / Challenged / Closed / All** and by department.
+2. Finance records the **invoice number** and **invoice net amount** against the P.O
+   (*Save invoice*), then either:
+   - **Close** it — reported as **committed spend** on the Departmental Budget Dashboard
+     (using the invoice net where entered, else the P.O net value); or
+   - **Challenge** it under one or more controlled reasons — **Invoice value** (different
+     to the P.O), **P.O details** (discrepancies vs the invoice), **P.O allocation**
+     (requires further questions), **Spend vs budget** (requires further questions) —
+     with an optional note. A challenge shows **under challenge** on the dashboard and
+     the requests screen until Finance **Re-opens** it.
+3. **Excel download** — tick individual P.Os and **Download selected**, or **Download
+   all**. The workbook has **one row per store allocation**, so every store and its
+   value to invoice/recharge is listed, alongside the P.O header, status, invoice
+   details and committed £.
+
+The seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
+Logistics, Architecture & Build) are governed in `core.dim_department`. The finance
+lifecycle (`finance_status` OPEN → CHALLENGED / CLOSED, plus invoice, approval, close
+and challenge stamps) is added by migration **052**. **Committed spend** on the
+Departmental Budget Dashboard is **P.O-committed** (closed P.Os) — not GL actuals — and
+is labelled as such.
 
 ### 5.17 Departmental Budgets (PLAN — HO)
 
