@@ -8,7 +8,7 @@ import {
 } from "../../../lib/dept-budget-rules";
 import {
   KINDS, KIND_LABEL, CLASSIFICATIONS, CLASSIFICATION_LABEL, PHASINGS, PHASING_LABEL,
-  defaultKindFor, initiativeInvestment, commercialSummary,
+  defaultKindFor, initiativeInvestment, commercialSummary, objectiveOutcome,
 } from "../../../lib/dept-initiative-rules";
 
 /* Departmental Budgets — the budget control centre. A budget opens with an
@@ -619,6 +619,24 @@ function ObjectiveField({ value, objectives = [], onAddObjective, onChange }) {
   );
 }
 
+// The single expected-outcome field, driven by the selected objective: a £ / unit
+// number for the standard objectives, or free text for Internal / Other / custom.
+function OutcomeField({ objective, value, note, onValue, onNote }) {
+  const oc = objectiveOutcome(objective);
+  if (!objective) return (
+    <label style={FIELD}><span style={labelSt}>Expected outcome</span>
+      <input value="" disabled placeholder="Select an objective first" style={{ ...inputSt, opacity: 0.6 }} /></label>
+  );
+  if (oc.kind === "text") return (
+    <label style={FIELD}><span style={labelSt}>{oc.label}</span>
+      <input value={note || ""} onChange={(e) => onNote(e.target.value)} placeholder="e.g. improve NPS by 5 pts" style={inputSt} /></label>
+  );
+  return (
+    <label style={FIELD}><span style={labelSt}>{oc.label}{oc.unit ? ` (${oc.unit})` : ""}</span>
+      <input value={value ?? ""} onChange={(e) => onValue(e.target.value)} inputMode="decimal" style={inputSt} /></label>
+  );
+}
+
 function Initiatives({ initiatives, editing, busy, department, budgetId, api, reload, onGoFinancial, objectives, onAddObjective, lineOptions }) {
   const c = commercialSummary(initiatives);
   const [adding, setAdding] = useState(false);
@@ -638,10 +656,11 @@ function Initiatives({ initiatives, editing, busy, department, budgetId, api, re
         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Build the budget around {noun}s; the system generates the financial cost lines and phasing, which appear (badged &ldquo;from plan&rdquo;) in the Financial View.</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
           <SummaryTile label="Planned investment" value={moneyC(c.investment)} sub={`${initiatives.length} ${noun}${initiatives.length === 1 ? "" : "s"}`} />
-          <SummaryTile label="Expected incremental sales" value={moneyC(c.incrementalSales)} sub="from these initiatives" />
-          <SummaryTile label="Expected incremental margin" value={moneyC(c.incrementalMargin)} sub="gross" />
-          <SummaryTile label="Expected contribution" value={moneyC(c.contribution)} sub="margin less investment" tone={c.contribution >= 0 ? "var(--green)" : "var(--red)"} />
+          {c.incrementalSales > 0 && <SummaryTile label="Expected incremental sales" value={moneyC(c.incrementalSales)} sub="from these initiatives" />}
+          {c.incrementalMargin > 0 && <SummaryTile label="Expected incremental margin" value={moneyC(c.incrementalMargin)} sub="gross" />}
+          {c.incrementalMargin > 0 && <SummaryTile label="Expected contribution" value={moneyC(c.contribution)} sub="margin less investment" tone={c.contribution >= 0 ? "var(--green)" : "var(--red)"} />}
         </div>
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8 }}>Each {noun}&rsquo;s expected outcome reflects its objective (footfall, conversion, sales, …) and is shown on its card below.</div>
       </div>
 
       {editing && !adding && <button onClick={() => setAdding(true)} style={btn("var(--accent)")}>+ New {noun}</button>}
@@ -683,8 +702,16 @@ function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open
         </div>
         <div style={{ textAlign: "right", fontSize: 12 }}>
           <div><span style={{ color: "var(--faint)" }}>Invest </span><strong>{moneyC(invest)}</strong></div>
-          <div><span style={{ color: "var(--faint)" }}>Inc. margin </span>{moneyC(init.incremental_margin)}</div>
-          <div style={{ color: contribution >= 0 ? "var(--green)" : "var(--red)" }}>Contribution {moneyC(contribution)}</div>
+          {(() => {
+            const oc = objectiveOutcome(init.objective);
+            const display = oc.kind === "text"
+              ? (init.outcome_note || null)
+              : (init.outcome_value != null && init.outcome_value !== ""
+                  ? (oc.unit === "£" ? moneyC(init.outcome_value) : `${Number(init.outcome_value).toLocaleString("en-GB")}${oc.unit ? ` ${oc.unit}` : ""}`)
+                  : null);
+            return display ? <div><span style={{ color: "var(--faint)" }}>{oc.label} </span>{display}</div> : null;
+          })()}
+          {Number(init.incremental_margin) > 0 && <div style={{ color: contribution >= 0 ? "var(--green)" : "var(--red)" }}>Contribution {moneyC(contribution)}</div>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -699,7 +726,7 @@ function InitiativeCard({ init, noun, editing, busy, budgetId, api, reload, open
 
 const FIELD = { display: "flex", flexDirection: "column", gap: 4 };
 function InitiativeForm({ kind, onCancel, onSave, busy, objectives, onAddObjective }) {
-  const [f, setF] = useState({ name: "", kind, objective: "", owner: "", scope: "", classification: "GROWTH", start_month: 1, end_month: 12, incremental_sales: "", incremental_margin: "" });
+  const [f, setF] = useState({ name: "", kind, objective: "", owner: "", scope: "", classification: "GROWTH", start_month: 1, end_month: 12, outcome_value: "", outcome_note: "" });
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   return (
     <div style={{ ...card, marginTop: 10 }}>
@@ -711,12 +738,12 @@ function InitiativeForm({ kind, onCancel, onSave, busy, objectives, onAddObjecti
         <label style={FIELD}><span style={labelSt}>Scope</span><input value={f.scope} onChange={set("scope")} placeholder="e.g. All stores" style={inputSt} /></label>
         <label style={FIELD}><span style={labelSt}>Start month</span><select value={f.start_month} onChange={set("start_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
         <label style={FIELD}><span style={labelSt}>End month</span><select value={f.end_month} onChange={set("end_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
-        <label style={FIELD}><span style={labelSt}>Exp. incremental sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
-        <label style={FIELD}><span style={labelSt}>Exp. incremental margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
+        <label style={FIELD}><span style={labelSt}>Objective</span>
+          <ObjectiveField value={f.objective} objectives={objectives} onAddObjective={onAddObjective} onChange={(v) => setF((s) => ({ ...s, objective: v }))} />
+        </label>
+        <OutcomeField objective={f.objective} value={f.outcome_value} note={f.outcome_note}
+          onValue={(v) => setF((s) => ({ ...s, outcome_value: v }))} onNote={(v) => setF((s) => ({ ...s, outcome_note: v }))} />
       </div>
-      <label style={{ ...FIELD, marginTop: 10, maxWidth: 340 }}><span style={labelSt}>Objective</span>
-        <ObjectiveField value={f.objective} objectives={objectives} onAddObjective={onAddObjective} onChange={(v) => setF((s) => ({ ...s, objective: v }))} />
-      </label>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button onClick={() => onSave(f)} disabled={busy || !f.name.trim()} style={btn("var(--accent)")}>Create</button>
         <button onClick={onCancel} style={ghost}>Cancel</button>
@@ -729,7 +756,7 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectiv
   const [f, setF] = useState({
     name: init.name, kind: init.kind, objective: init.objective || "", owner: init.owner || "", scope: init.scope || "",
     classification: init.classification, start_month: init.start_month, end_month: init.end_month,
-    incremental_sales: init.incremental_sales, incremental_margin: init.incremental_margin,
+    outcome_value: init.outcome_value ?? "", outcome_note: init.outcome_note ?? "",
   });
   const [costs, setCosts] = useState((init.costs || []).map((c) => ({ ...c })));
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -738,7 +765,7 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectiv
   const rmCost = (i) => setCosts((cs) => cs.filter((_, j) => j !== i));
 
   async function save() {
-    const patch = { ...f, start_month: Number(f.start_month), end_month: Number(f.end_month), incremental_sales: Number(f.incremental_sales) || 0, incremental_margin: Number(f.incremental_margin) || 0 };
+    const patch = { ...f, start_month: Number(f.start_month), end_month: Number(f.end_month) };
     const r1 = await api({ action: "initiative-update", budgetId, initiativeId: init.initiative_id, patch });
     if (!r1) return;
     const payload = costs.filter((c) => String(c.line_label || "").trim()).map((c) => ({
@@ -763,11 +790,11 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectiv
           <label style={FIELD}><span style={labelSt}>Classification</span><select value={f.classification} onChange={set("classification")} style={inputSt}>{CLASSIFICATIONS.map((k) => <option key={k} value={k}>{CLASSIFICATION_LABEL[k]}</option>)}</select></label>
           <label style={FIELD}><span style={labelSt}>Start</span><select value={f.start_month} onChange={set("start_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
           <label style={FIELD}><span style={labelSt}>End</span><select value={f.end_month} onChange={set("end_month")} style={inputSt}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
-          <label style={FIELD}><span style={labelSt}>Inc. sales £</span><input value={f.incremental_sales} onChange={set("incremental_sales")} inputMode="decimal" style={inputSt} /></label>
-          <label style={FIELD}><span style={labelSt}>Inc. margin £</span><input value={f.incremental_margin} onChange={set("incremental_margin")} inputMode="decimal" style={inputSt} /></label>
           <label style={FIELD}><span style={labelSt}>Objective</span>
             <ObjectiveField value={f.objective} objectives={objectives} onAddObjective={onAddObjective} onChange={(v) => setF((s) => ({ ...s, objective: v }))} />
           </label>
+          <OutcomeField objective={f.objective} value={f.outcome_value} note={f.outcome_note}
+            onValue={(v) => setF((s) => ({ ...s, outcome_value: v }))} onNote={(v) => setF((s) => ({ ...s, outcome_note: v }))} />
         </div>
       )}
       <div style={{ ...labelSt, marginBottom: 6 }}>Cost items → financial lines <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, color: "var(--faint)" }}>· zero-based: activity × unit cost</span></div>
