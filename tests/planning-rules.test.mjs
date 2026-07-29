@@ -4,7 +4,7 @@ import {
   transactionsFrom, calculatedSales, buildStoreSales, resolveAssumption,
   validateDriverDefinition, validateAssumption, PLANNING_SCOPES, ASSUMPTION_LEVELS,
   computeStoreSalesLines, monthsBetween, computeFixedCostLines, computePctOfSalesLines, validateCostRule,
-  computePayrollLines, validatePayrollRule,
+  computePayrollLines, validatePayrollRule, mappedAccountsOf, unmappedNominals,
 } from "../lib/planning-rules.js";
 
 test("transactions = footfall × conversion", () => {
@@ -163,6 +163,25 @@ test("validatePayrollRule requires basic and a period range", () => {
   assert.equal(validatePayrollRule({ scope: "COMPANY_STORE", monthly_basic: 10000, start_period: "2026-01", end_period: "2026-12" }), null);
   assert.match(validatePayrollRule({ scope: "COMPANY_STORE", start_period: "2026-01", end_period: "2026-12" }), /basic/);
   assert.match(validatePayrollRule({ scope: "COMPANY_STORE", monthly_basic: 10000 }), /start and end/);
+});
+
+test("mappedAccountsOf — collects every account a line entry claims", () => {
+  const spec = [
+    { kind: "line", label: "Sales", accounts: ["ST: Sales"] },
+    { kind: "total", label: "T", of: ["Sales"] },
+    { kind: "line", label: "Rent", accounts: ["ST: Rent", "ST: Rates"] },
+  ];
+  assert.deepEqual([...mappedAccountsOf(spec)].sort(), ["ST: Rates", "ST: Rent", "ST: Sales"]);
+});
+
+test("unmappedNominals — flags present nominals no line claims (the drop-out guard)", () => {
+  const spec = [
+    { kind: "line", label: "Sales", accounts: ["ST: Sales"] },
+    { kind: "line", label: "Rent", accounts: ["ST: Rent"] },
+  ];
+  // 'ST: Wages & Salaries' is present in the plan but not mapped by the template
+  assert.deepEqual(unmappedNominals(spec, ["ST: Sales", "ST: Rent", "ST: Wages & Salaries"]), ["ST: Wages & Salaries"]);
+  assert.deepEqual(unmappedNominals(spec, ["ST: Sales", "ST: Rent"]), []);
 });
 
 // ---- Assumption resolution -------------------------------------------------
