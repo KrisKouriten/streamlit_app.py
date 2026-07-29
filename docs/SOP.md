@@ -555,11 +555,18 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 **B. P.O Summary + Close — OPERATE** (`/operate/po-summary`, Finance/Admin only)
 
 1. Every signed-off P.O lands on Finance's review desk, filterable by **Needs Finance /
-   Open / Challenged / Closed / All** and by department.
+   Open / Challenged / Closed / All** and by department. A **⇄ Recharge** flag marks any
+   P.O set up to be recharged (Head-Office-only or split across stores).
 2. Finance records the **invoice number** and **invoice net amount** against the P.O
    (*Save invoice*), then either:
    - **Close** it — reported as **committed spend** on the Departmental Budget Dashboard
-     (using the invoice net where entered, else the P.O net value); or
+     (using the invoice net where entered, else the P.O net value); **and, if the P.O is
+     a recharge**, its allocation is **auto-posted to Intercompany → Inventory &
+     Recharges** as draft rows (one per store): the store is matched to its legal entity
+     as **CF In**, **CF Out** is left blank for Finance to set, amounts follow the invoice
+     net split by each store's %, and the P.O number/supplier/invoice carry across. The
+     post is idempotent (a re-close never duplicates) and traceable via `po_id`
+     (migration 054). Finance completes CF Out, VAT and reconciliation on the ledger; or
    - **Challenge** it under one or more controlled reasons — **Invoice value** (different
      to the P.O), **P.O details** (discrepancies vs the invoice), **P.O allocation**
      (requires further questions), **Spend vs budget** (requires further questions) —
@@ -609,6 +616,14 @@ here from the department chosen when each P.O was raised:
 - **P.Os under challenge** — the challenged P.Os and their reasons, in red.
 - **P.O register** — every **signed-off** P.O for the department, with supplier,
   campaign/category, net value, invoice net, committed £ and status.
+
+**Access — departments see only their own.** Finance, Exec and Admin can view any
+department (department picker enabled, and every department dashboard shows in the
+sidebar). Everyone else is locked to their **own** department: the other departments'
+dashboard nav entries are hidden, the picker is a static label, and a `?dept=` for
+another department is ignored (the page still renders their own). This is enforced
+server-side, not just in the sidebar. Manual per-department nav hides (Users, Roles &
+Permissions) still apply on top.
 
 ### 5.18 Departmental Budgets (PLAN — HO)
 

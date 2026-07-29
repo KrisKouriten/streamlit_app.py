@@ -1,6 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCsv, mapRows, CATEGORIES, toISODate } from "../lib/intercompany-rules.js";
+import { parseCsv, mapRows, CATEGORIES, toISODate, matchStoreEntity } from "../lib/intercompany-rules.js";
+
+const ENTITIES = [
+  { entity_id: 1, entity_name: "Miniso UK — Brighton", legal_name: "Kouriten Brighton Limited" },
+  { entity_id: 2, entity_name: "Miniso UK — Oxford Street", legal_name: "Kouriten Oxford Street Limited" },
+  { entity_id: 3, entity_name: "Miniso UK — Group", legal_name: "Kouriten Limited" },
+];
+
+test("matchStoreEntity maps a store name to its legal entity", () => {
+  assert.equal(matchStoreEntity(ENTITIES, "Brighton"), 1);
+  assert.equal(matchStoreEntity(ENTITIES, "Miniso UK — Brighton"), 1);
+  assert.equal(matchStoreEntity(ENTITIES, "Kouriten Brighton Limited"), 1);
+  assert.equal(matchStoreEntity(ENTITIES, "Oxford Street"), 2);
+});
+
+test("matchStoreEntity returns null when nothing matches or input is blank", () => {
+  assert.equal(matchStoreEntity(ENTITIES, "Cambridge"), null);
+  assert.equal(matchStoreEntity(ENTITIES, ""), null);
+  assert.equal(matchStoreEntity(ENTITIES, null), null);
+  assert.equal(matchStoreEntity([], "Brighton"), null);
+});
 
 test("UK dates (DD/MM/YYYY) normalise to ISO; ISO passes through", () => {
   assert.equal(toISODate("22/06/2026"), "2026-06-22");
