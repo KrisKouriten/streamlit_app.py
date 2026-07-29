@@ -62,8 +62,12 @@ entity/region derived from the Store Master. Planning scope is one of
     footfall × conversion × ATV ± management adjustment; blank drivers fall back
     to the Assumption Register; entity derived from the Store Master; idempotent
     recompute.
-  - **2b (next):** cost behaviours — fixed-cost rules + monthly overrides, and
-    %-of-sales costs (rate × the version's computed sales).
+  - **2b (done, migration 057):** cost behaviours — `planning.cost_rule` +
+    `planning.cost_override`. FIXED_MONTHLY (recurring over a period range, optional
+    annual increase, per-month override that never gets silently overwritten) and
+    PCT_OF_SALES (rate × the store's computed sales base). %-of-sales costs read the
+    sales plan lines, so they recalculate whenever sales change. Results land in
+    `plan_line` (source FIXED / PCT_OF_SALES).
   - **2c (next):** the payroll chain (basic → holiday → pension → employer NI →
     total), each component posting to its own nominal, rates from the register.
 - **Phase 3 — scope planning:** company-store, Head Office, franchise-store plans;
