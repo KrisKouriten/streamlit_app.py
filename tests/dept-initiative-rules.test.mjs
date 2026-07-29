@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   MONTH_KEYS, defaultKindFor, phaseCost, costAnnual, generateLines,
   initiativeInvestment, commercialSummary, validateInitiative,
+  costAmount, zeroBasedDetail,
 } from "../lib/dept-initiative-rules.js";
 
 const sumP = (arr) => arr.reduce((a, b) => a + Math.round(b * 100), 0);
@@ -12,6 +13,42 @@ test("defaultKindFor maps departments to their operational unit", () => {
   assert.equal(defaultKindFor("Architecture & Build"), "PROJECT");
   assert.equal(defaultKindFor("Logistics"), "CONTRACT");
   assert.equal(defaultKindFor("Nowhere"), "INITIATIVE");
+});
+
+test("costAmount — quantity × unit cost when both present, else the lump sum", () => {
+  assert.equal(costAmount({ quantity: 12, unit_cost: 2500 }), 30000);          // build-up wins
+  assert.equal(costAmount({ amount: 40000, quantity: 12, unit_cost: 2500 }), 30000); // build-up overrides a stale amount
+  assert.equal(costAmount({ amount: 40000 }), 40000);                          // no build-up → lump sum
+  assert.equal(costAmount({ amount: 40000, quantity: 12 }), 40000);            // unit cost missing → lump sum
+  assert.equal(costAmount({ quantity: 0, unit_cost: 2500 }), 0);               // zero quantity is still a build-up
+});
+
+test("phaseCost uses the zero-based build-up amount", () => {
+  // 12 campaigns × £2,500 = £30,000, one-off in March
+  const p = phaseCost({ quantity: 12, unit_cost: 2500, phasing: "ONEOFF", one_off_month: 3 }, { startMonth: 1, endMonth: 12 });
+  assert.equal(sumP(p), 3000000);
+  assert.equal(p[2], 30000);
+});
+
+test("zeroBasedDetail — one row per cost item with its build-up and basis", () => {
+  const inits = [{
+    name: "Spring Campaign", objective: "Increase Footfall", kind: "CAMPAIGN", classification: "GROWTH",
+    start_month: 1, end_month: 12,
+    costs: [
+      { category: "Media", line_label: "Paid media — digital", driver: "No. of campaigns", quantity: 4, unit_cost: 25000, phasing: "QUARTERLY" },
+      { category: "Agency", line_label: "Creative retainer", amount: 12000, phasing: "EVEN" },
+    ],
+  }];
+  const d = zeroBasedDetail(inits);
+  assert.equal(d.length, 2);
+  assert.equal(d[0].basis, "ZERO_BASED");
+  assert.equal(d[0].driver, "No. of campaigns");
+  assert.equal(d[0].amount, 100000);   // 4 × 25,000
+  assert.equal(d[0].annual, 100000);   // fully phased in-year
+  assert.equal(d[0].objective, "Increase Footfall");
+  assert.equal(d[1].basis, "LUMP_SUM");
+  assert.equal(d[1].quantity, null);
+  assert.equal(d[1].amount, 12000);
 });
 
 test("phaseCost EVEN spreads across the active month range, penny-exact", () => {

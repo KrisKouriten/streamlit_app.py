@@ -3,7 +3,7 @@ import { getSession, hasRole } from "../../../../lib/auth";
 import {
   listBudgets, getBudget, createBudget, saveLines, setTarget,
   transitionBudget, deleteBudget,
-  budgetDepartment, getUserDepartment, getApproverEmails,
+  budgetDepartment, getUserDepartment, getApproverEmails, addObjective,
 } from "../../../../lib/dept-budget";
 import { BUDGET_TRANSITIONS } from "../../../../lib/dept-budget-rules";
 import {
@@ -86,6 +86,11 @@ export async function POST(request) {
         return NextResponse.json({ error: "You can only create budgets for your own department" }, { status: 403 });
       }
       return NextResponse.json({ ok: true, ...(await createBudget(body, session)) });
+    }
+
+    // Add a new objective to the shared list (create-form "+ Add new").
+    if (action === "objective-add") {
+      return NextResponse.json({ ok: true, ...(await addObjective(body.label, session)) });
     }
 
     const budgetId = Number(body.budgetId);

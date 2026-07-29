@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
-import { listBudgets, getUserDepartment } from "../../../lib/dept-budget";
+import { listBudgets, getUserDepartment, listObjectives } from "../../../lib/dept-budget";
 import { listDepartments } from "../../../lib/governance";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
 import DeptBudgetUI from "./dept-budget-ui";
@@ -14,10 +14,11 @@ export default async function DeptBudgetsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [list, departments, myDept] = await Promise.all([
+  const [list, departments, myDept, objectives] = await Promise.all([
     listBudgets({}),
     listDepartments(),
     getUserDepartment(session.id),
+    listObjectives(),
   ]);
 
   const isAdminFinance = hasRole(session, "ADMIN", "FINANCE");
@@ -38,6 +39,7 @@ export default async function DeptBudgetsPage() {
           myDept={myDept}
           isAdminFinance={isAdminFinance}
           me={session.email || session.name}
+          initialObjectives={objectives}
         />
       )}
     </div>
