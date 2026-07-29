@@ -4,6 +4,7 @@ import {
   transactionsFrom, calculatedSales, buildStoreSales, resolveAssumption,
   validateDriverDefinition, validateAssumption, PLANNING_SCOPES, ASSUMPTION_LEVELS,
   computeStoreSalesLines, monthsBetween, computeFixedCostLines, computePctOfSalesLines, validateCostRule,
+  computePayrollLines, validatePayrollRule,
 } from "../lib/planning-rules.js";
 
 test("transactions = footfall × conversion", () => {
@@ -118,6 +119,50 @@ test("validateCostRule enforces behaviour-specific requirements", () => {
   assert.match(validateCostRule({ scope: "COMPANY_STORE", nominal: "ST: Rent", behaviour: "FIXED_MONTHLY", monthly_amount: 5000 }), /start and end/);
   assert.match(validateCostRule({ scope: "COMPANY_STORE", nominal: "X", behaviour: "PCT_OF_SALES" }), /rate/);
   assert.match(validateCostRule({ scope: "COMPANY_STORE", nominal: "X", behaviour: "NOPE" }), /behaviour/);
+});
+
+test("computePayrollLines — full chain to four component nominals, total in lineage", () => {
+  const rule = { scope: "COMPANY_STORE", monthly_basic: 10000, start_period: "2026-01", end_period: "2026-01" };
+  const lines = computePayrollLines(rule, { holiday_pct: 0.12, pension_pct: 0.03, er_ni_pct: 0.15, ni_threshold_monthly: 0 });
+  assert.equal(lines.length, 4);
+  const by = Object.fromEntries(lines.map((l) => [l.driver_code, l]));
+  assert.equal(by.PAYROLL_BASIC.amount, 10000);
+  assert.equal(by.PAYROLL_HOLIDAY.amount, 1200);          // 10000 × 12%
+  assert.equal(by.PAYROLL_PENSION.amount, 336);           // (11200) × 3%
+  assert.equal(by.PAYROLL_ER_NI.amount, 1680);            // 11200 × 15%
+  assert.equal(by.PAYROLL_BASIC.nominal, "ST: Wages & Salaries");
+  assert.equal(by.PAYROLL_ER_NI.nominal, "ST: Employer NI");
+  assert.equal(by.PAYROLL_BASIC.lineage.total, 13216);    // 11200 + 336 + 1680
+  assert.ok(lines.every((l) => l.source === "PAYROLL"));
+});
+
+test("computePayrollLines — employer NI only on gross above the monthly threshold", () => {
+  const lines = computePayrollLines(
+    { monthly_basic: 10000, start_period: "2026-01", end_period: "2026-01" },
+    { holiday_pct: 0.12, pension_pct: 0.03, er_ni_pct: 0.15, ni_threshold_monthly: 1200 });
+  const ni = lines.find((l) => l.driver_code === "PAYROLL_ER_NI");
+  assert.equal(ni.amount, 1500);                          // (11200 − 1200) × 15%
+});
+
+test("computePayrollLines — per-month override of basic recomputes the whole chain", () => {
+  const rule = { monthly_basic: 10000, start_period: "2026-01", end_period: "2026-02" };
+  const lines = computePayrollLines(rule, { holiday_pct: 0.12, pension_pct: 0.03, er_ni_pct: 0.15, ni_threshold_monthly: 0 }, [{ period: "2026-02", monthly_basic: 20000 }]);
+  const feb = lines.filter((l) => l.period === "2026-02");
+  assert.equal(feb.find((l) => l.driver_code === "PAYROLL_BASIC").amount, 20000);
+  assert.equal(feb.find((l) => l.driver_code === "PAYROLL_HOLIDAY").amount, 2400);
+  assert.equal(feb.find((l) => l.driver_code === "PAYROLL_BASIC").lineage.overridden, true);
+});
+
+test("computePayrollLines — annual increase escalates basic by year", () => {
+  const lines = computePayrollLines({ monthly_basic: 10000, annual_increase_pct: 0.05, start_period: "2026-12", end_period: "2027-01" }, { holiday_pct: 0, pension_pct: 0, er_ni_pct: 0, ni_threshold_monthly: 0 });
+  assert.equal(lines.find((l) => l.period === "2026-12" && l.driver_code === "PAYROLL_BASIC").amount, 10000);
+  assert.equal(lines.find((l) => l.period === "2027-01" && l.driver_code === "PAYROLL_BASIC").amount, 10500);
+});
+
+test("validatePayrollRule requires basic and a period range", () => {
+  assert.equal(validatePayrollRule({ scope: "COMPANY_STORE", monthly_basic: 10000, start_period: "2026-01", end_period: "2026-12" }), null);
+  assert.match(validatePayrollRule({ scope: "COMPANY_STORE", start_period: "2026-01", end_period: "2026-12" }), /basic/);
+  assert.match(validatePayrollRule({ scope: "COMPANY_STORE", monthly_basic: 10000 }), /start and end/);
 });
 
 // ---- Assumption resolution -------------------------------------------------

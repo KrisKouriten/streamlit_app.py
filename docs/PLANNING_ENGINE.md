@@ -68,6 +68,15 @@ entity/region derived from the Store Master. Planning scope is one of
     PCT_OF_SALES (rate × the store's computed sales base). %-of-sales costs read the
     sales plan lines, so they recalculate whenever sales change. Results land in
     `plan_line` (source FIXED / PCT_OF_SALES).
+  - **2c (done, migration 058):** the payroll chain — `planning.payroll_rule` +
+    `planning.payroll_override`. Per month: holiday = basic × holiday%; gross =
+    basic + holiday; pension = gross × pension%; employer NI = max(0, gross − monthly
+    NI threshold) × NI%. The four components each post to their own nominal in
+    `plan_line` (source PAYROLL); the TOTAL employment cost is carried in each
+    line's lineage — never posted as its own line, so it can't double-count when a
+    P&L template sums the component nominals. Blank rates fall back to the Assumption
+    Register (PAYROLL_* drivers); a per-month override sets that month's basic and
+    the chain recomputes from it.
   - **2c (next):** the payroll chain (basic → holiday → pension → employer NI →
     total), each component posting to its own nominal, rates from the register.
 - **Phase 3 — scope planning:** company-store, Head Office, franchise-store plans;
