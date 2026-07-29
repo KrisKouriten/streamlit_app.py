@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   transactionsFrom, calculatedSales, buildStoreSales, resolveAssumption,
   validateDriverDefinition, validateAssumption, PLANNING_SCOPES, ASSUMPTION_LEVELS,
+  computeStoreSalesLines,
 } from "../lib/planning-rules.js";
 
 test("transactions = footfall × conversion", () => {
@@ -39,6 +40,40 @@ test("buildStoreSales DIRECT — uses direct sales, ignores drivers for the tota
   const r = buildStoreSales({ method: "DIRECT", directSales: 300000, footfall: 210000, conversion: 0.135, atv: 8.75 });
   assert.equal(r.calculatedSales, 300000);
   assert.equal(r.finalSales, 300000);
+});
+
+test("computeStoreSalesLines — CORE month with full lineage", () => {
+  const [line] = computeStoreSalesLines(
+    [{ period: "2026-01", method: "CORE", footfall: 210000, conversion: 0.135, atv: 8.75 }]);
+  assert.equal(line.period, "2026-01");
+  assert.equal(line.nominal, "ST: Sales");
+  assert.equal(line.source, "SALES_DRIVER");
+  assert.equal(line.amount, 248062.5);
+  assert.equal(line.lineage.transactions, 28350);
+  assert.equal(line.lineage.managementAdjustment, 0);
+});
+
+test("computeStoreSalesLines — HYBRID keeps calc + adjustment separate in lineage", () => {
+  const [line] = computeStoreSalesLines(
+    [{ period: "2026-02", method: "HYBRID", footfall: 210000, conversion: 0.135, atv: 8.75, adjustment_amount: 6937.5 }]);
+  assert.equal(line.lineage.calculatedSales, 248062.5);
+  assert.equal(line.lineage.managementAdjustment, 6937.5);
+  assert.equal(line.amount, 255000);
+});
+
+test("computeStoreSalesLines — blank drivers fall back to the assumption resolver", () => {
+  const resolveDriver = (code) => ({ FOOTFALL: 100000, CONVERSION: 0.10, ATV: 10 }[code]);
+  const [line] = computeStoreSalesLines(
+    [{ period: "2026-03", method: "CORE" }], { resolveDriver });
+  assert.equal(line.lineage.footfall, 100000);
+  assert.equal(line.amount, 100000); // 100000 × 0.10 × 10
+});
+
+test("computeStoreSalesLines — custom nominal (e.g. franchise retail)", () => {
+  const [line] = computeStoreSalesLines(
+    [{ period: "2026-01", method: "DIRECT", direct_sales: 50000 }], { nominal: "FR: Retail Sales" });
+  assert.equal(line.nominal, "FR: Retail Sales");
+  assert.equal(line.amount, 50000);
 });
 
 // ---- Assumption resolution -------------------------------------------------

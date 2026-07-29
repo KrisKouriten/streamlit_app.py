@@ -55,7 +55,17 @@ entity/region derived from the Store Master. Planning scope is one of
   (`planning.scenario`). Pure rules + tests + DB layer. No UI, no live-screen change.
 - **Phase 2 — core driver engine:** store sales drivers (footfall × conversion ×
   ATV, direct, hybrid), %-of-sales costs, fixed-cost rules + overrides, payroll
-  chain, calculation lineage.
+  chain, calculation lineage. Delivered in slices:
+  - **2a (done, migration 056):** plan versions, store sales driver inputs, and
+    the calculated result grain `planning.plan_line` (keyed by the account NAME
+    the templates consume, e.g. `ST: Sales`, with `lineage`). Store net sales =
+    footfall × conversion × ATV ± management adjustment; blank drivers fall back
+    to the Assumption Register; entity derived from the Store Master; idempotent
+    recompute.
+  - **2b (next):** cost behaviours — fixed-cost rules + monthly overrides, and
+    %-of-sales costs (rate × the version's computed sales).
+  - **2c (next):** the payroll chain (basic → holiday → pension → employer NI →
+    total), each component posting to its own nominal, rates from the register.
 - **Phase 3 — scope planning:** company-store, Head Office, franchise-store plans;
   scope P&Ls via existing templates.
 - **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
