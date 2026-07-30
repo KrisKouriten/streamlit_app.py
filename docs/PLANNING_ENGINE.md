@@ -112,8 +112,14 @@ entity/region derived from the Store Master. Planning scope is one of
   × footfall × conversion × ATV × management adjustment with a live calculated/final
   preview; **Save** persists `sales_driver_input`; **Compute** runs sales + costs +
   payroll into `plan_line` and the store P&L re-renders below through the governed
-  template (shared `PnlTable`). API: `POST /api/plan/builder` (`saveSales`, `compute`).
-  Cost- and payroll-rule entry screens are the next increment.
+  template (shared `PnlTable`). The builder is tabbed — **Sales / Costs / Payroll /
+  P&L**: Costs adds fixed-monthly and %-of-sales rules (nominal picked from the store
+  template's cost accounts so they never render unmapped); Payroll adds the
+  basic→holiday→pension→NI chain (rates default to 12.07 / 3 / 13.8 %, blank falls
+  back to the Assumption Register). API: `POST /api/plan/builder`
+  (`saveSales`, `saveCostRule`, `deleteCostRule`, `savePayrollRule`,
+  `deletePayrollRule`, `compute`). Smoke: sales + fixed + %-of-sales + payroll foot to
+  EBITDA through the template with 0 unmapped.
 - **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
   + scope-readiness; consolidated P&L via existing template.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
