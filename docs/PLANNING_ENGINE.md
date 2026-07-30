@@ -95,10 +95,42 @@ entity/region derived from the Store Master. Planning scope is one of
       (`ST: Salaries - Basic Pay`, `ST: Salaries - Holiday Pay`, `ST: Pensions Costs`,
       `ST: Employers National Insurance`), so out-of-the-box they render as
       `unmapped`. Payroll rules must set the component nominals to the template's
-      account names (or the defaults be aligned) for staff costs to land in the
-      subtotal. Follow-up for the Phase 5 UI / a defaults tidy-up.
-- **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
-  + scope-readiness; consolidated P&L via existing template.
+      account names for staff costs to land in the subtotal. **Resolved in Phase 3b**
+      (see below): the payroll defaults are now the template account names.
+- **Phase 3b — engine on screen (read-only):** `Plan P&L (preview)` at `/plan/pl`
+  (nav: PLAN — Finance) is the first live surface over the engine. It renders a chosen
+  plan version × scenario × scope through `getScopePL` → the governed template, with a
+  store filter, a create-plan-version action, and the `unmapped` honesty banner. No
+  driver/cost/payroll entry yet — that's Phase 5. Also aligned the payroll default
+  nominals (`DEFAULT_PAYROLL_NOMINALS` in planning-rules.js) to the `STORE_FORMAT`
+  staff lines so computed payroll maps cleanly (0 unmapped), fixing the note above.
+  New helper `listPlanStores` backs the store filter.
+- **Phase 3c — Budget/Forecast Builder (sales driver entry):** `Budget / Forecast
+  Builder` at `/plan/builder` (nav: PLAN — Finance, the flipped-live `budget-builder`
+  slug). One screen for both — BUDGET vs FORECAST is the plan version's `kind`. First
+  cut is the store **sales driver** build: a month grid of method (CORE/DIRECT/HYBRID)
+  × footfall × conversion × ATV × management adjustment with a live calculated/final
+  preview; **Save** persists `sales_driver_input`; **Compute** runs sales + costs +
+  payroll into `plan_line` and the store P&L re-renders below through the governed
+  template (shared `PnlTable`). The builder is tabbed — **Sales / Costs / Payroll /
+  P&L**: Costs adds fixed-monthly and %-of-sales rules (nominal picked from the store
+  template's cost accounts so they never render unmapped); Payroll adds the
+  basic→holiday→pension→NI chain (rates default to 12.07 / 3 / 13.8 %, blank falls
+  back to the Assumption Register). API: `POST /api/plan/builder`
+  (`saveSales`, `saveCostRule`, `deleteCostRule`, `savePayrollRule`,
+  `deletePayrollRule`, `compute`). Smoke: sales + fixed + %-of-sales + payroll foot to
+  EBITDA through the template with 0 unmapped.
+- **Phase 4 — consolidation (migration 061):** `Consolidated P&L` at
+  `/plan/consolidated` (the flipped-live `consolidated-pl` slug). `getConsolidatedPL`
+  sums approved COMPANY_STORE + HEAD_OFFICE + FRANCHISE_STORE `plan_line` + APPROVED
+  `consolidation_adjustment`, rendered through the governed `consolidated` template as
+  five columns (Company Stores / Head Office / Franchise / Adjustments / Consolidated);
+  the Consolidated column reconciles to the sum of the others by construction. The
+  adjustments register (draft → approved, documented reason required — no unexplained
+  plug) is on the same screen. **Migration 061** also widens the `plan_line` unique
+  grain to include `department` so Head Office (planned by department) no longer
+  collides on the unique key. API: `POST /api/plan/consolidation`. Still to come:
+  HO/Franchise driver entry in the builder, franchise income drivers, scope-readiness.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
   scenario compare.
 - **Phase 6 — AI & reporting:** retrieval domain, reporting adapter, driver &
