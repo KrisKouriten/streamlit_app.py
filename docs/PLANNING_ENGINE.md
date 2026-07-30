@@ -105,6 +105,15 @@ entity/region derived from the Store Master. Planning scope is one of
   nominals (`DEFAULT_PAYROLL_NOMINALS` in planning-rules.js) to the `STORE_FORMAT`
   staff lines so computed payroll maps cleanly (0 unmapped), fixing the note above.
   New helper `listPlanStores` backs the store filter.
+- **Phase 3c — Budget/Forecast Builder (sales driver entry):** `Budget / Forecast
+  Builder` at `/plan/builder` (nav: PLAN — Finance, the flipped-live `budget-builder`
+  slug). One screen for both — BUDGET vs FORECAST is the plan version's `kind`. First
+  cut is the store **sales driver** build: a month grid of method (CORE/DIRECT/HYBRID)
+  × footfall × conversion × ATV × management adjustment with a live calculated/final
+  preview; **Save** persists `sales_driver_input`; **Compute** runs sales + costs +
+  payroll into `plan_line` and the store P&L re-renders below through the governed
+  template (shared `PnlTable`). API: `POST /api/plan/builder` (`saveSales`, `compute`).
+  Cost- and payroll-rule entry screens are the next increment.
 - **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
   + scope-readiness; consolidated P&L via existing template.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
