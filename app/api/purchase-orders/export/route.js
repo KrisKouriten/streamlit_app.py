@@ -1,6 +1,6 @@
 import { getSession, hasRole } from "../../../../lib/auth";
 import { posForExport } from "../../../../lib/purchase-orders";
-import { displayStatus, committedAmount, challengeReasonLabels } from "../../../../lib/po-rules";
+import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf } from "../../../../lib/po-rules";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +26,11 @@ export async function GET(request) {
   for (const p of pos) {
     const st = displayStatus(p);
     const base = {
-      "Xero P.O": p.xero_po_number, "P.O date": p.po_date ? String(p.po_date).slice(0, 10) : "",
+      "P.O number": poRef(p), "P.O date": p.po_date ? String(p.po_date).slice(0, 10) : "",
       Supplier: p.supplier, Department: p.department, Category: p.po_category,
       "Net value": Number(p.payment_value) || 0, Currency: p.currency,
       Status: st.label,
+      Payment: paymentStatusOf(p).label, "Paid date": p.paid_date ? String(p.paid_date).slice(0, 10) : "",
       "Invoice no": p.invoice_number || "", "Invoice net": p.invoice_amount != null ? Number(p.invoice_amount) : "",
       "Committed £": st.code === "CLOSED" ? committedAmount(p) : "",
       Challenge: p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons).join("; ") : "",
@@ -47,7 +48,7 @@ export async function GET(request) {
     }
   }
 
-  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Xero P.O": "No purchase orders" }]);
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "P.O number": "No purchase orders" }]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
   const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });

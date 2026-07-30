@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, challengeReasonLabels, committedAmount, isSignedOff } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf } from "../../../lib/po-rules";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -85,6 +85,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
   }
 
   const saveInvoice = (p) => op(p.po_id, { op: "set-invoice", invoice_number: inv[p.po_id]?.number || null, invoice_amount: inv[p.po_id]?.amount || null }, "Invoice saved.");
+  const setPayment = (p, payment_status) => op(p.po_id, { op: "set-payment-status", payment_status }, `Marked ${paymentStatusOf({ payment_status }).label.toLowerCase()}.`);
   const closePo = (p) => {
     if (!window.confirm(`Close P.O ${p.xero_po_number}? It will be reported as committed spend on the Departmental Budget Dashboard.`)) return;
     op(p.po_id, { op: "close", invoice_number: inv[p.po_id]?.number || null, invoice_amount: inv[p.po_id]?.amount || null }, "Closed — now committed spend.");
@@ -150,12 +151,12 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No purchase orders in this view.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 980 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1120 }}>
               <thead><tr>
                 <th style={{ padding: "8px 8px", borderBottom: "1px solid var(--line)" }}>
                   <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} />
                 </th>
-                {["Xero P.O", "Dept", "Supplier", "Net value", "Status", "Invoice no", "Invoice net (£)", "Actions"].map((h) => (
+                {["P.O number", "Dept", "Supplier", "Net value", "Status", "Payment", "Invoice no", "Invoice net (£)", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -171,7 +172,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           <input type="checkbox" checked={selected.has(String(p.po_id))} onChange={(e) => toggleRow(p.po_id, e.target.checked)} />
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          {p.xero_po_number}
+                          {poRef(p)}
                           {p.recharge_enabled && (
                             <div title={p.finance_status === "CLOSED" ? "Recharge auto-posted to Intercompany · Inventory & Recharges on close" : "Set up to be recharged — posts to Intercompany on close"}
                               style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "var(--accent)", background: "var(--accent-bg)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)", whiteSpace: "nowrap" }}>
@@ -186,6 +187,17 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           <StatusPill po={p} />
                           {st.code === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--green)", marginTop: 4 }}>Committed {money(committedAmount(p), p.currency)}</div>}
                           {p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</div>}
+                        </td>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                          {signed ? (
+                            <>
+                              <select style={{ ...inputSt, width: 110, color: TONE_FG[paymentStatusOf(p).tone] }} value={paymentStatusOf(p).code} disabled={isBusy}
+                                onChange={(e) => setPayment(p, e.target.value)}>
+                                {PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                              </select>
+                              {p.paid_date && <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3 }}>{new Date(p.paid_date).toLocaleDateString("en-GB")}</div>}
+                            </>
+                          ) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           <input style={{ ...inputSt, width: 120 }} placeholder="—" value={inv[p.po_id]?.number || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "number", e.target.value)} />
@@ -210,7 +222,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                       </tr>
                       {challengeFor === p.po_id && (
                         <tr>
-                          <td colSpan={9} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Challenge P.O {p.xero_po_number}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 8, marginBottom: 10 }}>
                               {CHALLENGE_REASONS.map((r) => (

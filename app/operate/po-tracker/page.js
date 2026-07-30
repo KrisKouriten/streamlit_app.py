@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, isAdmin } from "../../../lib/auth";
 import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
 import { getStoreList } from "../../../lib/store-sales";
-import { listSignoffs } from "../../../lib/governance";
+import { listSignoffs, getPoSelfApproveLimit } from "../../../lib/governance";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
 import PoUI from "./po-ui";
 
@@ -20,12 +20,13 @@ export default async function PurchaseOrderRequests() {
   const admin = isAdmin(session);
   const email = (session.email || "").toLowerCase();
 
-  const [list, departments, stores, signoffs, marketingCampaigns] = await Promise.all([
+  const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit] = await Promise.all([
     listPos({ limit: 100 }),
     getDepartments(),
     getStoreList().catch(() => []),
     listSignoffs().catch(() => []),
     marketingCampaignSuggestions().catch(() => []),
+    getPoSelfApproveLimit().catch(() => 0),
   ]);
 
   // Departments this user can sign off for (from governance.department_signoff).
@@ -52,6 +53,7 @@ export default async function PurchaseOrderRequests() {
           isAdmin={admin}
           approverDepts={approverDepts}
           marketingCampaigns={marketingCampaigns}
+          selfApproveLimit={selfApproveLimit}
         />
       )}
     </div>

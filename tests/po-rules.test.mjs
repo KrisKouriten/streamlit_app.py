@@ -5,6 +5,7 @@ import {
   invoiceOutcome, canSubmitForSignoff, poTransitionError, isEditablePo, PO_STATUSES, PO_TRANSITIONS,
   displayStatus, canDeletePo, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
   termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
+  poRef, paymentStatusOf, isPaymentStatus, selfApproveAllowed,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -24,8 +25,35 @@ test("validatePo catches each missing/!bad field", () => {
   assert.match(validatePo({ ...goodPo, payment_value: 0 }), /greater than zero/);
   assert.match(validatePo({ ...goodPo, fulfilment_days: -3 }), /days/);
   assert.match(validatePo({ ...goodPo, po_category: "" }), /category/);
-  assert.match(validatePo({ ...goodPo, xero_po_number: "" }), /Xero/);
   assert.match(validatePo({ ...goodPo, department: "" }), /department/);
+});
+
+test("validatePo no longer requires a P.O number (the platform mints it)", () => {
+  const { xero_po_number, ...noNumber } = goodPo;
+  assert.equal(validatePo(noNumber), null);
+});
+
+test("poRef prefers the minted number, then legacy Xero, then the id", () => {
+  assert.equal(poRef({ po_number: "PO-2001", xero_po_number: "PO-1042" }), "PO-2001");
+  assert.equal(poRef({ xero_po_number: "PO-1042" }), "PO-1042");
+  assert.equal(poRef({ po_id: 7 }), "P.O #7");
+  assert.equal(poRef({}), "—");
+});
+
+test("paymentStatusOf maps the code, defaulting to Unpaid", () => {
+  assert.equal(paymentStatusOf({ payment_status: "PAID" }).label, "Paid");
+  assert.equal(paymentStatusOf({ payment_status: "PART_PAID" }).tone, "amber");
+  assert.equal(paymentStatusOf({}).code, "UNPAID");
+  assert.equal(isPaymentStatus("PAID"), true);
+  assert.equal(isPaymentStatus("NOPE"), false);
+});
+
+test("selfApproveAllowed: within a positive limit only", () => {
+  assert.equal(selfApproveAllowed({ value: 500, limit: 1000 }), true);
+  assert.equal(selfApproveAllowed({ value: 1000, limit: 1000 }), true); // at the limit
+  assert.equal(selfApproveAllowed({ value: 1500, limit: 1000 }), false);
+  assert.equal(selfApproveAllowed({ value: 500, limit: 0 }), false);    // feature off
+  assert.equal(selfApproveAllowed({ value: 0, limit: 1000 }), false);
 });
 
 test("rechargeTotal and rechargeError", () => {

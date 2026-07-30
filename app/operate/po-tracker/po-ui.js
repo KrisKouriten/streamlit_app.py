@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
   invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, challengeReasonLabels,
-  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
+  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef, selfApproveAllowed,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
 
@@ -29,13 +29,13 @@ function StatusPill({ po }) {
 
 const EMPTY = {
   po_date: "", supplier: "", payment_terms: "", payment_date: "", currency: "GBP",
-  payment_value: "", po_category: "", xero_po_number: "",
+  payment_value: "", po_category: "",
   fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
   marketing_budget_category: "", marketing_campaign: "",
 };
 
-export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [] }) {
+export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], selfApproveLimit = 0 }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -89,6 +89,9 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
     recharge
   );
 
+  // Will this P.O be signed off automatically (within the self-approval limit)?
+  const willSelfApprove = selfApproveAllowed({ value: f.payment_value === "" ? 0 : f.payment_value, limit: selfApproveLimit });
+
   async function create(submitAfter) {
     setBusy(true); setError(null); setMsg(null);
     try {
@@ -96,12 +99,19 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
       const res = await fetch("/api/purchase-orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Could not create P.O");
+      let selfApproved = false;
       if (submitAfter) {
         const r2 = await fetch(`/api/purchase-orders/${j.poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "submit" }) });
         const j2 = await r2.json();
         if (!r2.ok) throw new Error(j2.error || "Created, but could not submit for sign-off");
+        selfApproved = !!j2.selfApproved;
       }
-      setMsg(submitAfter ? "P.O created and submitted for department-head sign-off." : "P.O saved as draft.");
+      const ref = j.poNumber ? ` (${j.poNumber})` : "";
+      setMsg(!submitAfter
+        ? `P.O${ref} saved as draft.`
+        : selfApproved
+          ? `P.O${ref} created and signed off automatically (within the self-approval limit) — it's now with Finance.`
+          : `P.O${ref} created and submitted for department-head sign-off.`);
       setF(EMPTY); setRecharge([]); setDueTouched(false);
       router.refresh();
     } catch (e) { setError(e.message); }
@@ -128,7 +138,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
       {/* ---- New P.O ---- */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>Raise a purchase order</div>
-        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 16 }}>Generate the P.O number in Xero first, then record it here. All fields marked are required.</div>
+        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 16 }}>A unique P.O number is generated automatically when you save — no need to raise it in Xero first. All fields marked are required.</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
           <label style={field}><span style={labelSt}>Date *</span><DateField value={f.po_date} onChange={setDate("po_date")} /></label>
@@ -140,7 +150,6 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           <label style={field}><span style={labelSt}>Currency *</span><select style={inputSt} value={f.currency} onChange={set("currency")}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Net value (£) *</span><input type="number" min="0" step="0.01" style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
           <label style={field}><span style={labelSt}>P.O category *</span><select style={inputSt} value={f.po_category} onChange={set("po_category")}><option value="">—</option>{PO_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-          <label style={field}><span style={labelSt}>Xero P.O number *</span><input style={inputSt} placeholder="e.g. PO-1042" value={f.xero_po_number} onChange={set("xero_po_number")} /></label>
           <label style={field}><span style={labelSt}>Fulfilment start date</span><DateField value={f.fulfilment_start_date} onChange={setDate("fulfilment_start_date")} /></label>
           <label style={field}><span style={labelSt}>Fulfilment period (days)</span><input type="number" min="0" step="1" style={inputSt} placeholder="e.g. 30" value={f.fulfilment_days} onChange={set("fulfilment_days")} /></label>
           <label style={field}><span style={labelSt}>Department *</span>
@@ -247,9 +256,10 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
           <button style={ghost} disabled={busy} onClick={() => create(false)}>Save draft</button>
-          <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || "Submit for department-head sign-off"} onClick={() => create(true)}>
-            {busy ? "Working…" : "Create & submit for sign-off"}
+          <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || (willSelfApprove ? "Within the self-approval limit — signs off automatically" : "Submit for department-head sign-off")} onClick={() => create(true)}>
+            {busy ? "Working…" : willSelfApprove ? "Create & sign off" : "Create & submit for sign-off"}
           </button>
+          {!gate && willSelfApprove && <span style={{ fontSize: 12, color: "var(--green)" }}>Within the £{Number(selfApproveLimit).toLocaleString("en-GB")} self-approval limit — this signs off automatically and goes straight to Finance.</span>}
           {gate && <span style={{ fontSize: 12, color: "var(--faint)" }}>{gate}</span>}
         </div>
       </div>
@@ -262,7 +272,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
-              <thead><tr>{["Xero P.O", "Supplier", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
+              <thead><tr>{["P.O number", "Supplier", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
@@ -271,7 +281,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                   const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
                   return (
                   <tr key={p.po_id}>
-                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.xero_po_number}</td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{poRef(p)}{p.self_approved ? <span title="Self-approved (within the self-approval limit)" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>· self</span> : null}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.department}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.po_category}{p.is_marketing ? (p.marketing_levy ? " · levy" : " · invoice") : ""}</td>

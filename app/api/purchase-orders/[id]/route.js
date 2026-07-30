@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, hasRole, isAdmin } from "../../../../lib/auth";
 import {
   getPo, updatePo, submitForSignoff, returnToDraft,
-  approvePo, rejectPo, deletePo, setInvoice, closePo, challengePo, reopenFinance,
+  approvePo, rejectPo, deletePo, setInvoice, closePo, challengePo, reopenFinance, setPaymentStatus,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
 import { canDeletePo } from "../../../../lib/po-rules";
@@ -58,15 +58,17 @@ export async function POST(request, { params }) {
         return NextResponse.json(await deletePo(id, session));
       }
 
-      // ---- Finance: invoice / close / challenge / reopen (P.O Summary + Close) ----
+      // ---- Finance: invoice / close / challenge / reopen / payment (P.O Summary + Close) ----
       case "set-invoice":
       case "close":
       case "challenge":
-      case "reopen-finance": {
+      case "reopen-finance":
+      case "set-payment-status": {
         if (!isFinance(session)) return NextResponse.json({ error: "Finance or admin only" }, { status: 403 });
         if (body.op === "set-invoice") return NextResponse.json(await setInvoice(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
         if (body.op === "close") return NextResponse.json(await closePo(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
         if (body.op === "challenge") return NextResponse.json(await challengePo(id, { reasons: body.reasons || [], note: body.note || null }, session));
+        if (body.op === "set-payment-status") return NextResponse.json(await setPaymentStatus(id, { payment_status: body.payment_status, paid_date: body.paid_date || null }, session));
         return NextResponse.json(await reopenFinance(id, session));
       }
 

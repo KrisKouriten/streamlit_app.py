@@ -531,10 +531,14 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 
 **A. Purchase Order Requests — PLAN → HO** (`/operate/po-tracker`)
 
-1. **Generate the number in Xero first**, then record the P.O — date, supplier,
-   payment terms & date, currency, **net value** (£), category, **Xero P.O number**,
-   **fulfilment start date**, **fulfilment period in days**, and the **department**
-   (the governed departments assignable per user in GOVERN → Users & Roles).
+1. Record the P.O — date, supplier, payment terms & date, currency, **net value** (£),
+   category, **fulfilment start date**, **fulfilment period in days**, and the
+   **department** (the governed departments assignable per user in GOVERN → Users &
+   Roles). The **P.O number is generated automatically** on save — a unique, sequential
+   `PO-####` minted by the platform (migration 062: `finance.po_number_seq`, unique
+   index). A number is never reused: the sequence never recycles, so even a deleted
+   P.O's number is retired. (The old *Xero P.O number* free-text field is removed; legacy
+   P.Os keep their recorded number.)
 2. **Marketing spend** asks one extra question — *is it part of the marketing levy?*
    **Yes** → allocate to stores with **no invoice**; **No** → **finance issues an
    invoice**. The chosen outcome is recorded on the P.O.
@@ -545,6 +549,14 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 4. **Save draft**, then **Create & submit for sign-off**. A department's **sign-off
    approvers** (governance.department_signoff — GOVERN → Users, Roles & Permissions), or
    any **admin**, then **Approve** or **Reject** it on this screen.
+   - **Self-approval limit.** Admins set an org-wide £ limit in GOVERN → Users, Roles &
+     Permissions → *Purchase-order self-approval*. A P.O whose **net value is at or below
+     the limit** is **signed off automatically** by whoever raises it (marked
+     *self-approved* in the audit trail and on the register) and goes straight to Finance
+     — so department-heads aren't asked to approve every small P.O. Anything above the
+     limit still goes for department-head sign-off. The limit defaults to **£0 = off**
+     (every P.O needs a sign-off). Stored in `governance.app_setting`
+     (`po_self_approve_limit`, migration 062).
 5. **Status** is shown against every P.O: **Draft → Awaiting sign-off → Open** (signed
    off, with Finance) → **Challenged** or **Closed**. A challenged P.O shows its
    **reason(s)** in red here until Finance resolves it.
@@ -572,7 +584,12 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
      (requires further questions), **Spend vs budget** (requires further questions) —
      with an optional note. A challenge shows **under challenge** on the dashboard and
      the requests screen until Finance **Re-opens** it.
-3. **Excel download** — tick individual P.Os and **Download selected**, or **Download
+3. **Payment status.** Against each signed-off P.O, Finance sets whether the supplier
+   has been paid — **Unpaid → Part-paid → Paid** (a **paid date** is stamped when marked
+   Paid). This is separate from the finance lifecycle (Open/Challenged/Closed) and is
+   surfaced to the raising department on its dashboard **P.O register** so departments can
+   see the payment state of every P.O (migration 062: `payment_status`, `paid_date`).
+4. **Excel download** — tick individual P.Os and **Download selected**, or **Download
    all**. The workbook has **one row per store allocation**, so every store and its
    value to invoice/recharge is listed, alongside the P.O header, status, invoice
    details and committed £.
@@ -608,14 +625,17 @@ engine keyed by `?dept=`, so every department reads the same way. All of a
 department's P.O activity — requests **and** the Summary + Close outcomes — rolls up
 here from the department chosen when each P.O was raised:
 
-- **Headline tiles** — budget (proposed & target), YTD committed spend (closed P.Os),
-  under challenge, open P.Os, budget remaining.
+- **Headline tiles** — budget (proposed & target); **YTD committed spend** (total £ of
+  closed P.Os, count beneath); under challenge; **open purchase orders** (total £ of open
+  P.Os, count beneath); **budget remaining** — proposed **less committed spend and open
+  P.Os** (both in-flight commitments and closed spend are netted off).
 - **Awaiting sign-off** — the budget holder's action queue: P.Os pending
   department-head sign-off, with inline **Approve / Reject** for that department's
   sign-off approvers (or an admin); read-only for everyone else.
 - **P.Os under challenge** — the challenged P.Os and their reasons, in red.
-- **P.O register** — every **signed-off** P.O for the department, with supplier,
-  campaign/category, net value, invoice net, committed £ and status.
+- **P.O register** — every **signed-off** P.O for the department, with its P.O number,
+  supplier, campaign/category, net value, invoice net, committed £, **payment status**
+  (Unpaid/Part-paid/Paid, maintained by Finance on P.O Summary + Close) and status.
 
 **Access — departments see only their own.** Finance, Exec and Admin can view any
 department (department picker enabled, and every department dashboard shows in the
