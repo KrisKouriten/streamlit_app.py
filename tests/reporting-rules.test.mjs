@@ -26,6 +26,16 @@ test("lifecycle: draft → review → approval → approved → issued", () => {
   assert.equal(reportTransitionError("issue", "APPROVED"), null);
 });
 
+test("cancel is recoverable: cancel → reopen → draft", () => {
+  assert.equal(reportTransitionError("cancel", "DRAFT"), null);
+  assert.equal(reportTransitionError("cancel", "IN_REVIEW"), null);
+  assert.equal(reportTransitionError("reopen", "CANCELLED"), null);
+  assert.equal(REPORT_TRANSITIONS.reopen.to, "DRAFT");
+  // Reopen only applies to a cancelled report, and a live report cannot be reopened.
+  assert.match(reportTransitionError("reopen", "DRAFT"), /Cannot reopen/);
+  assert.match(reportTransitionError("cancel", "ISSUED"), /Cannot cancel/);
+});
+
 test("illegal transitions are rejected", () => {
   assert.match(reportTransitionError("approve", "DRAFT"), /Cannot approve/);
   assert.match(reportTransitionError("issue", "IN_REVIEW"), /Cannot issue/);
