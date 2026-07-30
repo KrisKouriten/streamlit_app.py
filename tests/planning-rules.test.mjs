@@ -4,8 +4,9 @@ import {
   transactionsFrom, calculatedSales, buildStoreSales, resolveAssumption,
   validateDriverDefinition, validateAssumption, PLANNING_SCOPES, ASSUMPTION_LEVELS,
   computeStoreSalesLines, monthsBetween, computeFixedCostLines, computePctOfSalesLines, validateCostRule,
-  computePayrollLines, validatePayrollRule, mappedAccountsOf, unmappedNominals,
+  computePayrollLines, validatePayrollRule, mappedAccountsOf, unmappedNominals, DEFAULT_PAYROLL_NOMINALS,
 } from "../lib/planning-rules.js";
+import { STORE_FORMAT } from "../lib/pl-format.js";
 
 test("transactions = footfall × conversion", () => {
   assert.equal(Math.round(transactionsFrom(210000, 0.135)), 28350);
@@ -121,6 +122,19 @@ test("validateCostRule enforces behaviour-specific requirements", () => {
   assert.match(validateCostRule({ scope: "COMPANY_STORE", nominal: "X", behaviour: "NOPE" }), /behaviour/);
 });
 
+test("default payroll nominals all map to store P&L template staff lines (no unmapped)", () => {
+  // The store template's line accounts, flattened.
+  const templateAccounts = new Set(STORE_FORMAT.filter((e) => e.kind === "line").flatMap((e) => e.accounts));
+  for (const nom of Object.values(DEFAULT_PAYROLL_NOMINALS)) {
+    assert.ok(templateAccounts.has(nom), `payroll default nominal "${nom}" must be a store template account`);
+  }
+  // And the engine's default output uses exactly those nominals.
+  const lines = computePayrollLines(
+    { monthly_basic: 10000, start_period: "2026-01", end_period: "2026-01" },
+    { holiday_pct: 0.1207, pension_pct: 0.03, er_ni_pct: 0.138, ni_threshold_monthly: 0 });
+  assert.equal(unmappedNominals(STORE_FORMAT, lines.map((l) => l.nominal)).length, 0);
+});
+
 test("computePayrollLines — full chain to four component nominals, total in lineage", () => {
   const rule = { scope: "COMPANY_STORE", monthly_basic: 10000, start_period: "2026-01", end_period: "2026-01" };
   const lines = computePayrollLines(rule, { holiday_pct: 0.12, pension_pct: 0.03, er_ni_pct: 0.15, ni_threshold_monthly: 0 });
@@ -130,8 +144,8 @@ test("computePayrollLines — full chain to four component nominals, total in li
   assert.equal(by.PAYROLL_HOLIDAY.amount, 1200);          // 10000 × 12%
   assert.equal(by.PAYROLL_PENSION.amount, 336);           // (11200) × 3%
   assert.equal(by.PAYROLL_ER_NI.amount, 1680);            // 11200 × 15%
-  assert.equal(by.PAYROLL_BASIC.nominal, "ST: Wages & Salaries");
-  assert.equal(by.PAYROLL_ER_NI.nominal, "ST: Employer NI");
+  assert.equal(by.PAYROLL_BASIC.nominal, "ST: Salaries - Basic Pay");
+  assert.equal(by.PAYROLL_ER_NI.nominal, "ST: Employers National Insurance");
   assert.equal(by.PAYROLL_BASIC.lineage.total, 13216);    // 11200 + 336 + 1680
   assert.ok(lines.every((l) => l.source === "PAYROLL"));
 });

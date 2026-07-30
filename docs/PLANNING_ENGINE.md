@@ -95,8 +95,16 @@ entity/region derived from the Store Master. Planning scope is one of
       (`ST: Salaries - Basic Pay`, `ST: Salaries - Holiday Pay`, `ST: Pensions Costs`,
       `ST: Employers National Insurance`), so out-of-the-box they render as
       `unmapped`. Payroll rules must set the component nominals to the template's
-      account names (or the defaults be aligned) for staff costs to land in the
-      subtotal. Follow-up for the Phase 5 UI / a defaults tidy-up.
+      account names for staff costs to land in the subtotal. **Resolved in Phase 3b**
+      (see below): the payroll defaults are now the template account names.
+- **Phase 3b — engine on screen (read-only):** `Plan P&L (preview)` at `/plan/pl`
+  (nav: PLAN — Finance) is the first live surface over the engine. It renders a chosen
+  plan version × scenario × scope through `getScopePL` → the governed template, with a
+  store filter, a create-plan-version action, and the `unmapped` honesty banner. No
+  driver/cost/payroll entry yet — that's Phase 5. Also aligned the payroll default
+  nominals (`DEFAULT_PAYROLL_NOMINALS` in planning-rules.js) to the `STORE_FORMAT`
+  staff lines so computed payroll maps cleanly (0 unmapped), fixing the note above.
+  New helper `listPlanStores` backs the store filter.
 - **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
   + scope-readiness; consolidated P&L via existing template.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
