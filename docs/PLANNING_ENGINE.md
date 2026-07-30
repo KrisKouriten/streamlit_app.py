@@ -120,8 +120,17 @@ entity/region derived from the Store Master. Planning scope is one of
   (`saveSales`, `saveCostRule`, `deleteCostRule`, `savePayrollRule`,
   `deletePayrollRule`, `compute`). Smoke: sales + fixed + %-of-sales + payroll foot to
   EBITDA through the template with 0 unmapped.
-- **Phase 4 — consolidation:** consolidation service + adjustments + reconciliation
-  + scope-readiness; consolidated P&L via existing template.
+- **Phase 4 — consolidation (migration 061):** `Consolidated P&L` at
+  `/plan/consolidated` (the flipped-live `consolidated-pl` slug). `getConsolidatedPL`
+  sums approved COMPANY_STORE + HEAD_OFFICE + FRANCHISE_STORE `plan_line` + APPROVED
+  `consolidation_adjustment`, rendered through the governed `consolidated` template as
+  five columns (Company Stores / Head Office / Franchise / Adjustments / Consolidated);
+  the Consolidated column reconciles to the sum of the others by construction. The
+  adjustments register (draft → approved, documented reason required — no unexplained
+  plug) is on the same screen. **Migration 061** also widens the `plan_line` unique
+  grain to include `department` so Head Office (planned by department) no longer
+  collides on the unique key. API: `POST /api/plan/consolidation`. Still to come:
+  HO/Franchise driver entry in the builder, franchise income drivers, scope-readiness.
 - **Phase 5 — UX:** driver screens, impact preview, validation, submit/approve,
   scenario compare.
 - **Phase 6 — AI & reporting:** retrieval domain, reporting adapter, driver &
