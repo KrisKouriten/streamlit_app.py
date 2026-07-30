@@ -18,6 +18,9 @@ const AUDIENCES = [
   ["CEO", "CEO ⚠"], ["BOARD", "Board ⚠"], ["INVESTOR", "Investor / Group ⚠"], ["BANK", "Bank / Lender ⚠"],
 ];
 const SENSITIVE_AUD = new Set(["CEO", "BOARD", "INVESTOR", "BANK"]);
+// A report can be cancelled from any in-flight status (mirrors REPORT_TRANSITIONS.cancel);
+// a cancelled report can be reopened to a fresh draft (REPORT_TRANSITIONS.reopen).
+const CANCELLABLE = ["DRAFT", "DATA_PENDING", "COMMENTARY_PENDING", "REVIEW_READY", "IN_REVIEW", "RETURNED", "APPROVAL_READY"];
 const LEVEL_TONE = { PASSED: "var(--green)", WARNING: "var(--amber)", FAILED: "var(--red)" };
 const STATUS_TONE = { READY: "var(--green)", PARTIAL: "var(--amber)", PENDING: "var(--amber)", MISSING: "var(--red)" };
 
@@ -114,7 +117,9 @@ export default function Builder({ reportId, initial, canEdit, canApprove = false
           {status === "APPROVAL_READY" && canApprove && <button style={btn("var(--green)")} disabled={busy || !v.canIssue} onClick={() => op({ op: "transition", action: "approve" }, "Approved & locked")}>Approve & lock</button>}
           {status === "APPROVAL_READY" && !canApprove && <span style={{ fontSize: 12, color: "var(--faint)", alignSelf: "center" }}>Awaiting admin (Finance Director) approval</span>}
           {status === "APPROVED" && canApprove && <button style={btn("var(--green)")} disabled={busy} onClick={() => op({ op: "transition", action: "issue" }, "Issued")}>Issue</button>}
-          <button style={ghost} disabled={busy} onClick={() => op({ op: "snapshot", label: null }, "Draft snapshot taken")}>Snapshot draft</button>
+          {status !== "CANCELLED" && <button style={ghost} disabled={busy} onClick={() => op({ op: "snapshot", label: null }, "Draft snapshot taken")}>Snapshot draft</button>}
+          {CANCELLABLE.includes(status) && <button style={ghost} disabled={busy} onClick={() => { if (confirm("Cancel this report? It can be reopened later.")) op({ op: "transition", action: "cancel" }, "Report cancelled"); }}>Cancel report</button>}
+          {status === "CANCELLED" && <button style={btn("var(--accent)")} disabled={busy} onClick={() => op({ op: "transition", action: "reopen" }, "Report reopened as draft")}>Reopen as draft</button>}
         </div>
       )}
 
