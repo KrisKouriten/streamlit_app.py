@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession, isAdmin } from "../../../lib/auth";
-import { listUsersWithRoles, listDepartments, listSignoffs, listNavVisibility } from "../../../lib/governance";
+import { listUsersWithRoles, listDepartments, listSignoffs, listNavVisibility, getPoSelfApproveLimit } from "../../../lib/governance";
 import UsersAdmin from "./users-admin";
 import DepartmentSignoff from "./signoff";
 import AccessMatrix from "./access";
+import SelfApproveLimit from "./self-approve";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +24,12 @@ export default async function GovernUsers() {
     );
   }
 
-  const [users, departments, signoffs, visibility] = await Promise.all([
+  const [users, departments, signoffs, visibility, selfApproveLimit] = await Promise.all([
     listUsersWithRoles(),
     listDepartments(),
     listSignoffs(),
     listNavVisibility(),
+    getPoSelfApproveLimit().catch(() => 0),
   ]);
   const deptNames = departments.map((d) => d.department_name);
 
@@ -53,6 +55,12 @@ export default async function GovernUsers() {
         <h2 style={heading}>Department sign-off</h2>
         <p style={sub}>Who signs off each department&rsquo;s budgets and purchase orders. A department can have more than one approver.</p>
         <DepartmentSignoff departments={deptNames} signoffs={signoffs} users={users.map((u) => ({ name: u.name, email: u.email, department: u.department }))} />
+      </section>
+
+      <section style={{ marginBottom: 34 }}>
+        <h2 style={heading}>Purchase-order self-approval</h2>
+        <p style={sub}>A P.O whose net value is at or below this limit is signed off automatically by whoever raises it, so department-heads aren&rsquo;t asked to approve every small P.O. Anything above the limit still goes for department-head sign-off. Set £0 to switch it off.</p>
+        <SelfApproveLimit initialLimit={selfApproveLimit} />
       </section>
 
       <section>

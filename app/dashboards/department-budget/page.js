@@ -3,7 +3,7 @@ import { getSession, isAdmin, hasRole } from "../../../lib/auth";
 import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
-import { challengeReasonLabels, displayStatus, committedAmount } from "../../../lib/po-rules";
+import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
@@ -42,8 +42,11 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
 
   const s = d.summary;
   const committed = d.pos?.ytdCommitted || 0;
+  const openValue = d.pos?.openValue || 0;
   const proposed = s?.proposed || 0;
-  const budgetLeft = proposed ? proposed - committed : null;
+  // Budget remaining is net of both committed spend (closed P.Os) and open
+  // purchase-order commitments still in flight.
+  const budgetLeft = d.hasBudget ? proposed - committed - openValue : null;
   const maxCat = Math.max(1, ...(d.categories || []).map((c) => Math.abs(c.subtotal)));
 
   return (
@@ -60,19 +63,19 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <StatRow>
             <Stat label="Budget (proposed)" value={d.hasBudget ? money(proposed, { compact: true }) : "—"}
               sub={d.hasBudget ? (s.target != null ? `target ${money(s.target, { compact: true })}` : "no target set") : "no budget for this year"} />
-            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed POs, this year`} />
+            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed PO${(d.pos?.closedCount || 0) === 1 ? "" : "s"}, this year`} />
             <Stat label="Under challenge" value={String(d.pos?.challengedCount || 0)}
               sub={d.pos?.challengedCount ? `${money(d.pos.challengedValue || 0, { compact: true })} in query` : "none"}
               tone={d.pos?.challengedCount ? "red" : undefined} />
-            <Stat label="Open purchase orders" value={String(d.pos?.openCount || 0)}
-              sub={`${money(d.pos?.openValue || 0, { compact: true })}${d.pos?.pending ? ` · ${d.pos.pending} awaiting sign-off` : ""}`}
+            <Stat label="Open purchase orders" value={money(openValue, { compact: true })}
+              sub={`${d.pos?.openCount || 0} open PO${(d.pos?.openCount || 0) === 1 ? "" : "s"}${d.pos?.pending ? ` · ${d.pos.pending} awaiting sign-off` : ""}`}
               tone={d.pos?.pending ? "amber" : undefined} />
             <Stat label="Budget remaining" value={budgetLeft != null ? money(budgetLeft, { compact: true }) : "—"}
-              sub={budgetLeft != null ? "proposed less committed" : "set a budget"} tone={budgetLeft != null && budgetLeft < 0 ? "red" : undefined} />
+              sub={budgetLeft != null ? "proposed less committed & open" : "set a budget"} tone={budgetLeft != null && budgetLeft < 0 ? "red" : undefined} />
           </StatRow>
 
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
-            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
+            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded. <strong>Budget remaining</strong> is the proposed budget less committed spend <em>and</em> open purchase orders still in flight. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
           </div>
 
           {/* Awaiting sign-off — the budget-holder's action queue */}
@@ -111,7 +114,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               <div className="fos-card" style={{ padding: "6px 16px", borderColor: "color-mix(in srgb, var(--red) 30%, var(--line))" }}>
                 {d.pos.challenged.map((p) => (
                   <div key={p.po_id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{p.xero_po_number}</span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{poRef(p)}</span>
                     <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
                     <span className="fos-num" style={{ fontSize: 12.5 }}>{money(p.payment_value)}</span>
                     <span style={{ flex: 1, fontSize: 11.5, color: "var(--red)" }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</span>
@@ -140,13 +143,14 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <Panel title="P.O register" note={`${d.pos?.registerCount || 0} signed off`}>
             <Table
               columns={[
-                { label: "Xero P.O", render: (r) => r.xero_po_number || "—" },
+                { label: "P.O number", render: (r) => poRef(r) },
                 { label: "Approved", render: (r) => (r.approved_at ? new Date(r.approved_at).toLocaleDateString("en-GB") : "—") },
                 { label: "Supplier", render: (r) => r.supplier || "—" },
                 { label: department === "Marketing" ? "Campaign" : "Category", render: (r) => (department === "Marketing" ? (r.marketing_campaign || r.po_category || "—") : (r.po_category || "—")) },
                 { label: "Net value", align: "right", render: (r) => money(r.payment_value) },
                 { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
                 { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(committedAmount(r)) : "—") },
+                { label: "Payment", render: (r) => { const ps = paymentStatusOf(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
                 { label: "Status", render: (r) => { const st = displayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
               ]}
               rows={d.pos?.register || []}

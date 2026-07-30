@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
 import { clearMfaForUser } from "../../../../lib/mfa";
-import { audit, setUserRole, setUserDepartment, listUsersWithRoles, addSignoff, removeSignoff, setNavVisibility } from "../../../../lib/governance";
+import { audit, setUserRole, setUserDepartment, listUsersWithRoles, addSignoff, removeSignoff, setNavVisibility, setAppSetting } from "../../../../lib/governance";
 import { createInvite } from "../../../../lib/invite";
 import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
 import { graphConfigured, sendMail } from "../../../../lib/email/graph";
@@ -168,6 +168,17 @@ export async function POST(request) {
       await removeSignoff(signoffId);
       await audit({ actor: session, eventType: "dept.signoff.remove", objectType: "department_signoff", objectRef: String(signoffId) });
       return NextResponse.json({ ok: true });
+    }
+
+    if (action === "set-po-self-approve-limit") {
+      const raw = body.limit;
+      const limit = Number(raw);
+      if (!Number.isFinite(limit) || limit < 0) {
+        return NextResponse.json({ error: "Enter a limit of £0 or more (0 turns self-approval off)" }, { status: 400 });
+      }
+      await setAppSetting("po_self_approve_limit", Math.round(limit), session);
+      await audit({ actor: session, eventType: "settings.po_self_approve_limit", objectType: "app_setting", objectRef: "po_self_approve_limit", detail: { limit: Math.round(limit) } });
+      return NextResponse.json({ ok: true, limit: Math.round(limit) });
     }
 
     if (action === "set-visibility") {
