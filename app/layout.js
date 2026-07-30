@@ -116,6 +116,15 @@ a.fos-card{display:block;text-decoration:none;color:inherit}
 .fos-kbd{font-family:var(--mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line-strong);
   border-bottom-width:2px;border-radius:5px;padding:1.5px 5.5px;background:var(--raise)}
 
+/* sidebar rows — the ☆ pin sits quiet until you hover the row (an already-pinned
+   ★ and keyboard focus stay visible, and touch devices with no hover show it). */
+.fos-navrow{transition:background var(--t-fast) var(--ease)}
+.fos-navrow:hover{background:var(--raise)}
+.fos-navrow button[aria-pressed="false"]{opacity:0;transition:opacity var(--t-fast) var(--ease)}
+.fos-navrow:hover button[aria-pressed="false"],
+.fos-navrow button[aria-pressed="false"]:focus-visible{opacity:1}
+@media (hover:none){.fos-navrow button[aria-pressed="false"]{opacity:.6}}
+
 /* numerics */
 .fos-num{font-variant-numeric:tabular-nums}
 

@@ -115,9 +115,12 @@ lists every subsection as a Live or Planned card; the chevron beside it still
 toggles the group open/closed.
 
 **Recently viewed & favourites.** The sidebar and My Finance Home remember the pages
-you visit (a personal convenience kept only in your browser). On My Finance Home,
-**Recently viewed** lists where you've been; **★ pin** any page to add it to
-**Favourites**, which then sit at the top of the sidebar for one-click access.
+you visit (a personal convenience kept only in your browser). Every sub-header in the
+sidebar carries a **☆** — click it to drop that page into the **Favourites** folder
+at the top of the navigation (click the **★** again to remove it). The Favourites
+folder is always present and collapsible, giving one-click access to the screens you
+use most. On My Finance Home, **Recently viewed** lists where you've been and any page
+there can be pinned the same way; favourites stay in sync across both surfaces.
 
 **Every hub leads with a hero and page intelligence.** Each section and pillar hub
 now opens with a **hero KPI band** — the headline figures for that area (drawn from
