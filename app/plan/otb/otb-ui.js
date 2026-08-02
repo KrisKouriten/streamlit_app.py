@@ -180,8 +180,8 @@ export default function OtbWorkspace({ versions = [], channels = [], version, de
       )}
 
       {!version ? (
-        <EmptyState title="No OTB version selected">
-          Create an OTB version above to start building the plan. If the merchandising schema (migration 065/066) has not been applied yet, versions will appear once it is.
+        <EmptyState title="Start your first Open-to-Buy plan">
+          Create an OTB version with the button above — then set your sales, assumptions and stock position, and the workspace computes the remaining Open-to-Buy for Miniso MDS and Local Purchase across every component.
         </EmptyState>
       ) : (
         <>

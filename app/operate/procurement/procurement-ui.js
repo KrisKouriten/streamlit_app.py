@@ -96,8 +96,58 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
-      {canManage && <Upload onDone={() => router.refresh()} />}
+      {canManage && (
+        <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
+          <AddLine source={tab} onDone={() => router.refresh()} />
+          <Upload onDone={() => router.refresh()} />
+        </Panel>
+      )}
     </>
+  );
+}
+
+// Add a single purchase directly on the page — no spreadsheet. Example values sit
+// in the placeholders so it's obvious what each field wants.
+function AddLine({ source, onDone }) {
+  const empty = { supplier: "", category: "", order_ym: "", amount_gbp: "", terms_days: "", status: "COMMITTED", reference: "" };
+  const [f, setF] = useState(empty);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const eg = source === "MINISO"
+    ? { supplier: "e.g. MINISO HQ", category: "e.g. Core range", amount: "e.g. 420000", terms: "e.g. 60 days", ref: "e.g. PO-1042" }
+    : { supplier: "e.g. Design360", category: "e.g. Fixtures", amount: "e.g. 42000", terms: "e.g. 30 days", ref: "e.g. PO-2087" };
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setMsg("");
+    try {
+      await post({ action: "purchase", source, ...f });
+      setF(empty); setMsg("Added.");
+      onDone();
+    } catch (x) { setMsg(x.message); }
+    finally { setBusy(false); }
+  }
+  const inp = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
+  const lab = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
+  const Field = ({ label, children }) => <label style={{ display: "block" }}><span style={lab}>{label}</span>{children}</label>;
+  return (
+    <form onSubmit={submit} className="fos-card" style={{ padding: "15px 17px", marginBottom: 14 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add a {source === "MINISO" ? "Miniso" : "Local"} purchase</div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>Enter a purchase directly — no spreadsheet needed. The cash-out month is worked out from the order month plus the supplier&rsquo;s payment terms.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
+        <Field label="Supplier"><input required value={f.supplier} onChange={set("supplier")} placeholder={eg.supplier} style={inp} /></Field>
+        <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
+        <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
+        <Field label="Amount (£)"><input required type="number" min="0" step="0.01" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        <Field label="Terms (days)"><input type="number" min="0" value={f.terms_days} onChange={set("terms_days")} placeholder={eg.terms} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        <Field label="Status"><select value={f.status} onChange={set("status")} style={inp}><option value="COMMITTED">Committed</option><option value="PAID">Paid</option></select></Field>
+        <Field label="Reference"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 13 }}>
+        <button type="submit" className="fos-btn" disabled={busy} style={{ height: 34, fontSize: 12.5 }}>{busy ? "Adding…" : "Add purchase"}</button>
+        {msg && <span style={{ fontSize: 12, color: msg === "Added." ? "var(--green)" : "var(--red)" }}>{msg}</span>}
+      </div>
+    </form>
   );
 }
 
