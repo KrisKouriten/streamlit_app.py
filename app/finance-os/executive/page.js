@@ -4,6 +4,7 @@ import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
 import Orbit from "./orbit";
+import Starfield from "../../starfield";
 import PerspectivePanel from "../../perspective-panel";
 import LiveStamp from "../../live-stamp";
 
@@ -111,7 +112,13 @@ export default async function ExecutiveHub() {
         </div>
       </header>
 
-      <Orbit core={core} nodes={nodes} />
+      {/* The connected sphere sits in a quiet starfield — the control tower in space. */}
+      <div style={{ position: "relative", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8 }}>
+        <Starfield count={120} seed={4206} style={{ maskImage: "radial-gradient(ellipse 75% 75% at 50% 45%, #000 55%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 75% 75% at 50% 45%, #000 55%, transparent 100%)" }} />
+        <div style={{ position: "relative" }}>
+          <Orbit core={core} nodes={nodes} />
+        </div>
+      </div>
 
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5, textAlign: "center", maxWidth: 760, marginInline: "auto" }}>
         Revenue and gross margin (left) are live from the store sales feed — all stores. Revenue, gross profit, net

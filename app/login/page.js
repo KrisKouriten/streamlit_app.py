@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Starfield from "../starfield";
 
 /* The doorway. A quiet, lit field with the orbital motif behind a glass card —
    the first thing anyone sees should already feel like the product. */
@@ -87,7 +88,8 @@ export default function LoginPage() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", position: "relative", overflow: "hidden" }}>
-      {/* orbital field behind the card */}
+      {/* starfield + orbital field behind the card */}
+      <Starfield count={140} seed={20260803} />
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 780, height: 780, borderRadius: "50%",
           border: "1px solid color-mix(in srgb, var(--accent-deep) 55%, transparent)", opacity: .5 }} />
