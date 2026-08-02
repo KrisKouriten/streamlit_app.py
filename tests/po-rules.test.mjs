@@ -6,6 +6,8 @@ import {
   displayStatus, canDeletePo, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
   termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
   poRef, paymentStatusOf, isPaymentStatus, selfApproveAllowed,
+  selfApprovalDecision, validateDeptPoPolicy, isMeasurementPeriod,
+  PO_APPROVAL_ROUTES, CANCELLED_PO_POLICIES,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -184,4 +186,118 @@ test("MARKETING_BUDGET_LINKS covers the expected budget parts", () => {
   assert.ok(MARKETING_BUDGET_LINKS.includes("Campaign costs"));
   assert.ok(MARKETING_BUDGET_LINKS.includes("One-off projects"));
   assert.ok(MARKETING_BUDGET_LINKS.includes("New store openings"));
+});
+
+// ---- Department self-approval policy (migration 063) ----
+
+const marketingPolicy = {
+  department: "Marketing", active: true,
+  count_limit: 5, measurement_period: "FINANCIAL_PERIOD",
+  max_individual_value: 2500, max_cumulative_value: 8000,
+  line_manager_email: "head.marketing@example.com",
+  cancelled_po_policy: "RETAIN_IN_COUNT",
+};
+
+test("validateDeptPoPolicy accepts a well-formed policy", () => {
+  assert.equal(validateDeptPoPolicy(marketingPolicy), null);
+});
+
+test("validateDeptPoPolicy rejects bad input", () => {
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, department: "  " }), /department/i);
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, measurement_period: "NOPE" }), /period/i);
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, count_limit: -1 }), /count limit/i);
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, max_cumulative_value: -5 }), /cumulative/i);
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, measurement_period: "CUSTOM_PERIOD", custom_period_days: 0 }), /custom period/i);
+  assert.match(validateDeptPoPolicy({ ...marketingPolicy, cancelled_po_policy: "WAT" }), /cancelled/i);
+});
+
+test("isMeasurementPeriod + CANCELLED_PO_POLICIES vocab", () => {
+  assert.ok(isMeasurementPeriod("FINANCIAL_PERIOD"));
+  assert.ok(!isMeasurementPeriod("FORTNIGHT"));
+  assert.ok(CANCELLED_PO_POLICIES.some((c) => c.code === "RETAIN_IN_COUNT"));
+});
+
+test("selfApprovalDecision: within all limits self-approves", () => {
+  const d = selfApprovalDecision({
+    value: 1900, policy: marketingPolicy,
+    usage: { count: 2, cumulativeValue: 4100 },
+  });
+  assert.equal(d.selfApprove, true);
+  assert.equal(d.route, PO_APPROVAL_ROUTES.SELF);
+  assert.equal(d.remainingCount, 3);
+  assert.equal(d.remainingValue, 3900);
+  assert.equal(d.projectedValue, 6000);
+  assert.equal(d.binding, null);
+});
+
+test("selfApprovalDecision: cumulative cap is the binding rule", () => {
+  // 4 used, £6,450 cumulative; this P.O £1,900 → £8,350 > £8,000.
+  const d = selfApprovalDecision({
+    value: 1900, policy: marketingPolicy,
+    usage: { count: 4, cumulativeValue: 6450 },
+  });
+  assert.equal(d.selfApprove, false);
+  assert.equal(d.route, PO_APPROVAL_ROUTES.MANAGER);   // policy has a line manager
+  assert.match(d.binding, /cumulative/i);
+  assert.equal(d.remainingCount, 1);
+});
+
+test("selfApprovalDecision: count limit reached", () => {
+  const d = selfApprovalDecision({
+    value: 100, policy: marketingPolicy,
+    usage: { count: 5, cumulativeValue: 500 },
+  });
+  assert.equal(d.selfApprove, false);
+  assert.match(d.binding, /all 5 self-approved/i);
+  assert.equal(d.remainingCount, 0);
+});
+
+test("selfApprovalDecision: individual value cap", () => {
+  const d = selfApprovalDecision({
+    value: 3000, policy: marketingPolicy,
+    usage: { count: 0, cumulativeValue: 0 },
+  });
+  assert.equal(d.selfApprove, false);
+  assert.match(d.binding, /individual self-approval limit/i);
+});
+
+test("selfApprovalDecision: most-restrictive lists every breached rule", () => {
+  const d = selfApprovalDecision({
+    value: 3000, policy: marketingPolicy,
+    usage: { count: 5, cumulativeValue: 7900 },
+  });
+  assert.equal(d.selfApprove, false);
+  // count + individual + cumulative all breached.
+  assert.equal(d.reasons.length >= 3, true);
+});
+
+test("selfApprovalDecision: extra blocks (budget/supplier/SoD) always defer", () => {
+  const d = selfApprovalDecision({
+    value: 100, policy: marketingPolicy,
+    usage: { count: 0, cumulativeValue: 0 },
+    blocks: ["Department budget is insufficient"],
+  });
+  assert.equal(d.selfApprove, false);
+  assert.match(d.binding, /budget/i);
+  assert.equal(d.route, PO_APPROVAL_ROUTES.MANAGER);
+});
+
+test("selfApprovalDecision: no policy falls back to the org-wide limit", () => {
+  const within = selfApprovalDecision({ value: 400, policy: null, orgLimit: 500 });
+  assert.equal(within.selfApprove, true);
+  assert.equal(within.route, PO_APPROVAL_ROUTES.SELF);
+
+  const over = selfApprovalDecision({ value: 900, policy: null, orgLimit: 500 });
+  assert.equal(over.selfApprove, false);
+  assert.equal(over.route, PO_APPROVAL_ROUTES.DEPT);
+  assert.match(over.binding, /self-approval limit/i);
+
+  const off = selfApprovalDecision({ value: 900, policy: null, orgLimit: 0 });
+  assert.equal(off.selfApprove, false);
+  assert.match(off.binding, /off/i);
+});
+
+test("selfApprovalDecision: inactive policy also falls back", () => {
+  const d = selfApprovalDecision({ value: 400, policy: { ...marketingPolicy, active: false }, orgLimit: 500 });
+  assert.equal(d.selfApprove, true);
 });

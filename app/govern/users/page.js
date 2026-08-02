@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession, isAdmin } from "../../../lib/auth";
-import { listUsersWithRoles, listDepartments, listSignoffs, listNavVisibility, getPoSelfApproveLimit } from "../../../lib/governance";
+import { listUsersWithRoles, listDepartments, listSignoffs, listNavVisibility, getPoSelfApproveLimit, listDeptPoPolicies, listReportPermissions } from "../../../lib/governance";
+import { listTemplates } from "../../../lib/reporting/templates";
 import UsersAdmin from "./users-admin";
 import DepartmentSignoff from "./signoff";
 import AccessMatrix from "./access";
 import SelfApproveLimit from "./self-approve";
+import PoPolicySettings from "./po-policy";
+import ReportAccessMatrix from "./report-access";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +27,18 @@ export default async function GovernUsers() {
     );
   }
 
-  const [users, departments, signoffs, visibility, selfApproveLimit] = await Promise.all([
+  const [users, departments, signoffs, visibility, selfApproveLimit, poPolicies, reportPerms, tpl] = await Promise.all([
     listUsersWithRoles(),
     listDepartments(),
     listSignoffs(),
     listNavVisibility(),
     getPoSelfApproveLimit().catch(() => 0),
+    listDeptPoPolicies().catch(() => []),
+    listReportPermissions().catch(() => []),
+    listTemplates().catch(() => ({ templates: [] })),
   ]);
   const deptNames = departments.map((d) => d.department_name);
+  const reportTemplates = (Array.isArray(tpl) ? tpl : tpl.templates || []).map((t) => ({ template_key: t.template_key, name: t.name }));
 
   const heading = { fontSize: 16, fontWeight: 650, margin: "0 0 4px" };
   const sub = { fontSize: 12.5, color: "var(--muted)", margin: "0 0 14px", lineHeight: 1.5 };
@@ -59,8 +66,20 @@ export default async function GovernUsers() {
 
       <section style={{ marginBottom: 34 }}>
         <h2 style={heading}>Purchase-order self-approval</h2>
-        <p style={sub}>A P.O whose net value is at or below this limit is signed off automatically by whoever raises it, so department-heads aren&rsquo;t asked to approve every small P.O. Anything above the limit still goes for department-head sign-off. Set £0 to switch it off.</p>
+        <p style={sub}>A P.O whose net value is at or below this limit is signed off automatically by whoever raises it, so department-heads aren&rsquo;t asked to approve every small P.O. Anything above the limit still goes for department-head sign-off. Set £0 to switch it off. This is the fallback for departments without their own policy below.</p>
         <SelfApproveLimit initialLimit={selfApproveLimit} />
+      </section>
+
+      <section style={{ marginBottom: 34 }}>
+        <h2 style={heading}>Department PO Approval Settings</h2>
+        <p style={sub}>Per-department self-approval limits. Set a count of self-approved P.Os per period, an individual-P.O value cap and a cumulative value cap. Once the first of those is reached, the next P.O routes to the line manager (or department) for sign-off. Departments without a policy use the org-wide limit above.</p>
+        <PoPolicySettings departments={deptNames} initialPolicies={poPolicies} />
+      </section>
+
+      <section style={{ marginBottom: 34 }}>
+        <h2 style={heading}>Department report access</h2>
+        <p style={sub}>Choose which Corporate Reporting Centre reports each department may view and export. Finance, Exec and Admin always have full access; this grants access to the other departments. Enforced server-side.</p>
+        <ReportAccessMatrix departments={deptNames} templates={reportTemplates} initialPermissions={reportPerms} />
       </section>
 
       <section>

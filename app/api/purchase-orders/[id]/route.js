@@ -3,6 +3,7 @@ import { getSession, hasRole, isAdmin } from "../../../../lib/auth";
 import {
   getPo, updatePo, submitForSignoff, returnToDraft,
   approvePo, rejectPo, deletePo, setInvoice, closePo, challengePo, reopenFinance, setPaymentStatus,
+  computeSelfApprovalDecision, overrideRoute,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
 import { canDeletePo } from "../../../../lib/po-rules";
@@ -39,6 +40,31 @@ export async function POST(request, { params }) {
         return NextResponse.json(await submitForSignoff(id, session));
       case "return":
         return NextResponse.json(await returnToDraft(id, session));
+
+      // Live "Self-approval status" preview. Uses the saved P.O by default; the
+      // editor may pass department/value for an in-progress figure.
+      case "self-approval-preview": {
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        const department = body.department != null ? body.department : loaded.po.department;
+        const value = body.value != null ? body.value : loaded.po.payment_value;
+        const { decision } = await computeSelfApprovalDecision({ department, value });
+        return NextResponse.json({ ok: true, decision });
+      }
+
+      // Authorised override of the automatic route. Approvers/admin only, and never
+      // the requester (segregation of duties).
+      case "override-route": {
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        if (!(await canApprove(session, loaded.po.department))) {
+          return NextResponse.json({ error: "Only this department's sign-off approvers (or an admin) can override the route" }, { status: 403 });
+        }
+        if ((loaded.po.created_by || "").toLowerCase() === (session.email || session.name || "").toLowerCase()) {
+          return NextResponse.json({ error: "You cannot override the approval route on your own P.O" }, { status: 403 });
+        }
+        return NextResponse.json(await overrideRoute(id, { route: body.route, reason: body.reason, evidence: body.evidence || null }, session));
+      }
 
       case "approve":
       case "reject": {

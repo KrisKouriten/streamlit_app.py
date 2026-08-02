@@ -1,7 +1,9 @@
 import { createHash } from "crypto";
-import { getSession, hasRole } from "../../../../../lib/auth";
+import { getSession } from "../../../../../lib/auth";
 import { scopeForSession } from "../../../../../lib/intelligence/permission";
-import { resolveReport, getVersion, recordExport } from "../../../../../lib/reporting/reports";
+import { resolveReport, getVersion, recordExport, getReport } from "../../../../../lib/reporting/reports";
+import { getUserDepartmentById, getReportPermissionsForDepartment } from "../../../../../lib/governance";
+import { canAccessReport } from "../../../../../lib/reporting/report-access-rules";
 import { buildDeckPptx } from "../../../../../lib/reporting/export-pptx";
 import { buildAppendixWorkbook } from "../../../../../lib/reporting/export-xlsx";
 import { buildReportDocx } from "../../../../../lib/reporting/export-docx";
@@ -29,8 +31,16 @@ function assembleFromResolved(resolved) {
 export async function GET(request, { params }) {
   const session = await getSession();
   if (!session) return new Response(JSON.stringify({ error: "Not signed in" }), { status: 401 });
-  if (!hasRole(session, "ADMIN", "FINANCE", "EXEC")) return new Response(JSON.stringify({ error: "Not authorised" }), { status: 403 });
   const { id } = await params;
+  // Export access: finance/exec/admin may export; other departments need the
+  // export grant on this report template (migration 064).
+  const loaded = await getReport(id);
+  if (!loaded) return new Response(JSON.stringify({ error: "Report not found" }), { status: 404 });
+  const department = await getUserDepartmentById(session.id);
+  const permissions = await getReportPermissionsForDepartment(department);
+  if (!canAccessReport({ roles: session.roles, permissions, templateKey: loaded.template_key, verb: "export" })) {
+    return new Response(JSON.stringify({ error: "You do not have permission to export this report" }), { status: 403 });
+  }
   const url = new URL(request.url);
   const format = (url.searchParams.get("format") || "pptx").toLowerCase();
   const versionId = url.searchParams.get("version");
