@@ -899,6 +899,56 @@ here.
 - **Materiality.** Agent outputs above the agent's £ threshold require review;
   below-threshold, non-report outputs still route to review by default.
 - **Freshness.** The Data Quality agent and HOME surface stale or incomplete feeds.
+- **Department PO self-approval limits.** Each department can be given a policy in
+  Users, Roles &amp; Permissions → *Department PO Approval Settings*: a self-approved
+  P.O count per measurement period, a maximum individual value and a maximum
+  cumulative value. A P.O self-approves only while **all** apply; the first limit
+  reached routes it to the line manager (or department) for sign-off. Cancelling a
+  P.O does not restore capacity unless the policy allows it. The requester sees a
+  live *Self-approval status* on Purchase Order Requests before submitting; every
+  decision, and any authorised override (never by the requester), is audited.
+  Departments without a policy fall back to the org-wide self-approval limit.
+- **Corporate report access by department.** *Department report access* grants
+  named Corporate Reporting Centre reports (view / export) to a department.
+  Finance, Exec and Admin keep full access; other departments see only granted
+  reports. Enforcement is server-side on the report list, open, export, and the
+  Reporting Centre page.
+
+### 7.1 Merchandising Open-to-Buy (OTB)
+
+Merchandising purchasing runs through **Open-to-Buy** (`PLAN → Open-to-Buy`), not
+the standard department P.O flow. OTB sits between the approved store sales forecast
+and the Procurement Tracker, computed **separately for Miniso MDS and Local
+Purchase**:
+
+1. **Sales plan** — total store sales are split by channel and reconciled, per
+   store, to the approved forecast within a configurable tolerance (±1% default).
+   Out-of-tolerance plans block approval unless an authorised exception is recorded.
+2. **Assumptions** — per channel: cost-of-sales / gross margin, freight, duty, FX,
+   target closing stock (weeks), clearance realisation, in-transit confidence,
+   tolerance. Minimum-stock rules resolve most-specific-first
+   (company → store type → region → store → category).
+3. **Inventory & registers** — store / warehouse / in-transit stock is uploaded
+   (CSV) since there is no live stock feed; new-store opening inventory (excluding
+   construction capex), store closures (only transferable stock reduces OTB) and
+   clearance plans are captured.
+4. **Remaining OTB** — computed and stored **component by component** (planned COS
+   + target stock + new-store − opening stock − in-transit − closure − clearance −
+   commitments …), so the number is auditable.
+5. **Procurement requests** — each request picks a channel and shows available OTB
+   before/after. A request that exceeds OTB is blocked pending reduction,
+   re-period, an OTB revision, or a controlled exception. Approved requests create
+   commitments and can generate a P.O with no rekeying. Channel transfers are
+   controlled and audited. OTB versions are approved and **locked**; requests
+   retain the version they were approved against.
+
+> **Source of truth for approved sales** is pluggable (driver-based Builder,
+> legacy Forecast Versions, or manual) and left unbound until Finance confirms which
+> stack is authoritative — set it on the OTB version's *sales source*.
+
+Finance Buddy and AI Perspective can explain OTB — remaining spend by channel,
+requests exceeding OTB, sales reconciliation — from the governed engine, and OTB
+feeds the Corporate Reporting Centre via its source adapter.
 
 ---
 
