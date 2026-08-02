@@ -4,9 +4,35 @@ import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
   invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, challengeReasonLabels,
-  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef, selfApproveAllowed,
+  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
+
+const gbp = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+
+// The "Self-approval status" panel shown before submitting — POs used, cumulative
+// value vs the cap, this P.O, and the routing outcome with the binding reason.
+function SelfApprovalStatus({ d, value }) {
+  const ok = d.selfApprove;
+  const line = (a, b) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, fontSize: 12.5, padding: "3px 0" }}>
+      <span style={{ color: "var(--muted)" }}>{a}</span><span className="fos-num" style={{ color: "var(--ink)" }}>{b}</span>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 16, borderRadius: 10, padding: "12px 14px",
+      border: `1px solid ${ok ? "var(--green)" : "var(--amber)"}`,
+      background: ok ? "var(--green-bg)" : "var(--amber-bg)" }}>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: ok ? "var(--green)" : "var(--amber)", marginBottom: 8 }}>Self-approval status</div>
+      {d.countLimit != null && line("P.Os used", `${d.usedCount} of ${d.countLimit}${d.remainingCount != null ? ` · ${d.remainingCount} remaining` : ""}`)}
+      {d.maxCumulative != null && line("Cumulative value", `${gbp(d.usedValue)} of ${gbp(d.maxCumulative)}`)}
+      {line("This P.O", gbp(value))}
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--hairline)", fontSize: 12.5, fontWeight: 600, color: ok ? "var(--green)" : "var(--amber)" }}>
+        {ok ? "Within self-approval — this signs off automatically and goes straight to Finance." : (d.binding || "Department sign-off required.")}
+      </div>
+    </div>
+  );
+}
 
 const field = { display: "flex", flexDirection: "column", gap: 5 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -89,8 +115,28 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
     recharge
   );
 
-  // Will this P.O be signed off automatically (within the self-approval limit)?
-  const willSelfApprove = selfApproveAllowed({ value: f.payment_value === "" ? 0 : f.payment_value, limit: selfApproveLimit });
+  // Live "Self-approval status": the server resolves the department policy
+  // (count / individual / cumulative limits) against the current period usage,
+  // so the requester sees up front whether the P.O self-approves or routes to
+  // sign-off, and why. Debounced on department + value.
+  const [decision, setDecision] = useState(null);
+  const previewValue = f.payment_value === "" ? 0 : Number(f.payment_value);
+  useEffect(() => {
+    if (!f.department || !(previewValue > 0)) { setDecision(null); return; }
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/purchase-orders/preview", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ department: f.department, value: previewValue }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (live && res.ok) setDecision(j.decision);
+      } catch { /* preview is best-effort */ }
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [f.department, previewValue]);
+  const willSelfApprove = !!decision?.selfApprove;
 
   async function create(submitAfter) {
     setBusy(true); setError(null); setMsg(null);
@@ -251,15 +297,16 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
 
         <label style={{ ...field, marginTop: 16 }}><span style={labelSt}>Notes</span><textarea rows={2} style={inputSt} value={f.notes} onChange={set("notes")} /></label>
 
+        {decision && !gate && <SelfApprovalStatus d={decision} value={previewValue} />}
+
         {error && <div style={{ color: "var(--red)", fontSize: 13, marginTop: 12 }}>{error}</div>}
         {msg && <div style={{ color: "var(--green)", fontSize: 13, marginTop: 12 }}>{msg}</div>}
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
           <button style={ghost} disabled={busy} onClick={() => create(false)}>Save draft</button>
-          <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || (willSelfApprove ? "Within the self-approval limit — signs off automatically" : "Submit for department-head sign-off")} onClick={() => create(true)}>
+          <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || (willSelfApprove ? "Within self-approval — signs off automatically" : "Submit for department-head sign-off")} onClick={() => create(true)}>
             {busy ? "Working…" : willSelfApprove ? "Create & sign off" : "Create & submit for sign-off"}
           </button>
-          {!gate && willSelfApprove && <span style={{ fontSize: 12, color: "var(--green)" }}>Within the £{Number(selfApproveLimit).toLocaleString("en-GB")} self-approval limit — this signs off automatically and goes straight to Finance.</span>}
           {gate && <span style={{ fontSize: 12, color: "var(--faint)" }}>{gate}</span>}
         </div>
       </div>

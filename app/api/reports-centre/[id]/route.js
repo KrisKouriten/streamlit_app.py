@@ -6,18 +6,32 @@ import {
   reorderReportSections, addComponent, removeComponent, transitionReport, snapshotVersion, listVersions,
 } from "../../../../lib/reporting/reports";
 import { generateReportCommentary, editReportCommentary, reviewReportCommentary } from "../../../../lib/reporting/report-commentary";
+import { getUserDepartmentById, getReportPermissionsForDepartment } from "../../../../lib/governance";
+import { canAccessReport } from "../../../../lib/reporting/report-access-rules";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // AI commentary + multi-adapter resolution
 
 const canManage = (s) => hasRole(s, "ADMIN", "FINANCE");
 
+// Whether the session may access a report (by its template) for a verb. Finance/
+// exec/admin keep full access; other departments need an active grant (migration 064).
+export async function reportAccess(session, templateKey, verb = "view") {
+  const department = await getUserDepartmentById(session.id);
+  const permissions = await getReportPermissionsForDepartment(department);
+  return canAccessReport({ roles: session.roles, permissions, templateKey, verb });
+}
+
 // GET a fully resolved report + validation (the builder reads this).
 export async function GET(_request, { params }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  if (!hasRole(session, "ADMIN", "FINANCE", "EXEC")) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
   const { id } = await params;
+  const loaded = await getReport(id);
+  if (!loaded) return NextResponse.json({ error: "Report not found" }, { status: 404 });
+  if (!(await reportAccess(session, loaded.template_key, "view"))) {
+    return NextResponse.json({ error: "You do not have access to this report" }, { status: 403 });
+  }
   const scope = scopeForSession(session);
   const resolved = await resolveReport(id, scope);
   if (!resolved) return NextResponse.json({ error: "Report not found" }, { status: 404 });

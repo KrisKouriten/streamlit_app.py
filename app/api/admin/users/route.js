@@ -3,7 +3,9 @@ import crypto from "node:crypto";
 import { query } from "../../../../lib/db";
 import { getSession, isAdmin, hashPassword, endAllSessions } from "../../../../lib/auth";
 import { clearMfaForUser } from "../../../../lib/mfa";
-import { audit, setUserRole, setUserDepartment, listUsersWithRoles, addSignoff, removeSignoff, setNavVisibility, setAppSetting } from "../../../../lib/governance";
+import { audit, setUserRole, setUserDepartment, listUsersWithRoles, addSignoff, removeSignoff, setNavVisibility, setAppSetting, listDepartments, listDeptPoPolicies, upsertDeptPoPolicy, listReportPermissions, setReportPermission } from "../../../../lib/governance";
+import { validateDeptPoPolicy } from "../../../../lib/po-rules";
+import { listTemplates } from "../../../../lib/reporting/templates";
 import { createInvite } from "../../../../lib/invite";
 import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
 import { graphConfigured, sendMail } from "../../../../lib/email/graph";
@@ -179,6 +181,36 @@ export async function POST(request) {
       await setAppSetting("po_self_approve_limit", Math.round(limit), session);
       await audit({ actor: session, eventType: "settings.po_self_approve_limit", objectType: "app_setting", objectRef: "po_self_approve_limit", detail: { limit: Math.round(limit) } });
       return NextResponse.json({ ok: true, limit: Math.round(limit) });
+    }
+
+    if (action === "list-po-policies") {
+      const [policies, departments] = await Promise.all([listDeptPoPolicies(), listDepartments()]);
+      return NextResponse.json({ policies, departments });
+    }
+
+    if (action === "save-po-policy") {
+      const p = body.policy || {};
+      const err = validateDeptPoPolicy(p);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+      const res = await upsertDeptPoPolicy(p, session);
+      return NextResponse.json(res);
+    }
+
+    if (action === "list-report-permissions") {
+      const [permissions, tpl, departments] = await Promise.all([listReportPermissions(), listTemplates(), listDepartments()]);
+      const templates = Array.isArray(tpl) ? tpl : (tpl.templates || []);
+      return NextResponse.json({
+        permissions,
+        templates: templates.map((t) => ({ template_key: t.template_key, name: t.name })),
+        departments,
+      });
+    }
+
+    if (action === "save-report-permission") {
+      const p = body.permission || {};
+      if (!p.department || !p.template_key) return NextResponse.json({ error: "Department and report required" }, { status: 400 });
+      await setReportPermission(p, session);
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "set-visibility") {
