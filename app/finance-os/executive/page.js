@@ -114,7 +114,7 @@ export default async function ExecutiveHub() {
 
       {/* The connected sphere sits in a quiet starfield — the control tower in space. */}
       <div style={{ position: "relative", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8 }}>
-        <Starfield count={120} seed={4206} style={{ maskImage: "radial-gradient(ellipse 75% 75% at 50% 45%, #000 55%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 75% 75% at 50% 45%, #000 55%, transparent 100%)" }} />
+        <Starfield count={150} seed={4206} style={{ maskImage: "radial-gradient(ellipse 92% 92% at 50% 45%, #000 78%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 45%, #000 78%, transparent 100%)" }} />
         <div style={{ position: "relative" }}>
           <Orbit core={core} nodes={nodes} />
         </div>

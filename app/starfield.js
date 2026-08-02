@@ -1,10 +1,11 @@
 /* A deterministic starfield backdrop. Positions are seeded (a small mulberry32
    PRNG) so the server and client render exactly the same stars — no hydration
    mismatch and no Math.random at runtime. Purely decorative (aria-hidden); the
-   twinkle is subtle and respects prefers-reduced-motion. Stars are drawn in
-   var(--ink) so they adapt to the light/dark theme; a few "bright" ones carry a
-   soft accent glow to echo the connected-sphere motif. Works in both server and
-   client components (no hooks). */
+   twinkle is gentle and respects prefers-reduced-motion. Stars are drawn in
+   var(--ink) so they adapt to the light/dark theme, each with a soft glow so
+   they read clearly on the dark surfaces; a few "bright" ones carry an accent
+   halo to echo the connected-sphere motif. Works in both server and client
+   components (no hooks). */
 
 function mulberry32(a) {
   return function () {
@@ -15,21 +16,22 @@ function mulberry32(a) {
   };
 }
 
-export default function Starfield({ count = 120, seed = 20260803, twinkle = true, style }) {
+export default function Starfield({ count = 160, seed = 20260803, twinkle = true, style }) {
   const rand = mulberry32(seed);
   const stars = [];
   for (let i = 0; i < count; i++) {
     const x = (rand() * 100).toFixed(3);
     const y = (rand() * 100).toFixed(3);
-    const size = (0.5 + rand() * 1.9).toFixed(2);
-    const op = (0.18 + rand() * 0.62).toFixed(2);
+    const bright = rand() > 0.82;
+    const size = (bright ? 1.8 + rand() * 1.9 : 1.1 + rand() * 1.4).toFixed(2);
+    const op = (bright ? 0.75 + rand() * 0.25 : 0.4 + rand() * 0.45).toFixed(2);
     const delay = (rand() * 6).toFixed(2);
-    const dur = (2.6 + rand() * 4.6).toFixed(2);
-    const bright = rand() > 0.9;
-    stars.push({ x, y, size, op, delay, dur, bright, i });
+    const dur = (2.8 + rand() * 4.6).toFixed(2);
+    const glow = (Number(size) * (bright ? 3.2 : 1.8)).toFixed(1);
+    stars.push({ x, y, size, op, delay, dur, bright, glow, i });
   }
   const css = `
-    @keyframes sf-tw { 0%,100%{opacity:var(--sf-o)} 50%{opacity:calc(var(--sf-o) * 0.28)} }
+    @keyframes sf-tw { 0%,100%{opacity:var(--sf-o)} 50%{opacity:calc(var(--sf-o) * 0.5)} }
     @media (prefers-reduced-motion: reduce){ .sf-star{animation:none !important} }
   `;
   return (
@@ -43,7 +45,9 @@ export default function Starfield({ count = 120, seed = 20260803, twinkle = true
             position: "absolute", left: `${s.x}%`, top: `${s.y}%`,
             width: `${s.size}px`, height: `${s.size}px`, borderRadius: "50%",
             background: "var(--ink)", opacity: Number(s.op),
-            boxShadow: s.bright ? "0 0 5px 1px color-mix(in srgb, var(--accent) 65%, transparent)" : "none",
+            boxShadow: s.bright
+              ? `0 0 ${s.glow}px color-mix(in srgb, var(--accent) 75%, transparent)`
+              : `0 0 ${s.glow}px color-mix(in srgb, var(--ink) 55%, transparent)`,
             "--sf-o": s.op,
             animation: twinkle ? `sf-tw ${s.dur}s ease-in-out ${s.delay}s infinite` : "none",
           }}
