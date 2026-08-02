@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, addProcurementPurchase } from "../../../lib/procurement";
 
 export async function POST(request) {
   const session = await getSession();
@@ -15,6 +15,10 @@ export async function POST(request) {
       if (!body.csv?.trim()) return NextResponse.json({ error: "No CSV content" }, { status: 400 });
       const r = await ingestProcurementCsv(body.csv, actor);
       return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "purchase") {
+      await addProcurementPurchase(body, actor);
+      return NextResponse.json({ ok: true });
     }
     if (body.action === "budget") {
       const { source, ym, budget } = body;
