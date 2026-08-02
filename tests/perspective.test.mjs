@@ -10,10 +10,11 @@ import { BUDDY_DOMAINS } from "../lib/intelligence/domain-select.js";
 // drift means the button points at a page the orchestrator has no domains for.
 const seedSql =
   readFileSync(new URL("../db/migrations/038_intelligence.sql", import.meta.url), "utf8") +
-  readFileSync(new URL("../db/migrations/040_intelligence_pages.sql", import.meta.url), "utf8");
+  readFileSync(new URL("../db/migrations/040_intelligence_pages.sql", import.meta.url), "utf8") +
+  readFileSync(new URL("../db/migrations/067_otb_ai_context.sql", import.meta.url), "utf8");
 
-test("manifest covers all thirteen governed pages", () => {
-  assert.equal(PERSPECTIVE_PAGES.length, 13);
+test("manifest covers all fourteen governed pages", () => {
+  assert.equal(PERSPECTIVE_PAGES.length, 14);
 });
 
 test("isPerspectivePage accepts seeded ids and rejects others", () => {
