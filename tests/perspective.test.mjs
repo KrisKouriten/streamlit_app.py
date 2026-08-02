@@ -6,14 +6,16 @@ import { PERSPECTIVE_PAGES, isPerspectivePage } from "../lib/intelligence/perspe
 import { BUDDY_DOMAINS } from "../lib/intelligence/domain-select.js";
 
 // The Perspective manifest must stay in step with the governed
-// page_context_registry seeds (migration 038 for Phase 3, 040 for Phase 4) — a
-// drift means the button points at a page the orchestrator has no domains for.
+// page_context_registry seeds (migration 038 for Phase 3, 040 for Phase 4,
+// 071 for Pricing / Scenario / Capex) — a drift means the button points at a
+// page the orchestrator has no domains for.
 const seedSql =
   readFileSync(new URL("../db/migrations/038_intelligence.sql", import.meta.url), "utf8") +
-  readFileSync(new URL("../db/migrations/040_intelligence_pages.sql", import.meta.url), "utf8");
+  readFileSync(new URL("../db/migrations/040_intelligence_pages.sql", import.meta.url), "utf8") +
+  readFileSync(new URL("../db/migrations/071_pricing_capex_intelligence.sql", import.meta.url), "utf8");
 
-test("manifest covers all thirteen governed pages", () => {
-  assert.equal(PERSPECTIVE_PAGES.length, 13);
+test("manifest covers all sixteen governed pages", () => {
+  assert.equal(PERSPECTIVE_PAGES.length, 16);
 });
 
 test("isPerspectivePage accepts seeded ids and rejects others", () => {
