@@ -5,6 +5,7 @@ import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
 import Orbit from "./orbit";
 import PerspectivePanel from "../../perspective-panel";
+import LiveStamp from "../../live-stamp";
 
 export const dynamic = "force-dynamic";
 
@@ -101,8 +102,10 @@ export default async function ExecutiveHub() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
           <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "right", lineHeight: 1.5 }}>
-            <div>Trading as at <strong style={{ color: "var(--ink)" }}>{dateLabel(tradingAsAt)}</strong></div>
-            <div>Joiin finance as at {dateLabel(financeAsAt)}</div>
+            <div style={{ color: "var(--ink)", fontWeight: 600 }}><LiveStamp /></div>
+            <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>
+              Store data to {dateLabel(tradingAsAt)} · Joiin finance to {dateLabel(financeAsAt)}
+            </div>
           </div>
           <PerspectivePanel pageId="executive" pageName="Executive Intelligence Hub" />
         </div>

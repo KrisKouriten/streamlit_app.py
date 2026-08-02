@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LiveStamp from "../live-stamp";
 
 /* Shared presentational pieces for the Finance OS dashboards. Server-rendered,
    no client JS. Currency follows Miniso UK house style: £ with comma thousands
@@ -181,7 +182,10 @@ export function HeroBand({ stats = [], caption = null }) {
             : <div key={s.key || i}>{inner}</div>;
         })}
       </div>
-      {caption && <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8 }}>{caption}</div>}
+      <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8, display: "flex", gap: 7, flexWrap: "wrap", alignItems: "baseline" }}>
+        <LiveStamp style={{ color: "var(--muted)" }} />
+        {caption && <span>· {caption}</span>}
+      </div>
     </section>
   );
 }
