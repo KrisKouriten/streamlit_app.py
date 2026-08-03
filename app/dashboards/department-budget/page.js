@@ -4,6 +4,7 @@ import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
 import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
+import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment } from "../../../lib/procurement-close-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
@@ -157,6 +158,60 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               empty={`No signed-off purchase orders for ${department} yet.`}
             />
           </Panel>
+
+          {/* Procurement (Merchandising) — the Summary + Close lifecycle rolled up
+              here, same visibility Marketing has for its POs. */}
+          {d.proc?.ready && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 600, margin: "8px 0 12px" }}>Procurement</div>
+              <StatRow>
+                <Stat label="Committed spend" value={money(d.proc.committed, { compact: true })} sub={`${d.proc.committedCount} closed`} />
+                <Stat label="Open procurement" value={money(d.proc.open, { compact: true })}
+                  sub={`${d.proc.openCount} open${d.proc.pendingCount ? ` · ${d.proc.pendingCount} pending approval` : ""}`} tone={d.proc.pendingCount ? "amber" : undefined} />
+                <Stat label="Under challenge" value={String(d.proc.challengedCount)}
+                  sub={d.proc.challengedCount ? `${money(d.proc.challengedValue, { compact: true })} in query` : "none"} tone={d.proc.challengedCount ? "red" : undefined} />
+                <Stat label="Cash budget" value={money(d.proc.cashBudget, { compact: true })} sub="Miniso + Local monthly" />
+                <Stat label="Purchases" value={String(d.proc.count)} sub="all sources" />
+              </StatRow>
+
+              <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
+                &ldquo;Committed spend&rdquo; is procurement <strong>closed by Finance</strong> (Procurement Summary + Close) — invoice net where recorded. Covers Miniso &amp; Local purchases and OTB merch requests. Items <strong>under challenge</strong> are shown separately until resolved.
+              </div>
+
+              {d.proc.challengedCount > 0 && (
+                <Panel title="Procurement under challenge" note={`${d.proc.challengedCount} in query`}>
+                  <div className="fos-card" style={{ padding: "6px 16px", borderColor: "color-mix(in srgb, var(--red) 30%, var(--line))" }}>
+                    {d.proc.challenged.map((p) => (
+                      <div key={p.purchase_id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{procRef(p)}</span>
+                        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
+                        <span className="fos-num" style={{ fontSize: 12.5 }}>{money(procCommitted(p))}</span>
+                        <span style={{ flex: 1, fontSize: 11.5, color: "var(--red)" }}>{procChallengeLabels(p.challenge_reasons).join(" · ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              )}
+
+              <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · Summary + Close`}>
+                <Table
+                  columns={[
+                    { label: "Reference", render: (r) => procRef(r) },
+                    { label: "Source", render: (r) => r.source || "—" },
+                    { label: "Supplier", render: (r) => r.supplier || "—" },
+                    { label: "Channel / SKU", render: (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? ` · ${r.sku_or_range}` : ""}` : (r.category || "—")) },
+                    { label: "Net value", align: "right", render: (r) => money(procLineValue(r)) },
+                    { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
+                    { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(procCommitted(r)) : "—") },
+                    { label: "Payment", render: (r) => { const ps = procPayment(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
+                    { label: "Status", render: (r) => { const st = procDisplayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
+                  ]}
+                  rows={d.proc.register}
+                  empty="No procurement purchases yet."
+                />
+              </Panel>
+            </>
+          )}
         </>
       )}
     </div>
