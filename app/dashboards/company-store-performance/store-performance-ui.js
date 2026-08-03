@@ -19,26 +19,34 @@ const dLabel = (d) => { if (!d) return "—"; const x = new Date(d); return isNa
 const yoy = (cy, py) => (py ? (cy - py) / py : null);
 const vTone = (v) => (v == null ? undefined : v < 0 ? "var(--red)" : "var(--green)");
 
-export default function StorePerformanceUI({ view, exec, sku, stores = [], selectedStore, storeData }) {
+export default function StorePerformanceUI({ view, exec, sku, stores = [], selectedStore, storeData, period = "YTD", periodLabel = "Year to date", months = [] }) {
   const router = useRouter();
-  const go = (v, store) => {
+  const nav = ({ v = view, store = selectedStore, per = period } = {}) => {
     const p = new URLSearchParams();
-    p.set("view", v); if (store) p.set("store", store);
+    p.set("view", v); if (store) p.set("store", store); if (per && per !== "YTD") p.set("period", per);
     router.push(`/dashboards/company-store-performance?${p.toString()}`);
   };
+  const selStyle = { fontSize: 13, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
   return (
     <div>
       <div style={{ ...card, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: 4, paddingLeft: 14, paddingRight: 14 }}>
         <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", borderRadius: 9 }}>
           {[["exec", "Executive summary"], ["stores", "Stores"]].map(([k, l]) => {
             const on = k === view;
-            return <button key={k} onClick={() => go(k, selectedStore)} style={{ fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 14px", borderRadius: 7, cursor: "pointer", background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`, color: on ? "var(--ink)" : "var(--muted)" }}>{l}</button>;
+            return <button key={k} onClick={() => nav({ v: k })} style={{ fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 14px", borderRadius: 7, cursor: "pointer", background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`, color: on ? "var(--ink)" : "var(--muted)" }}>{l}</button>;
           })}
         </div>
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11.5, color: "var(--faint)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".07em" }}>Period</span>
+          <select value={period} onChange={(e) => nav({ per: e.target.value })} style={selStyle}>
+            <option value="YTD">Year to date</option>
+            {months.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </label>
         {view === "stores" && (
           <label style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
             <span style={{ fontSize: 11.5, color: "var(--faint)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".07em" }}>Focus store</span>
-            <select value={selectedStore || ""} onChange={(e) => go("stores", e.target.value)} style={{ fontSize: 13, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", minWidth: 220 }}>
+            <select value={selectedStore || ""} onChange={(e) => nav({ v: "stores", store: e.target.value })} style={{ ...selStyle, minWidth: 220 }}>
               <option value="">Select a store…</option>
               {stores.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
             </select>
@@ -46,7 +54,7 @@ export default function StorePerformanceUI({ view, exec, sku, stores = [], selec
         )}
       </div>
 
-      {view === "exec" ? <Executive exec={exec} sku={sku} onFocus={(code) => go("stores", code)} /> : <Stores storeData={storeData} sku={sku} />}
+      {view === "exec" ? <Executive exec={exec} sku={sku} onFocus={(code) => nav({ v: "stores", store: code })} /> : <Stores storeData={storeData} sku={sku} periodLabel={periodLabel} />}
     </div>
   );
 }
@@ -64,7 +72,7 @@ function Executive({ exec, sku, onFocus }) {
 
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 2 }}>Store trading league</div>
-        <div style={{ ...faint, marginBottom: 12 }}>Net sales, year to date. Select a store to drill in.</div>
+        <div style={{ ...faint, marginBottom: 12 }}>Net sales · {exec.periodLabel || "year to date"}. Select a store to drill in.</div>
         {!exec.league?.length ? <div style={faint}>Store trading feed not loaded in this environment yet.</div> : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
@@ -112,14 +120,15 @@ function Executive({ exec, sku, onFocus }) {
   );
 }
 
-function Stores({ storeData, sku }) {
+function Stores({ storeData, sku, periodLabel = "Year to date" }) {
   if (!storeData) {
     return <div style={card}><div style={faint}>Select a store above to see its sales, forecast, financial summary, KPIs, allocations, stock on hand and the range SKU summaries.</div></div>;
   }
   const d = storeData, k = d.kpis || {};
   const cy = d.cy || {}, py = d.py || {};
   const gmPct = k.gmPct;
-  const fcVar = d.forecastSales != null ? (k.net || 0) - d.forecastSales : null;
+  const ytdNet = d.ytdNet || 0;
+  const fcVar = d.forecastSales != null ? ytdNet - d.forecastSales : null;
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -128,7 +137,7 @@ function Stores({ storeData, sku }) {
       </div>
 
       {/* 1 · Sales results */}
-      <Section title="Sales results" note="year to date vs prior year">
+      <Section title="Sales results" note={`${periodLabel} vs prior year`}>
         {!d.cy ? <Empty>No store sales for this store in the current window.</Empty> : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 480 }}>
             <thead><tr>{["Measure", "This year", "Last year", "YoY"].map((h, i) => <th key={h} style={{ ...th, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
@@ -143,11 +152,11 @@ function Stores({ storeData, sku }) {
       </Section>
 
       {/* 2 · Sales forecast & variances */}
-      <Section title="Sales forecast & variances" note="FY forecast vs year-to-date actual">
+      <Section title="Sales forecast & variances" note="FY forecast vs year-to-date actual (annual basis)">
         {d.forecastSales == null ? <Empty>No sales forecast matched to this store. Load it under Operate → Forecast Builder.</Empty> : (
           <StatRow>
             <Stat label="FY forecast sales" value={money(d.forecastSales, { compact: true })} />
-            <Stat label="YTD actual net" value={money(k.net || 0, { compact: true })} />
+            <Stat label="YTD actual net" value={money(ytdNet, { compact: true })} />
             <Stat label="Variance to forecast" value={money(fcVar || 0, { compact: true })} tone={fcVar >= 0 ? "green" : "red"} sub={d.forecastSales ? pct((fcVar || 0) / d.forecastSales) : "—"} />
           </StatRow>
         )}

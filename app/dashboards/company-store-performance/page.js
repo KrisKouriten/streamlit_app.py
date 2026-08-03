@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
-import { getWindows, getStoreLeague, getStoreList, getStoreDetail, getBreakEven } from "../../../lib/store-sales";
+import { getWindows, getStoreLeague, getStoreList, getStoreDetail, getBreakEven, listSalesMonths, monthWindow } from "../../../lib/store-sales";
 import { getScopePnl } from "../../../lib/joiin-entity";
 import { getForecast } from "../../../lib/forecast";
 import { getSkuReport, getNewSkuReport, getDormantReport } from "../../../lib/sku-report";
@@ -30,8 +30,10 @@ export default async function CompanyStorePerformance({ searchParams }) {
   if (!session) redirect("/login");
   const sp = (await searchParams) || {};
   const view = sp.view === "stores" ? "stores" : "exec";
+  // Period filter: 'YTD' (default) or a specific 'YYYY-MM' month.
+  const period = sp.period && /^\d{4}-\d{2}$/.test(sp.period) ? sp.period : "YTD";
 
-  const [win, pnl, storeList, forecast, top80, newSku, dormant] = await Promise.all([
+  const [win, pnl, storeList, forecast, top80, newSku, dormant, months] = await Promise.all([
     getWindows(),
     getScopePnl({ scope: "store" }).catch(() => ({ ready: false, loaded: false })),
     getStoreList().catch(() => []),
@@ -39,9 +41,14 @@ export default async function CompanyStorePerformance({ searchParams }) {
     getSkuReport("top80").catch(() => ({ ready: false, loaded: false })),
     getNewSkuReport().catch(() => ({ ready: false, loaded: false })),
     getDormantReport().catch(() => ({ ready: false, loaded: false })),
+    listSalesMonths().catch(() => []),
   ]);
+  // The active window: YTD, or the selected month (capped at the data's max date).
+  const winSel = win ? (period === "YTD" ? win.ytd : (monthWindow(period, win.maxDate) || win.ytd)) : null;
+  const periodLabel = period === "YTD" ? "Year to date" : (winSel?.label || period);
+
   const [league, breakEven, inventory] = await Promise.all([
-    win ? getStoreLeague(win.ytd).catch(() => []) : [],
+    winSel ? getStoreLeague(winSel).catch(() => []) : [],
     getBreakEven().catch(() => []),
     getInventoryPositions().catch(() => []),
   ]);
@@ -60,6 +67,7 @@ export default async function CompanyStorePerformance({ searchParams }) {
     storeCount: league.length || Math.max(0, (storeList || []).length),
     league,
     breakEven,
+    periodLabel,
     win: win ? { maxDate: win.maxDate } : null,
   };
 
@@ -73,7 +81,10 @@ export default async function CompanyStorePerformance({ searchParams }) {
   let storeData = null;
   const storeCode = sp.store || null;
   if (view === "stores" && storeCode && win) {
-    const detail = await getStoreDetail(storeCode, win.ytd).catch(() => null);
+    const detail = await getStoreDetail(storeCode, winSel).catch(() => null);
+    // The forecast section always compares FY forecast to year-to-date actual, so
+    // fetch YTD separately when a single month is in focus.
+    const ytdDetail = period === "YTD" ? detail : await getStoreDetail(storeCode, win.ytd).catch(() => null);
     const meta = (storeList || []).find((s) => s.store_code === storeCode) || null;
     const be = (breakEven || []).find((b) => b.store_code === storeCode) || null;
     // Match the store's FY sales forecast (forecast unit is the store name / code).
@@ -88,8 +99,10 @@ export default async function CompanyStorePerformance({ searchParams }) {
       storeCode,
       storeName: meta?.store_name || storeCode,
       operator: meta?.operator_name || null,
+      periodLabel,
       cy, py,
       kpis: kpisFrom(cy),
+      ytdNet: n2(ytdDetail?.cy?.net),
       forecastSales: fc ? n2(fc.sales) : null,
       breakEven: be ? { actual: n2(be.ytd_actual), breakEven: n2(be.ytd_break_even) } : null,
       inventory: inv.map((r) => ({ channel: r.channel_code, value: n2(r.stock_value), units: n2(r.units), through: r.data_through })),
@@ -105,6 +118,8 @@ export default async function CompanyStorePerformance({ searchParams }) {
         view={view} exec={exec} sku={sku}
         stores={(storeList || []).map((s) => ({ code: s.store_code, name: s.store_name }))}
         selectedStore={storeCode} storeData={storeData}
+        period={period} periodLabel={periodLabel}
+        months={(months || []).map((m) => ({ value: m, label: new Date(m + "-01T00:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric" }) }))}
       />
     </div>
   );
