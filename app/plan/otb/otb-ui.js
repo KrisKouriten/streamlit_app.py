@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Stat, StatRow, Badge, EmptyState } from "../../finance-os/ui";
 
@@ -53,7 +53,6 @@ const TABS = [
   ["closures", "Closures"],
   ["clearance", "Clearance"],
   ["assumptions", "Assumptions"],
-  ["requests", "Procurement requests"],
   ["validation", "Validation"],
   ["history", "Approval history"],
 ];
@@ -208,7 +207,6 @@ export default function OtbWorkspace({ versions = [], channels = [], version, de
           {tab === "assumptions" && <Assumptions detail={detail} channelOpts={channelOpts} busy={busy}
             onSaveAssumption={(assumption) => otbOp({ op: "save-assumption", assumption }, "Assumptions saved.")}
             onSaveMinStock={(row) => otbOp({ op: "save-minstock", row }, "Min-stock rule saved.")} />}
-          {tab === "requests" && <Requests requests={requests} version={version} channelOpts={channelOpts} busy={busy} run={run} />}
           {tab === "validation" && <Validation requests={requests} detail={detail} />}
           {tab === "history" && <History version={version} detail={detail} canApprove={canApprove} busy={busy}
             onAction={(op) => otbOp({ op }, `Version ${op}.`)} />}
@@ -288,6 +286,68 @@ function ExecutiveSummary({ version, detail, onCompute, busy }) {
           </table>
         </div>
       </div>
+
+      <MonthlyOtb monthly={detail?.monthly} />
+    </div>
+  );
+}
+
+// The whole-horizon OTB pool, spread month by month across an 18-month projection.
+// Each month's Open-to-Buy is the classic retail roll: planned cost of sales + the
+// change in target stock cover, net of stock on hand / committed and the month's
+// store-opening / closure / clearance events (see projectChannelOtb, otb-rules).
+function MonthlyOtb({ monthly }) {
+  const m = monthly || {};
+  const rows = m.total || [];
+  const ymLabel = (p) => { const x = /^(\d{4})-(\d{2})$/.exec(p || ""); return x ? new Date(Date.UTC(+x[1], +x[2] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) : (p || "—"); };
+  const mds = (i) => m.byChannel?.MINISO_MDS?.months?.[i]?.otb;
+  const local = (i) => m.byChannel?.LOCAL_PURCHASE?.months?.[i]?.otb;
+  return (
+    <div style={card}>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 15, fontWeight: 650 }}>Monthly OTB — 18-month projection</div>
+        <div style={{ fontSize: 12, color: "var(--faint)" }}>
+          {m.ready && m.computed
+            ? <>The executive OTB pool spread across the calendar from {ymLabel(m.start)}. Each month = planned cost of sales + the change in target stock cover, net of stock on hand, commitments and store events.</>
+            : "Not yet available — enter the monthly sales plan and channel assumptions (COS %, target stock weeks), then Compute OTB."}
+        </div>
+      </div>
+      {m.ready && m.computed && rows.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+            <thead>
+              <tr>
+                <th style={th}>Month</th>
+                <th style={{ ...th, textAlign: "right" }}>Planned sales</th>
+                <th style={{ ...th, textAlign: "right" }}>Cost of sales</th>
+                <th style={{ ...th, textAlign: "right" }}>Miniso MDS OTB</th>
+                <th style={{ ...th, textAlign: "right" }}>Local OTB</th>
+                <th style={{ ...th, textAlign: "right" }}>Total OTB</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.period}>
+                  <td style={td}>{ymLabel(r.period)}</td>
+                  <td style={tdR}>{gbp(r.sales)}</td>
+                  <td style={tdR}>{gbp(r.plannedCos)}</td>
+                  <td style={{ ...tdR, color: mds(i) < 0 ? "var(--red)" : "var(--muted)" }}>{mds(i) == null ? "—" : gbp(mds(i))}</td>
+                  <td style={{ ...tdR, color: local(i) < 0 ? "var(--red)" : "var(--muted)" }}>{local(i) == null ? "—" : gbp(local(i))}</td>
+                  <td style={{ ...tdR, fontWeight: 600, color: r.otb < 0 ? "var(--red)" : "var(--ink)" }}>{gbp(r.otb)}</td>
+                </tr>
+              ))}
+              <tr style={{ fontWeight: 700 }}>
+                <td style={{ ...td, borderTop: "2px solid var(--line)" }}>18-month total</td>
+                <td style={{ ...tdR, borderTop: "2px solid var(--line)" }}>{gbp(rows.reduce((t, r) => t + r.sales, 0))}</td>
+                <td style={{ ...tdR, borderTop: "2px solid var(--line)" }}>{gbp(rows.reduce((t, r) => t + r.plannedCos, 0))}</td>
+                <td style={{ ...tdR, borderTop: "2px solid var(--line)", color: "var(--muted)" }}>{gbp(m.byChannel?.MINISO_MDS?.totalOtb || 0)}</td>
+                <td style={{ ...tdR, borderTop: "2px solid var(--line)", color: "var(--muted)" }}>{gbp(m.byChannel?.LOCAL_PURCHASE?.totalOtb || 0)}</td>
+                <td style={{ ...tdR, borderTop: "2px solid var(--line)", color: (m.totalOtb || 0) < 0 ? "var(--red)" : "var(--ink)" }}>{gbp(m.totalOtb || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -611,136 +671,6 @@ function Assumptions({ detail, channelOpts, onSaveAssumption, onSaveMinStock, bu
           ]}
           onSubmit={async (row) => !!(await onSaveMinStock(row))}
         />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tab 8 — Procurement requests
-// ---------------------------------------------------------------------------
-const REQ_ACTIONS = {
-  DRAFT: [["submit", "Submit"]],
-  MERCH_REVIEW: [["validate", "Validate"], ["reject", "Reject"]],
-  OTB_VALIDATED: [["finance", "To finance"], ["reject", "Reject"]],
-  FINANCE_REVIEW: [["approve", "Approve"], ["reject", "Reject"]],
-  APPROVED: [["order", "Mark ordered"]],
-};
-
-function Requests({ requests, version, channelOpts, busy, run }) {
-  const router = useRouter();
-  const [f, setF] = useState({
-    channel_code: "", supplier: "", category: "", amount_gbp: "", otb_period: "", units: "",
-    freight: "", duty: "", fx_rate: "", expected_receipt_date: "", reason: "",
-  });
-  const [avail, setAvail] = useState(null);
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-
-  // Live available-OTB preview once a channel + value are set.
-  useEffect(() => {
-    const value = Number(f.amount_gbp) || 0;
-    if (!f.channel_code || !(value > 0)) { setAvail(null); return; }
-    let live = true;
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch("/api/otb/requests", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ op: "availability", otbVersionId: version.otb_version_id, channel: f.channel_code, period: f.otb_period || null, requestValue: value }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (live && res.ok) setAvail(j.availability || null);
-      } catch { /* preview is best-effort */ }
-    }, 250);
-    return () => { live = false; clearTimeout(t); };
-  }, [f.channel_code, f.amount_gbp, f.otb_period, version.otb_version_id]);
-
-  async function submit() {
-    const j = await run("/api/otb/requests", { ...f, otb_version_id: version.otb_version_id });
-    if (j) setF({ channel_code: "", supplier: "", category: "", amount_gbp: "", otb_period: "", units: "", freight: "", duty: "", fx_rate: "", expected_receipt_date: "", reason: "" });
-  }
-  const reqOp = (id, body) => run(`/api/otb/requests/${id}`, body);
-
-  return (
-    <div>
-      <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Add procurement request</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
-          <label style={field}><span style={labelSt}>Channel</span>
-            <select style={inputSt} value={f.channel_code} onChange={set("channel_code")}>
-              <option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          <label style={field}><span style={labelSt}>Supplier</span><input style={inputSt} value={f.supplier} onChange={set("supplier")} /></label>
-          <label style={field}><span style={labelSt}>Category</span><input style={inputSt} value={f.category} onChange={set("category")} /></label>
-          <label style={field}><span style={labelSt}>Amount (£)</span><input type="number" step="0.01" style={inputSt} value={f.amount_gbp} onChange={set("amount_gbp")} /></label>
-          <label style={field}><span style={labelSt}>OTB period</span><input placeholder="YYYY-MM" style={inputSt} value={f.otb_period} onChange={set("otb_period")} /></label>
-          <label style={field}><span style={labelSt}>Units</span><input type="number" style={inputSt} value={f.units} onChange={set("units")} /></label>
-          <label style={field}><span style={labelSt}>Freight (£)</span><input type="number" step="0.01" style={inputSt} value={f.freight} onChange={set("freight")} /></label>
-          <label style={field}><span style={labelSt}>Duty (£)</span><input type="number" step="0.01" style={inputSt} value={f.duty} onChange={set("duty")} /></label>
-          <label style={field}><span style={labelSt}>FX rate</span><input type="number" step="0.0001" style={inputSt} value={f.fx_rate} onChange={set("fx_rate")} /></label>
-          <label style={field}><span style={labelSt}>Expected receipt</span><input type="date" style={inputSt} value={f.expected_receipt_date} onChange={set("expected_receipt_date")} /></label>
-          <label style={field}><span style={labelSt}>Reason</span><input style={inputSt} value={f.reason} onChange={set("reason")} /></label>
-        </div>
-
-        {avail && (
-          <div style={{ marginTop: 14, borderRadius: 10, padding: "12px 14px",
-            border: `1px solid ${VAL_TONE[avail.status] === "red" ? "var(--red)" : VAL_TONE[avail.status] === "amber" ? "var(--amber)" : "var(--line)"}`,
-            background: VAL_TONE[avail.status] === "red" ? "var(--red-bg)" : VAL_TONE[avail.status] === "amber" ? "var(--amber-bg)" : "var(--raise)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={labelSt}>Available OTB</span>
-              <Badge tone={VAL_TONE[avail.status] || "muted"}>{(avail.status || "").replace(/_/g, " ")}</Badge>
-            </div>
-            {[["Approved OTB", gbp(avail.approvedOtb)], ["Remaining", gbp(avail.remaining ?? avail.remainingBefore)], ["This request", gbp(Number(f.amount_gbp) || 0)], ["Remaining after", gbp(avail.remainingAfter)]].map(([l, v]) => (
-              <div key={l} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}>
-                <span style={{ color: "var(--muted)" }}>{l}</span><span style={{ color: "var(--ink)" }}>{v}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={{ marginTop: 14 }}>
-          <button style={btn("var(--accent)")} disabled={busy || !f.channel_code || !f.supplier || !(Number(f.amount_gbp) > 0)} onClick={submit}>{busy ? "Saving…" : "Add request"}</button>
-        </div>
-      </div>
-
-      <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Requests</div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
-            <thead><tr>{["Channel", "Supplier", "Amount", "Period", "Status", "OTB check", "Actions"].map((h, i) => (
-              <th key={h} style={{ ...th, textAlign: i === 2 ? "right" : "left" }}>{h}</th>
-            ))}</tr></thead>
-            <tbody>
-              {!requests.length ? <tr><td style={td} colSpan={7}><span style={{ color: "var(--faint)" }}>No requests for this version yet.</span></td></tr> :
-                requests.map((r) => {
-                  const acts = REQ_ACTIONS[r.request_status] || [];
-                  return (
-                    <tr key={r.purchase_id}>
-                      <td style={td}>{r.channel_code}</td>
-                      <td style={td}>{r.supplier}</td>
-                      <td style={tdR}>{gbp(r.amount_gbp)}</td>
-                      <td style={td}>{r.otb_period || "—"}</td>
-                      <td style={td}><Badge tone="muted">{(r.request_status || "").replace(/_/g, " ")}</Badge></td>
-                      <td style={td}>{r.validation_status ? <Badge tone={VAL_TONE[r.validation_status] || "muted"}>{r.validation_status.replace(/_/g, " ")}</Badge> : "—"}</td>
-                      <td style={td}>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                          {acts.map(([action, label]) => (
-                            <button key={action} style={action === "reject" ? { ...ghost, color: "var(--red)" } : ghost} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "transition", action })}>{label}</button>
-                          ))}
-                          {r.validation_status === "EXCEEDS_OTB" && (
-                            <button style={{ ...ghost, color: "var(--amber)" }} disabled={busy} onClick={() => { const reason = window.prompt("Reason for the OTB exception?"); if (reason) reqOp(r.purchase_id, { op: "exception", reason }); }}>Record exception</button>
-                          )}
-                          {r.request_status === "APPROVED" && (
-                            <button style={btn("var(--green)")} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "generate-po" })}>Generate P.O</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );

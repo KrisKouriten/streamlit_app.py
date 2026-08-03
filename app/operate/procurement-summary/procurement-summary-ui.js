@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
+  settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 
@@ -37,6 +38,16 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   const [challengeFor, setChallengeFor] = useState(null);
   const [chReasons, setChReasons] = useState(() => new Set());
   const [chNote, setChNote] = useState("");
+  const [lcFor, setLcFor] = useState(null);
+  const [lcForm, setLcForm] = useState(() => {
+    const m = {};
+    for (const r of initialRows) m[r.purchase_id] = {
+      lc_reference: r.lc_reference || "", lc_amount: r.lc_amount != null ? String(r.lc_amount) : "",
+      lc_bank: r.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: r.lc_confirmed_date || "", lc_payment_date: r.lc_payment_date || "",
+      lc_settled_date: r.lc_settled_date || "", lc_settled_amount: r.lc_settled_amount != null ? String(r.lc_settled_amount) : "",
+    };
+    return m;
+  });
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -102,6 +113,23 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   async function submitChallenge(r) {
     await op(r.purchase_id, { op: "challenge", reasons: [...chReasons], note: chNote || null }, "Challenge raised.");
     setChallengeFor(null); setChReasons(new Set()); setChNote("");
+  }
+
+  const setLcField = (id, k, v) => setLcForm((s) => ({ ...s, [id]: { ...s[id], [k]: v } }));
+  function openLc(r) { setLcFor((cur) => (cur === r.purchase_id ? null : r.purchase_id)); }
+  async function saveLc(r) {
+    const f = lcForm[r.purchase_id] || {};
+    await op(r.purchase_id, {
+      op: "set-lc", lc_reference: f.lc_reference || null, lc_amount: f.lc_amount || null,
+      lc_bank: f.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: f.lc_confirmed_date || null, lc_payment_date: f.lc_payment_date || null,
+    }, "LC details logged.");
+  }
+  async function reconcileLcRow(r) {
+    const f = lcForm[r.purchase_id] || {};
+    await op(r.purchase_id, {
+      op: "reconcile-lc", lc_settled_date: f.lc_settled_date || null, lc_settled_amount: f.lc_settled_amount || null,
+    }, "LC reconciled — settled.");
+    setLcFor(null);
   }
 
   function download() {
@@ -203,36 +231,82 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                           <Badge tone={st.tone}>{st.label}</Badge>
                           {fs === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(r.challenge_reasons).join(" · ")}</div>}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}><Badge tone={pay.tone}>{pay.label}</Badge></td>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                          {settlesByLc(r) ? (() => { const lc = lcStatus(r); return <Badge tone={lc.tone}>{lc.label}</Badge>; })() : <Badge tone={pay.tone}>{pay.label}</Badge>}
+                        </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
-                          {fs === "PENDING" && financeActionError("approve", r) === null && (
-                            <button style={btn("var(--green)")} disabled={isBusy} onClick={() => approve(r)}>Approve</button>
-                          )}
-                          {fs === "APPROVED" && (
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                              <input style={{ ...inputSt, width: 110 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
-                              <input type="number" min="0" step="0.01" style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
-                              {financeActionError("invoice", r) === null && <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
-                              {financeActionError("payment", r) === null && (
-                                <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
-                                  {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-                                </select>
-                              )}
-                              {financeActionError("close", r) === null && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closeRow(r)}>Close</button>}
-                              {financeActionError("challenge", r) === null && <button style={btn("var(--red)")} disabled={isBusy} onClick={() => openChallenge(r)}>Challenge</button>}
-                            </div>
-                          )}
-                          {fs === "CHALLENGED" && (
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              {financeActionError("reopen", r) === null && <button style={ghost} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>}
-                              {financeActionError("close", r) === null && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closeRow(r)}>Close</button>}
-                            </div>
-                          )}
-                          {fs === "CLOSED" && financeActionError("reopen", r) === null && (
-                            <button style={ghost} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>
-                          )}
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            {fs === "PENDING" && financeActionError("approve", r) === null && (
+                              <button style={btn("var(--green)")} disabled={isBusy} onClick={() => approve(r)}>Approve</button>
+                            )}
+                            {fs === "APPROVED" && settlesByLc(r) && (
+                              <button style={btn("var(--accent)")} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
+                            )}
+                            {fs === "APPROVED" && !settlesByLc(r) && (
+                              <>
+                                <input style={{ ...inputSt, width: 110 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
+                                <input type="number" min="0" step="0.01" style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
+                                {financeActionError("invoice", r) === null && <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
+                                {financeActionError("payment", r) === null && (
+                                  <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
+                                    {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                                  </select>
+                                )}
+                              </>
+                            )}
+                            {fs === "CHALLENGED" && settlesByLc(r) && (
+                              <button style={btn("var(--accent)")} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
+                            )}
+                            {(fs === "CHALLENGED") && financeActionError("reopen", r) === null && <button style={ghost} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>}
+                            {financeActionError("close", r) === null && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closeRow(r)}>Close</button>}
+                            {financeActionError("challenge", r) === null && <button style={btn("var(--red)")} disabled={isBusy} onClick={() => openChallenge(r)}>Challenge</button>}
+                            {fs === "CLOSED" && financeActionError("reopen", r) === null && (
+                              <button style={ghost} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
+                      {lcFor === id && settlesByLc(r) && (
+                        <tr>
+                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                            <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 2 }}>Letter of Credit — {procRef(r)}</div>
+                            <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>
+                              Miniso HQ inventory settles by {r.lc_bank || LC_BANK_DEFAULT} LC. Log the LC details once confirmed, then reconcile the payment once it settles.
+                            </div>
+                            {/* Log LC */}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 12, maxWidth: 820 }}>
+                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. HSBC-LC-2026-014" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} disabled={r.lc_settled} /></Field>
+                              <Field label="LC amount (£)"><input type="number" min="0" step="0.01" style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} disabled={r.lc_settled} /></Field>
+                              <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} disabled={r.lc_settled} /></Field>
+                              <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_confirmed_date || ""} onChange={(e) => setLcField(id, "lc_confirmed_date", e.target.value)} disabled={r.lc_settled} /></Field>
+                              <Field label="Expected payment"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_payment_date || ""} onChange={(e) => setLcField(id, "lc_payment_date", e.target.value)} disabled={r.lc_settled} /></Field>
+                            </div>
+                            {!r.lc_settled && (
+                              <div style={{ display: "flex", gap: 8, marginBottom: r.lc_reference ? 16 : 0, alignItems: "center" }}>
+                                <button style={btn("var(--accent)")} disabled={isBusy || !(lcForm[id]?.lc_reference || "").trim()} onClick={() => saveLc(r)}>{r.lc_reference ? "Update LC" : "Log LC"}</button>
+                                <button style={ghost} onClick={() => setLcFor(null)}>Close</button>
+                              </div>
+                            )}
+                            {/* Reconcile once logged */}
+                            {r.lc_reference && (
+                              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>{r.lc_settled ? "Settlement" : "Reconcile payment"}</div>
+                                {r.lc_settled ? (
+                                  <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                                    Settled {r.lc_settled_date || "—"}{r.lc_settled_amount != null ? ` · ${money(r.lc_settled_amount)}` : ""}.
+                                  </div>
+                                ) : (
+                                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                                    <Field label="Settled date"><input type="date" style={{ ...inputSt, width: 150 }} value={lcForm[id]?.lc_settled_date || ""} onChange={(e) => setLcField(id, "lc_settled_date", e.target.value)} /></Field>
+                                    <Field label="Settled amount (£)"><input type="number" min="0" step="0.01" style={{ ...inputSt, width: 130, textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_settled_amount || ""} onChange={(e) => setLcField(id, "lc_settled_amount", e.target.value)} /></Field>
+                                    <button style={btn("var(--green)")} disabled={isBusy} onClick={() => reconcileLcRow(r)}>Reconcile — mark settled</button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                       {challengeFor === id && (
                         <tr>
                           <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
@@ -262,7 +336,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          Approve a purchase, record its invoice number and net amount, then <strong>Close</strong> it (reported as committed procurement spend) or <strong>Challenge</strong> it under a controlled reason (shown &ldquo;under challenge&rdquo; until resolved). Download the current view to CSV.
+          Approve a purchase, then either record its invoice + payment (Local Purchase) or log the <strong>HSBC Letter of Credit</strong> and reconcile it on settlement (Miniso HQ), before you <strong>Close</strong> it (reported as committed procurement spend). <strong>Challenge</strong> is available on any open purchase under a controlled reason (shown &ldquo;under challenge&rdquo; until resolved). Download the current view to CSV.
         </div>
       </div>
     </div>
@@ -272,4 +346,14 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
 // A keyed group of two <tr> rows (the row + its optional challenge panel).
 function FragmentRow({ children }) {
   return <>{children}</>;
+}
+
+// A labelled field for the LC panel.
+function Field({ label, children }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={labelSt}>{label}</span>
+      {children}
+    </label>
+  );
 }

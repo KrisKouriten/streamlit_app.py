@@ -1,14 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 
-/* Procurement UI: two sections (Miniso / Local). Each shows the monthly cash
-   budget vs committed spend (bucketed by supplier payment terms) and the
-   supplier list with terms. CSV upload + inline monthly budget entry. */
+/* Procurement Request UI: three sections. Miniso / Local are the cash-tracker
+   purchases (monthly cash budget vs committed spend, bucketed by supplier payment
+   terms). Merchandising requests raise an OTB-validated channel request (moved
+   here from the OTB workspace) against the approved Open-to-Buy. */
 
-const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"]];
+const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["MERCH", "Merchandising requests"]];
+const VAL_TONE = { WITHIN_OTB: "green", OTB_WARNING: "amber", EXCEEDS_OTB: "red", NO_APPROVED_OTB: "muted", APPROVED_EXCEPTION: "accent" };
+const REQ_ACTIONS = {
+  DRAFT: [["submit", "Submit"]],
+  MERCH_REVIEW: [["validate", "Validate"], ["reject", "Reject"]],
+  OTB_VALIDATED: [["finance", "To finance"], ["reject", "Reject"]],
+  FINANCE_REVIEW: [["approve", "Approve"], ["reject", "Reject"]],
+  APPROVED: [["order", "Mark ordered"]],
+};
 const CSV_TEMPLATE = "Source,Supplier,Category,Order Month,Amount,Terms (days),Status,Reference\nMiniso,MINISO HQ,Core range,2026-07,420000,60,Committed,PO-1\nLocal,Design360,Fixtures,2026-07,42000,30,Committed,PO-2\n";
 const monthLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }); };
 
@@ -19,7 +28,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -31,6 +40,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
     </div>;
   }
 
+  const isMerch = tab === "MERCH";
   const s = data[tab];
 
   async function saveBudget(ym, value) {
@@ -41,7 +51,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
   return (
     <>
-      {illustrative && <IllustrativeBanner>These purchases are illustrative — upload the merch team's PO/purchase extract (with supplier payment terms) and the real cash-budget control replaces them.</IllustrativeBanner>}
+      {illustrative && !isMerch && <IllustrativeBanner>These purchases are illustrative — upload the merch team's PO/purchase extract (with supplier payment terms) and the real cash-budget control replaces them.</IllustrativeBanner>}
 
       <div style={{ display: "inline-flex", gap: 3, marginBottom: 20, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
         {SECTIONS.map(([key, label]) => (
@@ -54,6 +64,10 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {err && <div style={{ fontSize: 13, color: "var(--red)", marginBottom: 14 }}>{err}</div>}
 
+      {isMerch ? (
+        <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} />
+      ) : (
+      <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
         <Tile label="Committed spend" value={money(s.totalCommitted, { compact: true })} sub="all months" />
         <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets" />
@@ -101,6 +115,8 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
           <AddLine source={tab} onDone={() => router.refresh()} />
           <Upload onDone={() => router.refresh()} />
         </Panel>
+      )}
+      </>
       )}
     </>
   );
@@ -210,5 +226,162 @@ function Upload({ onDone }) {
       {state && <span style={{ color: "var(--muted)" }}>{state}</span>}
       <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: "none" }} />
     </div>
+  );
+}
+
+/* Merchandising requests — the OTB-linked channel request flow (moved here from the
+   OTB workspace). Pick the OTB version, raise a request against a purchase channel;
+   it is validated live against the approved Open-to-Buy before it becomes a
+   commitment, then moves through merch → OTB → finance review and can generate a
+   formal P.O without rekeying. */
+function MerchRequests({ otbVersions = [], activeVersionId = null, requests = [], channelOpts = [], canManage }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [f, setF] = useState({ channel_code: "", supplier: "", category: "", amount_gbp: "", otb_period: "", units: "", freight: "", duty: "", fx_rate: "", expected_receipt_date: "", reason: "" });
+  const [avail, setAvail] = useState(null);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const version = otbVersions.find((v) => String(v.otb_version_id) === String(activeVersionId)) || null;
+
+  const inp = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
+  const lab = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
+  const Field = ({ label, children }) => <label style={{ display: "block" }}><span style={lab}>{label}</span>{children}</label>;
+  const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
+  const ghost = { fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
+
+  // Live available-OTB preview once a channel + value are set.
+  useEffect(() => {
+    const value = Number(f.amount_gbp) || 0;
+    if (!version || !f.channel_code || !(value > 0)) { setAvail(null); return; }
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/otb/requests", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: "availability", otbVersionId: version.otb_version_id, channel: f.channel_code, period: f.otb_period || null, requestValue: value }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (live && res.ok) setAvail(j.availability || null);
+      } catch { /* preview is best-effort */ }
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [f.channel_code, f.amount_gbp, f.otb_period, version?.otb_version_id]);
+
+  function pickVersion(e) { router.push(`/operate/procurement?v=${e.target.value}`); }
+
+  async function req(url, body) {
+    setBusy(true); setMsg("");
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg(j.error || "Request failed"); return null; }
+      router.refresh();
+      return j;
+    } catch (x) { setMsg(x.message); return null; }
+    finally { setBusy(false); }
+  }
+  async function submit() {
+    const j = await req("/api/otb/requests", { ...f, otb_version_id: version.otb_version_id });
+    if (j) { setF({ channel_code: "", supplier: "", category: "", amount_gbp: "", otb_period: "", units: "", freight: "", duty: "", fx_rate: "", expected_receipt_date: "", reason: "" }); setMsg("Request added."); }
+  }
+  const reqOp = (id, body) => req(`/api/otb/requests/${id}`, body);
+
+  if (!otbVersions.length) {
+    return <Empty>No Open-to-Buy version is available yet. Create and approve an OTB version in <strong>Plan → OTB Planning</strong>, then raise merchandising requests here against it.</Empty>;
+  }
+
+  return (
+    <>
+      <div className="fos-card" style={{ padding: "15px 17px", marginBottom: 16, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        <Field label="OTB version">
+          <select style={{ ...inp, width: "auto", minWidth: 220 }} value={version?.otb_version_id || ""} onChange={pickVersion}>
+            {otbVersions.map((v) => <option key={v.otb_version_id} value={v.otb_version_id}>{v.label}{v.status ? ` · ${v.status}` : ""}</option>)}
+          </select>
+        </Field>
+        <div style={{ fontSize: 11.5, color: "var(--faint)", maxWidth: 460, lineHeight: 1.5 }}>
+          Requests are raised against the selected OTB version and validated against its approved Open-to-Buy. Approved requests consume the channel&rsquo;s remaining OTB and can generate a formal P.O.
+        </div>
+      </div>
+
+      {msg && <div style={{ fontSize: 12.5, color: msg.includes("added") ? "var(--green)" : "var(--red)", marginBottom: 12 }}>{msg}</div>}
+
+      {canManage && (
+        <div className="fos-card" style={{ padding: "15px 17px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add merchandising request</div>
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>Enter the channel, supplier and landed-cost detail. The available-OTB preview updates as you type.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
+            <Field label="Channel"><select style={inp} value={f.channel_code} onChange={set("channel_code")}><option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+            <Field label="Supplier"><input style={inp} value={f.supplier} onChange={set("supplier")} placeholder="e.g. MINISO HQ" /></Field>
+            <Field label="Category"><input style={inp} value={f.category} onChange={set("category")} placeholder="e.g. Core range" /></Field>
+            <Field label="Amount (£)"><input type="number" step="0.01" min="0" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
+            <Field label="OTB period"><input placeholder="YYYY-MM" style={inp} value={f.otb_period} onChange={set("otb_period")} /></Field>
+            <Field label="Units"><input type="number" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.units} onChange={set("units")} /></Field>
+            <Field label="Freight (£)"><input type="number" step="0.01" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.freight} onChange={set("freight")} /></Field>
+            <Field label="Duty (£)"><input type="number" step="0.01" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.duty} onChange={set("duty")} /></Field>
+            <Field label="FX rate"><input type="number" step="0.0001" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.fx_rate} onChange={set("fx_rate")} /></Field>
+            <Field label="Expected receipt"><input type="date" style={inp} value={f.expected_receipt_date} onChange={set("expected_receipt_date")} /></Field>
+            <Field label="Reason"><input style={inp} value={f.reason} onChange={set("reason")} /></Field>
+          </div>
+
+          {avail && (
+            <div style={{ marginTop: 14, borderRadius: 10, padding: "12px 14px",
+              border: `1px solid ${VAL_TONE[avail.status] === "red" ? "var(--red)" : VAL_TONE[avail.status] === "amber" ? "var(--amber)" : "var(--line)"}`,
+              background: VAL_TONE[avail.status] === "red" ? "var(--red-bg)" : VAL_TONE[avail.status] === "amber" ? "var(--amber-bg)" : "var(--raise)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={lab}>Available OTB</span>
+                <Badge tone={VAL_TONE[avail.status] || "muted"}>{(avail.status || "").replace(/_/g, " ")}</Badge>
+              </div>
+              {[["Approved OTB", money(avail.approvedOtb)], ["Remaining", money(avail.remaining ?? avail.remainingBefore)], ["This request", money(Number(f.amount_gbp) || 0)], ["Remaining after", money(avail.remainingAfter)]].map(([l, v]) => (
+                <div key={l} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}>
+                  <span style={{ color: "var(--muted)" }}>{l}</span><span style={{ color: "var(--ink)" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <button style={btn("var(--accent)")} disabled={busy || !version || !f.channel_code || !f.supplier || !(Number(f.amount_gbp) > 0)} onClick={submit}>{busy ? "Saving…" : "Add request"}</button>
+          </div>
+        </div>
+      )}
+
+      <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
+          <thead><tr>{["Channel", "Supplier", "Amount", "Period", "Status", "OTB check", "Actions"].map((h, i) => (
+            <th key={h} style={{ textAlign: i === 2 ? "right" : "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+          ))}</tr></thead>
+          <tbody>
+            {!requests.length ? <tr><td style={{ padding: "12px 14px", color: "var(--faint)" }} colSpan={7}>No requests for this version yet.</td></tr> :
+              requests.map((r) => {
+                const acts = REQ_ACTIONS[r.request_status] || [];
+                return (
+                  <tr key={r.purchase_id}>
+                    <Td>{r.channel_code}</Td>
+                    <Td>{r.supplier}</Td>
+                    <Td r>{money(r.amount_gbp)}</Td>
+                    <Td>{r.otb_period || "—"}</Td>
+                    <Td><Badge tone="muted">{(r.request_status || "").replace(/_/g, " ")}</Badge></Td>
+                    <Td>{r.validation_status ? <Badge tone={VAL_TONE[r.validation_status] || "muted"}>{r.validation_status.replace(/_/g, " ")}</Badge> : "—"}</Td>
+                    <Td>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {canManage && acts.map(([action, label]) => (
+                          <button key={action} style={action === "reject" ? { ...ghost, color: "var(--red)" } : ghost} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "transition", action })}>{label}</button>
+                        ))}
+                        {canManage && r.validation_status === "EXCEEDS_OTB" && (
+                          <button style={{ ...ghost, color: "var(--amber)" }} disabled={busy} onClick={() => { const reason = window.prompt("Reason for the OTB exception?"); if (reason) reqOp(r.purchase_id, { op: "exception", reason }); }}>Record exception</button>
+                        )}
+                        {canManage && r.request_status === "APPROVED" && (
+                          <button style={btn("var(--green)")} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "generate-po" })}>Generate P.O</button>
+                        )}
+                        {!canManage && !acts.length && <span style={{ color: "var(--faint)", fontSize: 12 }}>—</span>}
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

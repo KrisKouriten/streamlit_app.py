@@ -5,6 +5,7 @@ import {
   plannedCostOfSales, targetStockFromWeeks, availableWarehouse, inTransitAvailable, clearanceReduction,
   resolveMinStock, computeRemainingOtb, validateAgainstOtb, landedCost,
   OTB_CHANNELS, TOLERANCE_STATUS, OTB_VALIDATION, OTB_COMPONENTS,
+  addMonths, periodRange, projectChannelOtb,
 } from "../lib/otb-rules.js";
 
 test("splitByMix + mixError", () => {
@@ -122,4 +123,40 @@ test("landedCost applies freight, duty and FX", () => {
 
 test("OTB_CHANNELS covers the two purchase channels", () => {
   assert.deepEqual(OTB_CHANNELS, ["MINISO_MDS", "LOCAL_PURCHASE"]);
+});
+
+test("addMonths + periodRange walk the calendar", () => {
+  assert.equal(addMonths("2026-01", 0), "2026-01");
+  assert.equal(addMonths("2026-11", 2), "2027-01");
+  assert.equal(addMonths("2026-12", 1), "2027-01");
+  assert.equal(addMonths("bad", 1), null);
+  assert.deepEqual(periodRange("2026-01", 3), ["2026-01", "2026-02", "2026-03"]);
+  assert.equal(periodRange("2026-01", 18).length, 18);
+});
+
+test("projectChannelOtb rolls monthly OTB from sales × assumptions", () => {
+  const periods = periodRange("2026-01", 3);
+  const salesByPeriod = { "2026-01": 100000, "2026-02": 100000, "2026-03": 100000 };
+  // 50% cost of sales, 4.345 weeks target cover (≈ one month of COS as closing stock).
+  const r = projectChannelOtb({ periods, salesByPeriod, cosRate: 0.5, targetWeeks: 4.345, openingStock: 0 });
+  assert.equal(r.months.length, 3);
+  const m1 = r.months[0];
+  assert.equal(m1.plannedCos, 50000);              // 100k × 50%
+  assert.equal(m1.endStock, 50000);                // ≈ one month cover
+  assert.equal(m1.beginStock, 0);                  // opening stock
+  // Month 1 OTB = plannedCos + (endStock − beginStock) = 50k + 50k = 100k (build the stock).
+  assert.equal(m1.otb, 100000);
+  // Month 2 opens with month 1's closing stock, so no re-build — OTB = plannedCos only.
+  assert.equal(r.months[1].beginStock, 50000);
+  assert.equal(r.months[1].otb, 50000);
+});
+
+test("projectChannelOtb nets opening stock and month events", () => {
+  const periods = periodRange("2026-01", 2);
+  const salesByPeriod = { "2026-01": 100000, "2026-02": 100000 };
+  const eventsByPeriod = { "2026-01": { openCommitments: 20000, newStore: 10000 } };
+  const r = projectChannelOtb({ periods, salesByPeriod, cosRate: 0.5, targetWeeks: 4.345, openingStock: 50000, eventsByPeriod });
+  // Month 1: plannedCos 50k + (endStock 50k − beginStock 50k opening) + newStore 10k − openCommitments 20k = 40k.
+  assert.equal(r.months[0].otb, 40000);
+  assert.equal(r.totalOtb, r.months[0].otb + r.months[1].otb);
 });

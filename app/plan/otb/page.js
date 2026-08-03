@@ -3,7 +3,7 @@ import { getSession, hasRole } from "../../../lib/auth";
 import {
   listOtbVersions, listChannels, getOtbVersion, getOtbSummary, reconcileVersion,
   getStoreSales, getAssumptions, getInventoryPositions, listNewStores, listClosures,
-  listClearance, listMinStockRules, listCommitments, listTransfers,
+  listClearance, listMinStockRules, listCommitments, listTransfers, getMonthlyOtb,
 } from "../../../lib/otb";
 import { listMerchRequests } from "../../../lib/otb-procurement";
 import OtbWorkspace from "./otb-ui";
@@ -45,8 +45,9 @@ export default async function OtbPage({ searchParams }) {
   let requests = [];
   if (version) {
     const scenario = version.scenario_code || "BASE";
-    const [summary, reconciliation, storeSales, assumptions, inventory, newStores, closures, clearance, minStock, commitments, transfers] = await Promise.all([
+    const [summary, monthly, reconciliation, storeSales, assumptions, inventory, newStores, closures, clearance, minStock, commitments, transfers] = await Promise.all([
       getOtbSummary(version.otb_version_id, { scenario }).catch(() => ({ byChannel: {}, total: {}, computed: false })),
+      getMonthlyOtb(version.otb_version_id, { scenario }).catch(() => ({ ready: false, months: [], byChannel: {}, total: [] })),
       reconcileVersion(version.otb_version_id, { scenario }).catch(() => ({ ready: false, stores: [] })),
       getStoreSales(version.otb_version_id, { scenario }).catch(() => []),
       getAssumptions(version.otb_version_id).catch(() => []),
@@ -58,7 +59,7 @@ export default async function OtbPage({ searchParams }) {
       listCommitments(version.otb_version_id).catch(() => []),
       listTransfers(version.otb_version_id).catch(() => []),
     ]);
-    detail = { summary, reconciliation, storeSales, assumptions, inventory, newStores, closures, clearance, minStock, commitments, transfers };
+    detail = { summary, monthly, reconciliation, storeSales, assumptions, inventory, newStores, closures, clearance, minStock, commitments, transfers };
     requests = await listMerchRequests({ otbVersionId: version.otb_version_id }).catch(() => []);
   }
 

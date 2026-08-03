@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../../lib/auth";
-import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance } from "../../../../lib/procurement-close";
+import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance, setLc, reconcileLc } from "../../../../lib/procurement-close";
 
 export const dynamic = "force-dynamic";
 const isFinance = (s) => hasRole(s, "ADMIN", "FINANCE");
@@ -27,6 +27,8 @@ export async function POST(request, { params }) {
       case "set-payment-status": return NextResponse.json(await setPaymentStatus(id, body, session));
       case "challenge": return NextResponse.json(await challengeProcurement(id, body, session));
       case "close": return NextResponse.json(await closeProcurement(id, body, session));
+      case "set-lc": return NextResponse.json(await setLc(id, body, session));
+      case "reconcile-lc": return NextResponse.json(await reconcileLc(id, body, session));
       case "reopen-finance": return NextResponse.json(await reopenFinance(id, session));
       default: return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
