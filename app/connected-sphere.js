@@ -4,11 +4,19 @@ import { useEffect, useRef } from "react";
 
 /* The connected sphere — the whole concept as one live object. A slowly rotating
    wireframe globe carries the pillars and data feeds as glowing nodes; streams
-   cross the surface between them and are drawn inward to a bright convergent
-   core. Pure canvas (no libraries), deterministic layout, additive glow. Reads
-   the app's --accent so it stays on-palette; degrades to a single static frame
-   under prefers-reduced-motion and pauses when the tab is hidden. Decorative
-   (aria-hidden); the parent must be position:relative. */
+   cross the surface between them and are drawn inward to the centre. Pure canvas,
+   deterministic layout, additive glow. Reads the app's --accent so it stays
+   on-palette; single static frame under prefers-reduced-motion; pauses when the
+   tab is hidden. Decorative (aria-hidden); the parent must be position:relative.
+
+   Props:
+     labels        show node names (default true)
+     glow          draw the warm convergent core glow (default true — the opening page)
+     centerValue   a number to set at the centre instead of the glow (the hub's
+                   attention count); when set, the glow is suppressed
+     centerCaption small caption under centerValue (e.g. "items need attention")
+     pillarTones   { PLAN: "green"|"amber"|"red"|"accent"|"faint", … } — live status
+                   colour per pillar; omit for all-gold pillars */
 
 function hexToRgb(hex, fallback) {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex || "").trim());
@@ -16,8 +24,10 @@ function hexToRgb(hex, fallback) {
   return `${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)}`;
 }
 
-export default function ConnectedSphere({ labels = true }) {
+export default function ConnectedSphere({ labels = true, glow = true, centerValue = null, centerCaption = "", pillarTones = null }) {
   const ref = useRef(null);
+  const propsRef = useRef({});
+  propsRef.current = { labels, glow, centerValue, centerCaption, pillarTones };
 
   useEffect(() => {
     const canvas = ref.current;
@@ -29,6 +39,7 @@ export default function ConnectedSphere({ labels = true }) {
     const GOLD = hexToRgb(root.getPropertyValue("--accent"), "210,199,117");
     const GOLD_B = "245,236,186";
     const AMBER = "207,143,74";
+    const TONE = { green: "126,200,120", amber: "224,180,80", red: "220,110,90", accent: GOLD_B, faint: "120,116,104" };
 
     let W = 0, H = 0, cx = 0, cy = 0, R = 0, DPR = 1, raf = 0;
     function resize() {
@@ -58,6 +69,11 @@ export default function ConnectedSphere({ labels = true }) {
     ];
     const N = NODES.length;
     NODES.forEach((n) => { n.v = [Math.sin(n.p) * Math.cos(n.t), Math.cos(n.p), Math.sin(n.p) * Math.sin(n.t)]; });
+    function nodeColor(n) {
+      const pt = propsRef.current.pillarTones;
+      if (n.pillar && pt && pt[n.l] && TONE[pt[n.l]]) return TONE[pt[n.l]];
+      return n.pillar ? GOLD_B : GOLD;
+    }
 
     function slerp(a, b, u) {
       let dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -67,10 +83,8 @@ export default function ConnectedSphere({ labels = true }) {
       const k0 = Math.sin((1 - u) * om) / so, k1 = Math.sin(u * om) / so;
       return [a[0] * k0 + b[0] * k1, a[1] * k0 + b[1] * k1, a[2] * k0 + b[2] * k1];
     }
-
-    // Deterministic pseudo-random for arc phases/speeds (no hydration concerns; effect-only).
-    let s = 987654321;
-    const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    let sd = 987654321;
+    const rnd = () => { sd = (sd * 1103515245 + 12345) & 0x7fffffff; return sd / 0x7fffffff; };
 
     const ARCS = [];
     const seen = new Set();
@@ -88,7 +102,7 @@ export default function ConnectedSphere({ labels = true }) {
     }
 
     const STARS = [];
-    for (let i = 0; i < 130; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.4 + rnd() * 1.3, a: 0.15 + rnd() * 0.5 });
+    for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55 });
 
     const WIRE = [];
     for (let li = 1; li < 6; li++) {
@@ -113,10 +127,11 @@ export default function ConnectedSphere({ labels = true }) {
       const persp = 1 / (1 - z2 * 0.32);
       return { x: cx + x * R * persp, y: cy - y2 * R * persp, z: z2, s: persp };
     }
-    const depthAlpha = (z) => 0.12 + (z + 1) * 0.5 * 0.88;
+    const dA = (z) => 0.12 + (z + 1) * 0.5 * 0.88;
 
     let start = null;
     function draw(now) {
+      const P = propsRef.current;
       if (start == null) start = now;
       const time = (now - start) / 1000;
       const ay = reduce ? 0.6 : time * 0.16;
@@ -124,10 +139,8 @@ export default function ConnectedSphere({ labels = true }) {
       ctx.clearRect(0, 0, W, H);
 
       for (const st of STARS) {
-        ctx.beginPath();
-        ctx.arc(st.x * W, st.y * H, st.r, 0, 6.283);
-        ctx.fillStyle = "rgba(" + GOLD + "," + (st.a * 0.6) + ")";
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, 6.283);
+        ctx.fillStyle = "rgba(" + GOLD_B + "," + st.a + ")"; ctx.fill();
       }
 
       ctx.lineWidth = 1;
@@ -135,8 +148,7 @@ export default function ConnectedSphere({ labels = true }) {
         ctx.beginPath();
         let started = false;
         for (const v of ring) { const q = project(v, ay); if (!started) { ctx.moveTo(q.x, q.y); started = true; } else ctx.lineTo(q.x, q.y); }
-        ctx.strokeStyle = "rgba(" + GOLD + ",0.05)";
-        ctx.stroke();
+        ctx.strokeStyle = "rgba(" + GOLD + ",0.05)"; ctx.stroke();
       }
 
       ctx.globalCompositeOperation = "lighter";
@@ -144,7 +156,7 @@ export default function ConnectedSphere({ labels = true }) {
         const q = project(NODES[i].v, ay);
         const g = ctx.createLinearGradient(q.x, q.y, cx, cy);
         g.addColorStop(0, "rgba(" + GOLD + ",0)");
-        g.addColorStop(1, "rgba(" + GOLD + "," + (0.09 * depthAlpha(q.z)) + ")");
+        g.addColorStop(1, "rgba(" + GOLD + "," + (0.09 * dA(q.z)) + ")");
         ctx.strokeStyle = g; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(cx, cy); ctx.stroke();
       }
@@ -152,7 +164,7 @@ export default function ConnectedSphere({ labels = true }) {
       for (const arc of ARCS) {
         const proj = arc.pts.map((v) => project(v, ay));
         let za = 0; for (const p of proj) za += p.z; za /= proj.length;
-        const al = depthAlpha(za);
+        const al = dA(za);
         ctx.beginPath(); ctx.moveTo(proj[0].x, proj[0].y);
         for (let k = 1; k < proj.length; k++) ctx.lineTo(proj[k].x, proj[k].y);
         ctx.strokeStyle = "rgba(" + GOLD + "," + (0.16 * al) + ")"; ctx.lineWidth = 1; ctx.stroke();
@@ -166,7 +178,7 @@ export default function ConnectedSphere({ labels = true }) {
           const i0 = Math.floor(idx), f = idx - i0;
           const a = arc.pts[i0], b = arc.pts[Math.min(i0 + 1, arc.pts.length - 1)];
           const v = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
-          const q = project(v, ay), al = depthAlpha(q.z), rad = 1.7 * q.s;
+          const q = project(v, ay), al = dA(q.z), rad = 1.7 * q.s;
           const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rad * 5);
           g.addColorStop(0, "rgba(" + AMBER + "," + (0.9 * al) + ")");
           g.addColorStop(1, "rgba(" + AMBER + ",0)");
@@ -188,41 +200,57 @@ export default function ConnectedSphere({ labels = true }) {
 
       const order = NODES.map((n, i) => ({ i, q: project(n.v, ay) })).sort((a, b) => a.q.z - b.q.z);
       for (const o of order) {
-        const n = NODES[o.i], q = o.q, al = depthAlpha(q.z);
-        const rr = (n.pillar ? 4.2 : 2.6) * q.s;
+        const n = NODES[o.i], q = o.q, al = dA(q.z), c = nodeColor(n);
+        const rr = (n.pillar ? 4.3 : 2.6) * q.s;
         ctx.globalCompositeOperation = "lighter";
         const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rr * 6);
-        g.addColorStop(0, "rgba(" + (n.pillar ? GOLD_B : GOLD) + "," + (0.55 * al) + ")");
-        g.addColorStop(1, "rgba(" + GOLD + ",0)");
+        g.addColorStop(0, "rgba(" + c + "," + (0.55 * al) + ")");
+        g.addColorStop(1, "rgba(" + c + ",0)");
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, rr * 6, 0, 6.283); ctx.fill();
         ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = "rgba(" + (n.pillar ? GOLD_B : GOLD) + "," + Math.min(1, al + 0.1) + ")";
+        ctx.fillStyle = "rgba(" + c + "," + Math.min(1, al + 0.1) + ")";
         ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, 6.283); ctx.fill();
-        if (labels && q.z > -0.15) {
+        if (P.labels && q.z > -0.15) {
           const la = Math.max(0, Math.min(1, (q.z + 0.15) / 0.7));
           ctx.font = (n.pillar ? "600 12px" : "500 10.5px") + " ui-monospace, Menlo, monospace";
-          ctx.fillStyle = "rgba(" + (n.pillar ? GOLD_B : GOLD) + "," + (la * (n.pillar ? 0.95 : 0.62)) + ")";
+          ctx.fillStyle = "rgba(" + (n.pillar ? c : GOLD) + "," + (la * (n.pillar ? 0.95 : 0.62)) + ")";
           ctx.textBaseline = "middle";
           ctx.fillText(n.l, q.x + rr + 5, q.y);
         }
       }
 
-      ctx.globalCompositeOperation = "lighter";
       const pulse = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(time * 1.6));
-      const coreR = R * (0.17 + 0.02 * pulse);
-      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.4);
-      cg.addColorStop(0, "rgba(" + GOLD_B + ",0.85)");
-      cg.addColorStop(0.22, "rgba(" + GOLD + "," + (0.40 + 0.18 * pulse) + ")");
-      cg.addColorStop(0.6, "rgba(" + AMBER + ",0.10)");
-      cg.addColorStop(1, "rgba(" + AMBER + ",0)");
-      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, coreR * 3.4, 0, 6.283); ctx.fill();
-      const hotR = coreR * (0.95 + 0.06 * pulse);
-      const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
-      hot.addColorStop(0, "rgba(255,251,238," + (0.85 + 0.12 * pulse) + ")");
-      hot.addColorStop(0.4, "rgba(" + GOLD_B + ",0.7)");
-      hot.addColorStop(1, "rgba(" + GOLD + ",0)");
-      ctx.fillStyle = hot; ctx.beginPath(); ctx.arc(cx, cy, hotR, 0, 6.283); ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
+      if (P.glow && P.centerValue == null) {
+        ctx.globalCompositeOperation = "lighter";
+        const coreR = R * (0.17 + 0.02 * pulse);
+        const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.4);
+        cg.addColorStop(0, "rgba(" + GOLD_B + ",0.85)");
+        cg.addColorStop(0.22, "rgba(" + GOLD + "," + (0.40 + 0.18 * pulse) + ")");
+        cg.addColorStop(0.6, "rgba(" + AMBER + ",0.10)");
+        cg.addColorStop(1, "rgba(" + AMBER + ",0)");
+        ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, coreR * 3.4, 0, 6.283); ctx.fill();
+        const hotR = coreR * (0.95 + 0.06 * pulse);
+        const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
+        hot.addColorStop(0, "rgba(255,251,238," + (0.85 + 0.12 * pulse) + ")");
+        hot.addColorStop(0.4, "rgba(" + GOLD_B + ",0.7)");
+        hot.addColorStop(1, "rgba(" + GOLD + ",0)");
+        ctx.fillStyle = hot; ctx.beginPath(); ctx.arc(cx, cy, hotR, 0, 6.283); ctx.fill();
+        ctx.globalCompositeOperation = "source-over";
+      }
+
+      if (P.centerValue != null) {
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(245,225,150,0.98)";
+        ctx.font = "700 " + Math.round(R * 0.30) + "px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(String(P.centerValue), cx, cy + R * 0.07);
+        if (P.centerCaption) {
+          ctx.fillStyle = "rgba(200,178,120,0.92)";
+          ctx.font = "600 10.5px ui-monospace, Menlo, monospace";
+          ctx.fillText(String(P.centerCaption).toUpperCase(), cx, cy + R * 0.19);
+        }
+        ctx.textAlign = "left";
+      }
 
       if (!reduce) raf = requestAnimationFrame(draw);
     }
@@ -239,7 +267,7 @@ export default function ConnectedSphere({ labels = true }) {
       window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [labels]);
+  }, []);
 
   return <canvas ref={ref} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", pointerEvents: "none" }} />;
 }

@@ -3,16 +3,16 @@ import Link from "next/link";
 import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
-import Orbit from "./orbit";
-import Starfield from "../../starfield";
+import ConnectedSphere from "../../connected-sphere";
 import PerspectivePanel from "../../perspective-panel";
 import LiveStamp from "../../live-stamp";
 
 export const dynamic = "force-dynamic";
 
-/* HOME — the connected sphere. The orbit is the hero: the control-tower core with
-   the pillars orbiting it. Below it, the exception-led detail: position, forward
-   view, the ranked "needs attention" feed, and the health of the operating engines. */
+/* HOME — the connected sphere is the hero: a rotating globe of the pillars and
+   data feeds converging on the live attention count. Below it, the exception-led
+   detail: position, forward view, the ranked "needs attention" feed, and the
+   health of the operating engines. */
 
 const SOURCE = {
   STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store · all" },
@@ -83,16 +83,16 @@ export default async function ExecutiveHub() {
   const connCount = financeScope?.count || 0;
   const connNames = (financeScope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
 
-  // Orbit model — pillars around the control-tower core, each with a live signal.
-  const nodes = [
-    { key: "PLAN", label: "PLAN", href: "/plan", signal: forward ? `${Math.round(forward.pctOfPlan * 100)}% of FY plan` : "Budget & forecast" },
-    { key: "PERFORM", label: "PERFORM", href: "/perform", signal: `${opsOutstanding} task${opsOutstanding === 1 ? "" : "s"} open`, tone: opsOutstanding > 0 ? "amber" : "green" },
-    { key: "OPERATE", label: "OPERATE", href: "/finance-os/store-sales", signal: tradingAsAt ? "Store trading live" : "Awaiting feed", tone: tradingAsAt ? "green" : "amber" },
-    { key: "AI", label: "AI CONTROL TOWER", href: "/ai", signal: `${agents.pendingReviews} to review`, tone: agents.pendingReviews > 0 ? "amber" : "green" },
-    { key: "GOVERN", label: "GOVERN", href: "/govern/actions", signal: `${actions.open} open · ${actions.overdue} overdue`, tone: actions.overdue > 0 ? "red" : actions.open > 0 ? "amber" : "green" },
-    { key: "COMMERCIAL", label: "COMMERCIAL", href: null, planned: true, signal: "New pillar · 2027" },
-  ];
-  const core = { attention: attention.length };
+  // Live status colour per pillar for the connected sphere — same signals the
+  // orbit carried, now driving each pillar node's colour.
+  const pillarTones = {
+    PLAN: "accent",
+    PERFORM: opsOutstanding > 0 ? "amber" : "green",
+    OPERATE: tradingAsAt ? "green" : "amber",
+    AI: agents.pendingReviews > 0 ? "amber" : "green",
+    GOVERN: actions.overdue > 0 ? "red" : actions.open > 0 ? "amber" : "green",
+    COMMERCIAL: "faint",
+  };
 
   return (
     <div className="fos-shell">
@@ -112,12 +112,9 @@ export default async function ExecutiveHub() {
         </div>
       </header>
 
-      {/* The connected sphere sits in a quiet starfield — the control tower in space. */}
-      <div style={{ position: "relative", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8 }}>
-        <Starfield count={150} seed={4206} style={{ maskImage: "radial-gradient(ellipse 92% 92% at 50% 45%, #000 78%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 92% 92% at 50% 45%, #000 78%, transparent 100%)" }} />
-        <div style={{ position: "relative" }}>
-          <Orbit core={core} nodes={nodes} />
-        </div>
+      {/* The connected sphere — pillars and data feeds converging on the live attention count. */}
+      <div style={{ position: "relative", height: "clamp(340px, 44vh, 460px)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8 }}>
+        <ConnectedSphere labels glow={false} centerValue={attention.length} centerCaption="items need attention" pillarTones={pillarTones} />
       </div>
 
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5, textAlign: "center", maxWidth: 760, marginInline: "auto" }}>
