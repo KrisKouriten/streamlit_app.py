@@ -91,12 +91,17 @@ export default function LoginPage() {
       {/* starfield + orbital field behind the card */}
       <Starfield count={140} seed={20260803} />
       <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {/* warm central glow — a wide soft wash plus a brighter core, so the circle reads as a lit halo */}
+        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 1150, height: 1150, borderRadius: "50%",
+          background: "radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent) 0%, color-mix(in srgb, var(--accent) 7%, transparent) 36%, transparent 64%)" }} />
+        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 640, height: 640, borderRadius: "50%",
+          background: "radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent), transparent 68%)", filter: "blur(8px)" }} />
+        {/* the ring itself — warm, with an outer bloom and a faint inner light */}
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 780, height: 780, borderRadius: "50%",
-          border: "1px solid color-mix(in srgb, var(--accent-deep) 55%, transparent)", opacity: .5 }} />
+          border: "1px solid color-mix(in srgb, var(--accent) 48%, transparent)", opacity: .8,
+          boxShadow: "0 0 70px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 90px color-mix(in srgb, var(--accent) 9%, transparent)" }} />
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 520, height: 520, borderRadius: "50%",
-          border: "1px dashed var(--line)", opacity: .6 }} />
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 1000, height: 1000, borderRadius: "50%",
-          background: "radial-gradient(circle, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%)" }} />
+          border: "1px dashed color-mix(in srgb, var(--accent) 30%, transparent)", opacity: .6 }} />
       </div>
 
       {step === "password" ? (
