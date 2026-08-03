@@ -36,10 +36,24 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const root = getComputedStyle(document.documentElement);
-    const GOLD = hexToRgb(root.getPropertyValue("--accent"), "210,199,117");
-    const GOLD_B = "245,236,186";
-    const AMBER = "207,143,74";
-    const TONE = { green: "126,200,120", amber: "224,180,80", red: "220,110,90", accent: GOLD_B, faint: "120,116,104" };
+    const GOLD0 = hexToRgb(root.getPropertyValue("--accent"), "210,199,117");
+    // Two palettes: warm gold glowing on a dark stage, or its opposite — deep
+    // olive-gold rendered dark on the light stage. On light, additive blending is
+    // switched to normal compositing so the sphere reads as dark marks on white.
+    const DARK = {
+      GOLD: GOLD0, GOLD_B: "245,236,186", AMBER: "207,143,74",
+      TONE: { green: "126,200,120", amber: "224,180,80", red: "220,110,90", accent: "245,236,186", faint: "120,116,104" },
+      ADD: "lighter", HOT: "255,251,238", VAL: "245,225,150", CAP: "200,178,120",
+    };
+    const LIGHT = {
+      GOLD: "120,100,40", GOLD_B: "78,66,26", AMBER: "150,95,45",
+      TONE: { green: "40,120,55", amber: "150,110,25", red: "170,60,50", accent: "78,66,26", faint: "150,140,120" },
+      ADD: "source-over", HOT: "120,104,52", VAL: "70,62,28", CAP: "120,105,60",
+    };
+    let GOLD, GOLD_B, AMBER, TONE, ADD, HOT, VAL, CAP;
+    const isLight = () => document.documentElement.getAttribute("data-theme") === "light";
+    function applyPalette() { const p = isLight() ? LIGHT : DARK; GOLD = p.GOLD; GOLD_B = p.GOLD_B; AMBER = p.AMBER; TONE = p.TONE; ADD = p.ADD; HOT = p.HOT; VAL = p.VAL; CAP = p.CAP; }
+    let curLight = isLight(); applyPalette();
 
     let W = 0, H = 0, cx = 0, cy = 0, R = 0, DPR = 1, raf = 0;
     function resize() {
@@ -63,8 +77,8 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       { l: "PRICING", t: 3.0, p: 2.4 },
       { l: "OTB", t: 4.0, p: 0.6 },
       { l: "CAPEX", t: 5.0, p: 2.3 },
-      { l: "CASH", t: 5.9, p: 0.75 },
-      { l: "SKU", t: 1.9, p: 2.65 },
+      { l: "TREASURY", t: 5.9, p: 0.75 },
+      { l: "CASHFLOW", t: 1.9, p: 2.65 },
       { l: "FORECAST", t: 3.9, p: 1.35 },
     ];
     const N = NODES.length;
@@ -136,6 +150,9 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       const time = (now - start) / 1000;
       const ay = reduce ? 0.6 : time * 0.16;
 
+      // Re-read the theme (cheap) so a toggle flips the palette live.
+      const nl = isLight(); if (nl !== curLight) { curLight = nl; applyPalette(); }
+
       ctx.clearRect(0, 0, W, H);
 
       for (const st of STARS) {
@@ -151,7 +168,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.strokeStyle = "rgba(" + GOLD + ",0.05)"; ctx.stroke();
       }
 
-      ctx.globalCompositeOperation = "lighter";
+      ctx.globalCompositeOperation = ADD;
       for (let i = 0; i < N; i++) {
         const q = project(NODES[i].v, ay);
         const g = ctx.createLinearGradient(q.x, q.y, cx, cy);
@@ -202,7 +219,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       for (const o of order) {
         const n = NODES[o.i], q = o.q, al = dA(q.z), c = nodeColor(n);
         const rr = (n.pillar ? 4.3 : 2.6) * q.s;
-        ctx.globalCompositeOperation = "lighter";
+        ctx.globalCompositeOperation = ADD;
         const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rr * 6);
         g.addColorStop(0, "rgba(" + c + "," + (0.55 * al) + ")");
         g.addColorStop(1, "rgba(" + c + ",0)");
@@ -221,7 +238,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       const pulse = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(time * 1.6));
       if (P.glow && P.centerValue == null) {
-        ctx.globalCompositeOperation = "lighter";
+        ctx.globalCompositeOperation = ADD;
         const coreR = R * (0.17 + 0.02 * pulse);
         const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.4);
         cg.addColorStop(0, "rgba(" + GOLD_B + ",0.85)");
