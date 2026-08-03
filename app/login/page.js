@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Starfield from "../starfield";
+import ConnectedSphere from "../connected-sphere";
 
 /* The doorway. A quiet, lit field with the orbital motif behind a glass card —
    the first thing anyone sees should already feel like the product. */
@@ -87,22 +87,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", position: "relative", overflow: "hidden" }}>
-      {/* starfield + orbital field behind the card */}
-      <Starfield count={140} seed={20260803} />
-      <div aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        {/* warm central glow — a wide soft wash plus a brighter core, so the circle reads as a lit halo */}
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 1150, height: 1150, borderRadius: "50%",
-          background: "radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent) 0%, color-mix(in srgb, var(--accent) 7%, transparent) 36%, transparent 64%)" }} />
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 640, height: 640, borderRadius: "50%",
-          background: "radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent), transparent 68%)", filter: "blur(8px)" }} />
-        {/* the ring itself — warm, with an outer bloom and a faint inner light */}
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 780, height: 780, borderRadius: "50%",
-          border: "1px solid color-mix(in srgb, var(--accent) 48%, transparent)", opacity: .8,
-          boxShadow: "0 0 70px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 90px color-mix(in srgb, var(--accent) 9%, transparent)" }} />
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 520, height: 520, borderRadius: "50%",
-          border: "1px dashed color-mix(in srgb, var(--accent) 30%, transparent)", opacity: .6 }} />
-      </div>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", position: "relative", overflow: "hidden",
+      background: "radial-gradient(120% 90% at 50% 46%, rgba(164,134,63,0.14), transparent 60%), linear-gradient(180deg, #0d0c0a 0%, #12100b 55%, #0d0c0a 100%)" }}>
+      {/* the connected sphere — the whole concept, live behind the card */}
+      <ConnectedSphere labels />
 
       {step === "password" ? (
         <form onSubmit={submit} className="fos-glass fos-page" style={{ position: "relative", width: "100%", maxWidth: 384, borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-pop)", padding: "2rem 1.9rem 1.9rem" }}>
