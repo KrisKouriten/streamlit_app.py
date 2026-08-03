@@ -35,9 +35,10 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     const ctx = canvas.getContext("2d");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const root = getComputedStyle(document.documentElement);
-    const GOLD = hexToRgb(root.getPropertyValue("--accent"), "210,199,117");
-    const GOLD_B = "245,236,186";
+    // The concept-preview palette — a bright, warm gold rendered on a dark stage.
+    // (Not the app's muted --accent, which reads dull/grey for the glowing nodes.)
+    const GOLD = "231,212,146";
+    const GOLD_B = "244,230,172";
     const AMBER = "207,143,74";
     const TONE = { green: "126,200,120", amber: "224,180,80", red: "220,110,90", accent: GOLD_B, faint: "120,116,104" };
     const ADD = "lighter"; // the sphere always sits on a dark stage, so additive glow
