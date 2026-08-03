@@ -1,12 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cashOutYm, summarise, parseProcurementCsv } from "../lib/procurement-rules.js";
+import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
   assert.equal(cashOutYm("2026-07", 30), "2026-08");   // 31 Jul + 30d = 30 Aug
   assert.equal(cashOutYm("2026-07", 0), "2026-07");    // due at month-end
   assert.equal(cashOutYm("2026-07", 14), "2026-08");   // 31 Jul + 14d = 14 Aug
+});
+
+test("Miniso HQ cash-out = pickup date + 180 days", () => {
+  assert.equal(MINISO_TERMS_DAYS, 180);
+  assert.equal(cashOutFromDate("2026-07-15", 180), "2027-01"); // 15 Jul 2026 + 180d = 11 Jan 2027
+  assert.equal(cashOutFromDate("", 180), null);
+  // Miniso with a pickup date uses pickup + 180; without one it falls back to order-month + its terms.
+  assert.equal(cashOutFor({ source: "MINISO", pickup_date: "2026-07-15", order_ym: "2026-07", terms_days: 0 }), "2027-01");
+  assert.equal(cashOutFor({ source: "MINISO", order_ym: "2026-07", terms_days: 60 }), "2026-09"); // legacy row, no pickup
+  assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: 30 }), "2026-08");
 });
 
 test("summarise buckets committed spend into the cash-out month vs budget", () => {

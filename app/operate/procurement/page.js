@@ -34,7 +34,7 @@ export default async function Procurement({ searchParams }) {
 
   return (
     <div className="fos-shell">
-      <PageHeader crumb="Operate" title="Procurement Request"
+      <PageHeader crumb="Operate" title="Procurement Requests"
         right={pr.loaded ? "Cash budget vs committed spend" : "Awaiting purchases"} />
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
         <PerspectivePanel pageId="procurement" pageName="Procurement" />

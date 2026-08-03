@@ -125,13 +125,14 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
 // in the placeholders so it's obvious what each field wants.
 function AddLine({ source, onDone }) {
-  const empty = { supplier: "", category: "", order_ym: "", amount_gbp: "", terms_days: "", status: "COMMITTED", reference: "" };
+  const isMiniso = source === "MINISO";
+  const empty = { supplier: "", category: "", order_ym: "", delivery_ym: "", amount_gbp: "", terms_days: "", pickup_date: "", status: "COMMITTED", reference: "" };
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
-  const eg = source === "MINISO"
-    ? { supplier: "e.g. MINISO HQ", category: "e.g. Core range", amount: "e.g. 420000", terms: "e.g. 60 days", ref: "e.g. PO-1042" }
+  const eg = isMiniso
+    ? { supplier: "e.g. MINISO HQ (Guangzhou)", category: "e.g. Core range", amount: "e.g. 420000", ref: "e.g. PO-1042" }
     : { supplier: "e.g. Design360", category: "e.g. Fixtures", amount: "e.g. 42000", terms: "e.g. 30 days", ref: "e.g. PO-2087" };
   async function submit(e) {
     e.preventDefault();
@@ -148,14 +149,26 @@ function AddLine({ source, onDone }) {
   const Field = ({ label, children }) => <label style={{ display: "block" }}><span style={lab}>{label}</span>{children}</label>;
   return (
     <form onSubmit={submit} className="fos-card" style={{ padding: "15px 17px", marginBottom: 14 }}>
-      <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add a {source === "MINISO" ? "Miniso" : "Local"} purchase</div>
-      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>Enter a purchase directly — no spreadsheet needed. The cash-out month is worked out from the order month plus the supplier&rsquo;s payment terms.</div>
+      <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add a {isMiniso ? "Miniso" : "Local"} purchase</div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>
+        {isMiniso
+          ? <>Miniso HQ settles on fixed <strong>180-day terms from the pickup date</strong> — enter the pickup date and the cash-out month is worked out automatically.</>
+          : <>Enter a purchase directly — no spreadsheet needed. The cash-out month is the order month-end plus the supplier&rsquo;s payment terms.</>}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
         <Field label="Supplier"><input required value={f.supplier} onChange={set("supplier")} placeholder={eg.supplier} style={inp} /></Field>
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
+        <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
         <Field label="Amount (£)"><input required type="number" min="0" step="0.01" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
-        <Field label="Terms (days)"><input type="number" min="0" value={f.terms_days} onChange={set("terms_days")} placeholder={eg.terms} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        {isMiniso ? (
+          <>
+            <Field label="Pickup date"><input required type="date" value={f.pickup_date} onChange={set("pickup_date")} style={inp} /></Field>
+            <Field label="Terms"><input value="180 days · from pickup" disabled style={{ ...inp, color: "var(--muted)" }} /></Field>
+          </>
+        ) : (
+          <Field label="Terms (days)"><input type="number" min="0" value={f.terms_days} onChange={set("terms_days")} placeholder={eg.terms} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        )}
         <Field label="Status"><select value={f.status} onChange={set("status")} style={inp}><option value="COMMITTED">Committed</option><option value="PAID">Paid</option></select></Field>
         <Field label="Reference"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
       </div>

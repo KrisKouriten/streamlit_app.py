@@ -200,7 +200,7 @@ export default function OtbWorkspace({ versions = [], channels = [], version, de
 
           {tab === "summary" && <ExecutiveSummary version={version} detail={detail} onCompute={() => otbOp({ op: "compute" }, "OTB computed.")} busy={busy} />}
           {tab === "sales" && <SalesPlan detail={detail} />}
-          {tab === "inventory" && <Inventory detail={detail} version={version} onIngest={(csv) => otbOp({ op: "ingest-inventory", csv }, "Inventory ingested.")} busy={busy} />}
+          {tab === "inventory" && <Inventory detail={detail} version={version} />}
           {tab === "newstores" && <NewStores detail={detail} channelOpts={channelOpts} busy={busy} onSave={(row) => otbOp({ op: "save-newstore", row }, "New store saved.")} />}
           {tab === "closures" && <Closures detail={detail} channelOpts={channelOpts} busy={busy} onSave={(row) => otbOp({ op: "save-closure", row }, "Closure saved.")} />}
           {tab === "clearance" && <Clearance detail={detail} channelOpts={channelOpts} busy={busy} onSave={(row) => otbOp({ op: "save-clearance", row }, "Clearance plan saved.")} />}
@@ -394,58 +394,63 @@ function SalesPlan({ detail }) {
 // ---------------------------------------------------------------------------
 // Tab 3 — Inventory (store / warehouse / in-transit) + CSV ingest
 // ---------------------------------------------------------------------------
-function Inventory({ detail, version, onIngest, busy }) {
+function Inventory({ detail, version }) {
   const rows = detail?.inventory || [];
-  const [csv, setCsv] = useState("");
-  const groups = [["STORE", "Store stock"], ["WAREHOUSE", "Warehouse stock"], ["IN_TRANSIT", "Stock in transit"]];
+  // Consolidate to a topline: per channel × location, stores rolled to one total.
+  const LOC = [["IN_TRANSIT", "Stock in transit"], ["WAREHOUSE", "Stock in the DC"], ["STORE", "Store stock (all stores)"]];
+  const CH = [["MINISO_MDS", "Miniso MDS"], ["LOCAL_PURCHASE", "Local Purchase"]];
+  const cell = (ch, loc) => {
+    const g = rows.filter((r) => r.channel_code === ch && r.location_type === loc);
+    if (!g.length) return null;
+    return g.reduce((t, r) => t + (Number(r.stock_value) || 0), 0);
+  };
+  const dataThrough = rows.reduce((m, r) => (r.data_through && (!m || r.data_through > m) ? r.data_through : m), null);
+  const storeCount = rows.filter((r) => r.location_type === "STORE").length;
   return (
     <div>
       <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 2 }}>Upload inventory position</div>
-        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 10, lineHeight: 1.6 }}>
-          Paste CSV or choose a file. Columns: <span style={{ fontFamily: "var(--mono)" }}>Channel, Location, Store, Units, Stock value, Reserved, Damaged, Confidence, Data through</span>.
-          Location is one of STORE / WAREHOUSE / IN_TRANSIT.
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 650 }}>Inventory position {dataThrough ? `· through ${dateLabel(dataThrough)}` : ""}</div>
+          <a href="/plan/inventory-position" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>Manage in Inventory Position →</a>
         </div>
-        <input type="file" accept=".csv,text/csv" onChange={async (e) => { const file = e.target.files?.[0]; if (file) setCsv(await file.text()); }} style={{ fontSize: 12.5, marginBottom: 10 }} />
-        <textarea rows={5} style={{ ...inputSt, width: "100%", fontFamily: "var(--mono)", fontSize: 12 }} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder="Channel,Location,Store,Units,Stock value,Reserved,Damaged,Confidence,Data through" />
-        <div style={{ marginTop: 10 }}>
-          <button style={btn("var(--accent)")} disabled={busy || !csv.trim()} onClick={() => onIngest(csv)}>{busy ? "Ingesting…" : "Ingest inventory"}</button>
+        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.6 }}>
+          Consolidated topline that feeds the OTB calculation, pulled live from the <strong>Inventory Position</strong> master (Plan · HO). Stores are consolidated to a single total ({storeCount} store{storeCount === 1 ? "" : "s"} across channels); manage the detail there.
         </div>
-      </div>
-
-      <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Inventory positions {version.inventory_through ? `· through ${dateLabel(version.inventory_through)}` : ""}</div>
         {!rows.length ? (
-          <div style={{ fontSize: 13, color: "var(--faint)" }}>No inventory loaded for this version yet.</div>
-        ) : groups.map(([type, title]) => {
-          const g = rows.filter((r) => r.location_type === type);
-          if (!g.length) return null;
-          return (
-            <div key={type} style={{ marginBottom: 18 }}>
-              <div style={{ ...labelSt, marginBottom: 8 }}>{title} · {g.length}</div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
-                  <thead><tr>{["Channel", "Store", "Stock value", "Reserved", "Damaged", "Confidence", "Data through"].map((h, i) => (
-                    <th key={h} style={{ ...th, textAlign: i >= 2 && i <= 5 ? "right" : "left" }}>{h}</th>
-                  ))}</tr></thead>
-                  <tbody>
-                    {g.map((r) => (
-                      <tr key={r.id}>
-                        <td style={td}>{r.channel_code}</td>
-                        <td style={td}>{r.store_code || "—"}</td>
-                        <td style={tdR}>{gbp(r.stock_value)}</td>
-                        <td style={tdR}>{gbp(r.reserved_value)}</td>
-                        <td style={tdR}>{gbp(r.damaged_value)}</td>
-                        <td style={tdR}>{r.confidence == null ? "—" : `${Math.round(Number(r.confidence) * 100)}%`}</td>
-                        <td style={td}>{r.data_through ? dateLabel(r.data_through) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })}
+          <div style={{ fontSize: 13, color: "var(--faint)" }}>No inventory loaded yet — add positions in Plan · HO → Inventory Position.</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 520 }}>
+              <thead><tr>
+                <th style={th}>Location</th>
+                {CH.map(([, l]) => <th key={l} style={{ ...th, textAlign: "right" }}>{l}</th>)}
+                <th style={{ ...th, textAlign: "right" }}>Total</th>
+              </tr></thead>
+              <tbody>
+                {LOC.map(([loc, title]) => {
+                  const vals = CH.map(([ch]) => cell(ch, loc));
+                  const total = vals.reduce((t, v) => t + (v || 0), 0);
+                  if (vals.every((v) => v == null)) return null;
+                  return (
+                    <tr key={loc}>
+                      <td style={td}>{title}</td>
+                      {vals.map((v, i) => <td key={i} style={tdR}>{v == null ? "—" : gbp(v)}</td>)}
+                      <td style={tdR}>{gbp(total)}</td>
+                    </tr>
+                  );
+                })}
+                <tr style={{ fontWeight: 700 }}>
+                  <td style={{ ...td, borderTop: "2px solid var(--line)" }}>Total inventory</td>
+                  {CH.map(([ch]) => {
+                    const t = LOC.reduce((s, [loc]) => s + (cell(ch, loc) || 0), 0);
+                    return <td key={ch} style={{ ...tdR, borderTop: "2px solid var(--line)" }}>{gbp(t)}</td>;
+                  })}
+                  <td style={{ ...tdR, borderTop: "2px solid var(--line)" }}>{gbp(rows.reduce((t, r) => t + (Number(r.stock_value) || 0), 0))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
