@@ -28,7 +28,12 @@ const TABS = [
   ["sales", "Sales income"],
   ["recon", "Store cash rec."],
 ];
-const mLabel = (m) => { const x = /^(\d{4})-(\d{2})/.exec(m || ""); return x ? new Date(Date.UTC(+x[1], +x[2] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) : (m || "—"); };
+const mLabel = (m) => {
+  if (!m) return "—";
+  const s = typeof m === "string" ? m : (m instanceof Date ? m.toISOString() : String(m));
+  const x = /^(\d{4})-(\d{2})/.exec(s);
+  return x ? new Date(Date.UTC(+x[1], +x[2] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "—";
+};
 const dLabel = (d) => { if (!d) return "—"; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); };
 
 export default function TreasuryUI({ data, canManage }) {
