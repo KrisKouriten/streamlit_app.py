@@ -112,8 +112,11 @@ export default async function ExecutiveHub() {
         </div>
       </header>
 
-      {/* The connected sphere — pillars and data feeds converging on the live attention count. */}
-      <div style={{ position: "relative", height: "clamp(340px, 44vh, 460px)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8 }}>
+      {/* The connected sphere — pillars and data feeds converging on the live attention count.
+          It carries its own dark stage so the gold sphere reads the same in either theme. */}
+      <div style={{ position: "relative", height: "clamp(340px, 44vh, 460px)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8,
+        border: "1px solid var(--line)",
+        background: "radial-gradient(120% 90% at 50% 46%, rgba(164,134,63,0.16), transparent 60%), linear-gradient(180deg, #0d0c0a 0%, #12100b 55%, #0d0c0a 100%)" }}>
         <ConnectedSphere labels glow={false} centerValue={attention.length} centerCaption="items need attention" pillarTones={pillarTones} />
       </div>
 
