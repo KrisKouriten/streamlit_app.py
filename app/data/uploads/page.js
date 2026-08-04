@@ -45,11 +45,11 @@ const LIVE = [
   },
   {
     key: "cost-model",
-    title: "Fixed & Variable cost model",
+    title: "Fixed, Variable & Labour cost model",
     drives: "The Management Accounts Close accrual review — the expected figure per store × nominal (variance versus actuals).",
-    detail: "One row per store × nominal: Behaviour = FIXED (a monthly £ amount) or VARIABLE (a % of that store's revenue). At month-end the accrual review compares this expectation to what's posted; where no model line exists it falls back to the trailing run-rate.",
-    uploads: [{ endpoint: "/api/management-accounts", action: "costModel", fileField: "file", label: "Upload cost model (Excel / CSV)" }],
-    template: { name: "cost-model-template.csv", href: "Store,Nominal,Behaviour,Monthly Amount,% of Revenue\nCamden,ST: Rent,FIXED,12000,\nCamden,ST: Rates,FIXED,3500,\nCamden,ST: Cost of Goods Sold,VARIABLE,,40\nCamden,ST: Card Fees,VARIABLE,,1.5\n" },
+    detail: "The store cost-assumptions workbook: fixed costs (£/month, with a start month), variable costs (% of sales), the monthly COGS % override, and the seasonal labour chain (Basic Pay → Holiday → NI → Pension). At month-end the accrual review compares this expectation to what's posted; where no model line exists it falls back to the trailing run-rate. A simple long tab (Store · Nominal · Behaviour · Monthly Amount · % of Revenue) is also accepted.",
+    uploads: [{ endpoint: "/api/management-accounts", action: "costModel", fileField: "file", label: "Upload cost model (Excel)" }],
+    template: { name: "cost-model-simple-template.csv", href: "Store,Nominal,Behaviour,Monthly Amount,% of Revenue\nCamden,ST: Rent,FIXED,12000,\nCamden,ST: Rates,FIXED,3500,\nCamden,ST: Cost of Goods Sold,VARIABLE,,40\nCamden,ST: Card Fees,VARIABLE,,1.5\n" },
     fullHref: "/operate/management-close", fullLabel: "Open the accrual review ↗",
   },
 ];

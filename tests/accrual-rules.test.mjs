@@ -166,6 +166,43 @@ test("MODEL basis works in the first month with no prior history", () => {
   assert.equal(r.lines[0].accrual, 5000);
 });
 
+test("MODEL basis: YM month override drives the variable expectation", () => {
+  const rows = [
+    R("Camden", "ST: Sales", "2026-07", 100000),
+    R("Camden", "ST: Cost of Goods Sold", "2026-07", 30000),
+  ];
+  const expectations = {
+    base: [{ store: "Camden", line_label: "ST: Cost of Goods Sold", behaviour: "VARIABLE", pct_of_revenue: 0.37 }],
+    monthRates: [{ store: "Camden", line_label: "ST: Cost of Goods Sold", scope: "YM", period_key: "2026-07", pct_of_revenue: 0.42 }],
+  };
+  const r = computeAccrualReview(rows, { targetMonth: "2026-07", expectations });
+  const cogs = r.lines.find((l) => l.nominal === "ST: Cost of Goods Sold");
+  assert.equal(cogs.expected, 42000); // 0.42 override, not 0.37
+  assert.equal(cogs.accrual, 12000);
+});
+
+test("MODEL basis: MONTH seasonal rate applies by calendar month", () => {
+  const rows = [
+    R("Camden", "ST: Sales", "2026-07", 100000),
+    R("Camden", "ST: Salaries - Basic Pay", "2026-07", 5000),
+  ];
+  const expectations = {
+    base: [{ store: "Camden", line_label: "ST: Salaries - Basic Pay", behaviour: "VARIABLE", pct_of_revenue: null }],
+    monthRates: [{ store: "Camden", line_label: "ST: Salaries - Basic Pay", scope: "MONTH", period_key: "07", pct_of_revenue: 0.15 }],
+  };
+  const r = computeAccrualReview(rows, { targetMonth: "2026-07", expectations });
+  const sal = r.lines.find((l) => l.nominal === "ST: Salaries - Basic Pay");
+  assert.equal(sal.expected, 15000); // 0.15 × 100,000
+  assert.equal(sal.accrual, 10000);
+});
+
+test("MODEL basis: fixed cost not yet started is not flagged", () => {
+  const rows = [R("Camden", "ST: Rent", "2026-07", 0)];
+  const expectations = { base: [{ store: "Camden", line_label: "ST: Rent", behaviour: "FIXED", monthly_amount: 5000, start_ym: "2026-08" }], monthRates: [] };
+  const r = computeAccrualReview(rows, { targetMonth: "2026-07", expectations });
+  assert.equal(r.lines.length, 0); // starts next month — no accrual expected yet
+});
+
 test("mixed: model where loaded, run-rate elsewhere", () => {
   const rows = [
     ...rentSeries(0), // Camden Rent — no model → run-rate 1000, COMPLETENESS

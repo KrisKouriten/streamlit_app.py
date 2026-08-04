@@ -30,6 +30,19 @@ test("expectedForMonth: fixed amount, variable × revenue", () => {
   assert.equal(expectedForMonth(null, 100000), 0);
 });
 
+test("expectedForMonth: fixed respects the start month", () => {
+  const exp = { behaviour: "FIXED", monthly_amount: 12000, start_ym: "2026-03" };
+  assert.equal(expectedForMonth(exp, 0, { ym: "2026-01" }), 0);      // before start
+  assert.equal(expectedForMonth(exp, 0, { ym: "2026-03" }), 12000);  // from start
+  assert.equal(expectedForMonth(exp, 0, { ym: "2026-07" }), 12000);
+});
+
+test("expectedForMonth: month rate overrides the flat variable rate", () => {
+  const exp = { behaviour: "VARIABLE", pct_of_revenue: 0.37 };
+  assert.equal(expectedForMonth(exp, 100000, { ym: "2026-07", monthRate: 0.42 }), 42000);
+  assert.equal(expectedForMonth(exp, 100000, { ym: "2026-06" }), 37000); // no override → flat
+});
+
 function wbFromRows(rows) {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -76,4 +89,82 @@ test("parseCostModelWorkbook: no matching tab warns cleanly", () => {
   const { records, warnings } = parseCostModelWorkbook(wb);
   assert.equal(records.length, 0);
   assert.ok(warnings[0].includes("No cost-model tab"));
+});
+
+test("parseCostModelWorkbook: wide Cost Assumptions + Labour Seasonality", () => {
+  const D = (y, m) => new Date(Date.UTC(y, m - 1, 1));
+  const ca = [
+    ["Cost Assumptions", null, "Camden", "Oxford"],
+    [],
+    [null, "FIXED COSTS — £ per month"],
+    [null, "ST: Rent", 12000, 8000],
+    [],
+    [null, "FIXED COSTS — Start Date (dd/mm/yyyy)"],
+    [null, "ST: Rent", D(2026, 3), D(2026, 1)],
+    [],
+    [null, "VARIABLE COSTS — % of Sales"],
+    [null, "ST: Cost of Goods Sold", 0.37, 0.40],
+    [],
+    [null, "MONTHLY COST OF GOODS SOLD — % of Sales (per store, per month)."],
+    [null, "Month", "Camden", "Oxford"],
+    [null, D(2026, 7), 0.42, 0.41],
+  ];
+  const ls = [
+    ["Labour Seasonality", null],
+    [],
+    [null, "ST: Salaries - Basic Pay  (% of Sales)", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    [null, "Camden", 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15],
+    [null, "Oxford", 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.16],
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ca), "Cost Assumptions");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ls), "Labour Seasonality");
+  wb._utils = XLSX.utils;
+
+  const { records, monthRates, stores, warnings } = parseCostModelWorkbook(wb);
+  assert.equal(warnings.length, 0);
+  assert.deepEqual(stores, ["Camden", "Oxford"]);
+
+  const rent = records.find((r) => r.store === "Camden" && r.line_label === "ST: Rent");
+  assert.equal(rent.behaviour, "FIXED");
+  assert.equal(rent.monthly_amount, 12000);
+  assert.equal(rent.start_ym, "2026-03");
+  assert.equal(records.find((r) => r.store === "Oxford" && r.line_label === "ST: Rent").start_ym, "2026-01");
+
+  const cogs = records.find((r) => r.store === "Camden" && r.line_label === "ST: Cost of Goods Sold");
+  assert.equal(cogs.behaviour, "VARIABLE");
+  assert.equal(cogs.pct_of_revenue, 0.37);
+  const cogsJul = monthRates.find((m) => m.store === "Camden" && m.line_label === "ST: Cost of Goods Sold" && m.scope === "YM");
+  assert.equal(cogsJul.period_key, "2026-07");
+  assert.equal(cogsJul.pct_of_revenue, 0.42);
+
+  // Labour: base VARIABLE record + 12 MONTH rates for Basic Pay
+  assert.ok(records.some((r) => r.store === "Camden" && r.line_label === "ST: Salaries - Basic Pay" && r.behaviour === "VARIABLE"));
+  const basic = monthRates.filter((m) => m.store === "Camden" && m.line_label === "ST: Salaries - Basic Pay" && m.scope === "MONTH");
+  assert.equal(basic.length, 12);
+  assert.equal(basic.find((x) => x.period_key === "07").pct_of_revenue, 0.15);
+});
+
+test("parseCostModelWorkbook: labour chain folds NI onto % of sales", () => {
+  const wb = XLSX.utils.book_new();
+  const ls = [
+    ["Labour Seasonality", null],
+    [],
+    [null, "ST: Salaries - Basic Pay  (% of Sales)", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    [null, "Camden", 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20],
+    [],
+    [null, "ST: Salaries - Holiday Pay  (% of Basic Pay)", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    [null, "Camden", 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10],
+    [],
+    [null, "ST: Employers National Insurance  (% of Basic + Holiday)", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    [null, "Camden", 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138, 0.138],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ls), "Labour Seasonality");
+  wb._utils = XLSX.utils;
+  const { monthRates } = parseCostModelWorkbook(wb);
+  // basic = 0.20; holiday eff = 0.10*0.20 = 0.02; (basic+holiday) as %sales = 0.20*1.10 = 0.22; NI eff = 0.138*0.22 = 0.03036
+  const ni = monthRates.find((m) => m.line_label === "ST: Employers National Insurance" && m.period_key === "01");
+  assert.ok(Math.abs(ni.pct_of_revenue - 0.03036) < 1e-9);
+  const hol = monthRates.find((m) => m.line_label === "ST: Salaries - Holiday Pay" && m.period_key === "01");
+  assert.ok(Math.abs(hol.pct_of_revenue - 0.02) < 1e-9);
 });
