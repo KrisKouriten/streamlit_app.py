@@ -124,3 +124,60 @@ test("target defaults to the latest month present", () => {
   const r = computeAccrualReview(rentSeries(0));
   assert.equal(r.target, "2026-04");
 });
+
+test("run-rate basis is the default when no model is loaded", () => {
+  const r = computeAccrualReview(rentSeries(600), { targetMonth: "2026-04" });
+  assert.equal(r.modelLoaded, false);
+  assert.equal(r.lines[0].basis, "RUN_RATE");
+  assert.equal(r.lines[0].expected, 1000);
+});
+
+test("MODEL basis: FIXED expectation drives the variance, not run-rate", () => {
+  // run-rate would be 1000, but the fixed model says 1500 — variance uses 1500
+  const expectations = [{ store: "Camden", line_label: "ST: Rent", behaviour: "FIXED", monthly_amount: 1500 }];
+  const r = computeAccrualReview(rentSeries(600), { targetMonth: "2026-04", expectations });
+  assert.equal(r.modelLoaded, true);
+  assert.equal(r.lines[0].basis, "MODEL");
+  assert.equal(r.lines[0].expected, 1500);
+  assert.equal(r.lines[0].accrual, 900); // 1500 − 600
+  assert.equal(r.basisCounts.MODEL, 1);
+  assert.equal(r.basisCounts.RUN_RATE, 0);
+});
+
+test("MODEL basis: VARIABLE expectation applies the rate to store revenue", () => {
+  const rows = [
+    R("Camden", "ST: Sales", "2026-04", 100000),
+    R("Camden", "ST: COGS", "2026-04", 30000),
+  ];
+  const expectations = [{ store: "Camden", line_label: "ST: COGS", behaviour: "VARIABLE", pct_of_revenue: 0.4 }];
+  const r = computeAccrualReview(rows, { targetMonth: "2026-04", expectations });
+  const cogs = r.lines.find((l) => l.nominal === "ST: COGS");
+  assert.equal(cogs.basis, "MODEL");
+  assert.equal(cogs.expected, 40000); // 40% × 100,000
+  assert.equal(cogs.accrual, 10000);  // 40,000 − 30,000
+});
+
+test("MODEL basis works in the first month with no prior history", () => {
+  const rows = [R("Camden", "ST: Rent", "2026-01", 0)];
+  const expectations = [{ store: "Camden", line_label: "ST: Rent", behaviour: "FIXED", monthly_amount: 5000 }];
+  const r = computeAccrualReview(rows, { targetMonth: "2026-01", expectations });
+  assert.equal(r.lines.length, 1);
+  assert.equal(r.lines[0].type, "COMPLETENESS");
+  assert.equal(r.lines[0].accrual, 5000);
+});
+
+test("mixed: model where loaded, run-rate elsewhere", () => {
+  const rows = [
+    ...rentSeries(0), // Camden Rent — no model → run-rate 1000, COMPLETENESS
+    R("Oxford", "ST: Salaries", "2026-04", 100),
+  ];
+  const expectations = [{ store: "Oxford", line_label: "ST: Salaries", behaviour: "FIXED", monthly_amount: 2000 }];
+  const r = computeAccrualReview(rows, { targetMonth: "2026-04", expectations });
+  assert.equal(r.basisCounts.MODEL, 1);
+  assert.equal(r.basisCounts.RUN_RATE, 1);
+  const rent = r.lines.find((l) => l.nominal === "ST: Rent");
+  const sal = r.lines.find((l) => l.nominal === "ST: Salaries");
+  assert.equal(rent.basis, "RUN_RATE");
+  assert.equal(sal.basis, "MODEL");
+  assert.equal(sal.accrual, 1900); // 2000 − 100
+});

@@ -12,6 +12,7 @@ import { money, Badge } from "../../finance-os/ui";
 
 const TYPE_LABEL = { COMPLETENESS: "Nothing posted", REVERSAL: "Reversal", DRIFT: "Under-posted" };
 const TYPE_TONE = { COMPLETENESS: "red", REVERSAL: "amber", DRIFT: "amber" };
+const BASIS_LABEL = { MODEL: "Model", RUN_RATE: "Run-rate" };
 const MATERIALITY_OPTS = [250, 500, 1000];
 
 function csvEscape(v) {
@@ -24,8 +25,8 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
 
   const csvHref = useMemo(() => {
     if (!review?.lines?.length) return null;
-    const head = ["Store", "Nominal", "Type", "Run-rate", "Posted", "Accrual", "Months used"];
-    const body = review.lines.map((l) => [l.store, l.nominal, TYPE_LABEL[l.type] || l.type, l.runRate, l.posted, l.accrual, l.monthsUsed]);
+    const head = ["Store", "Nominal", "Type", "Basis", "Expected", "Posted", "Accrual", "Months used"];
+    const body = review.lines.map((l) => [l.store, l.nominal, TYPE_LABEL[l.type] || l.type, BASIS_LABEL[l.basis] || l.basis, l.expected, l.posted, l.accrual, l.monthsUsed]);
     const csv = [head, ...body].map((r) => r.map(csvEscape).join(",")).join("\n");
     return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
   }, [review]);
@@ -89,7 +90,7 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
       {/* headline tiles */}
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 18 }}>
         <Tile label="Estimated accrual" value={money(t.totalAccrual, { compact: true })} tone="var(--amber)" sub={`${t.flagged} cost line${t.flagged === 1 ? "" : "s"} flagged`} />
-        <Tile label="Run-rate cost" value={money(t.runRateCost, { compact: true })} sub={`vs ${money(t.targetCost, { compact: true })} posted`} />
+        <Tile label="Expected cost" value={money(t.runRateCost, { compact: true })} sub={review.modelLoaded ? "model + run-rate" : `vs ${money(t.targetCost, { compact: true })} posted`} />
         <Tile label="Posted this month" value={money(t.targetCost, { compact: true })} sub={review.target} />
         <Tile label="Revenue not posted" value={rev.count} tone={rev.count ? "var(--red)" : "var(--green)"} sub={rev.count ? `${money(rev.runRate, { compact: true })} run-rate — data gap` : "all store sales posted"} />
       </div>
@@ -116,9 +117,16 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
       </div>
 
       {/* full lines */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
         <span style={{ fontSize: 14, fontWeight: 650 }}>Accrual candidates</span>
-        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {review.target} vs run-rate of {review.priorMonths.length} prior month{review.priorMonths.length === 1 ? "" : "s"} · gap ≥ {money(review.materiality)}</span>
+        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {review.target} vs expected · gap ≥ {money(review.materiality)}</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 10 }}>
+        {review.modelLoaded ? (
+          <>Expected from the <strong style={{ color: "var(--muted)" }}>fixed / variable cost model</strong> where loaded ({review.basisCounts.MODEL} line{review.basisCounts.MODEL === 1 ? "" : "s"}), else the trailing run-rate of {review.priorMonths.length} prior month{review.priorMonths.length === 1 ? "" : "s"} ({review.basisCounts.RUN_RATE} line{review.basisCounts.RUN_RATE === 1 ? "" : "s"}).</>
+        ) : (
+          <>Expected from the trailing run-rate of {review.priorMonths.length} prior month{review.priorMonths.length === 1 ? "" : "s"}. Upload a <strong style={{ color: "var(--muted)" }}>fixed / variable cost model</strong> on Data uploads to drive the variance off budgeted expectations instead.</>
+        )}
       </div>
       {review.lines.length === 0 ? (
         <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--green)" }}>
@@ -128,8 +136,8 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
         <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
             <thead><tr>
-              {["Store", "Nominal", "Type", "Run-rate", "Posted", "Accrual", "Months"].map((h, i) => (
-                <th key={i} style={{ textAlign: i >= 3 ? "right" : "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+              {["Store", "Nominal", "Type", "Basis", "Expected", "Posted", "Accrual"].map((h, i) => (
+                <th key={i} style={{ textAlign: i >= 4 ? "right" : "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -141,10 +149,10 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
                     <td style={{ padding: "9px 14px", borderBottom: bb, whiteSpace: "nowrap", fontWeight: 550 }}>{l.store}</td>
                     <td style={{ padding: "9px 14px", borderBottom: bb }}>{l.nominal}</td>
                     <td style={{ padding: "9px 14px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={TYPE_TONE[l.type]}>{TYPE_LABEL[l.type] || l.type}</Badge></td>
-                    <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--muted)" }}>{money(l.runRate)}</td>
+                    <td style={{ padding: "9px 14px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={l.basis === "MODEL" ? "accent" : "muted"}>{BASIS_LABEL[l.basis] || l.basis}</Badge></td>
+                    <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--muted)" }} title={l.basis === "RUN_RATE" ? `run-rate of ${l.monthsUsed} month${l.monthsUsed === 1 ? "" : "s"}` : "fixed / variable model"}>{money(l.expected)}</td>
                     <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--muted)" }}>{money(l.posted)}</td>
                     <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, fontWeight: 600, color: "var(--amber)" }}>{money(l.accrual)}</td>
-                    <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--faint)" }}>{l.monthsUsed}</td>
                   </tr>
                 );
               })}

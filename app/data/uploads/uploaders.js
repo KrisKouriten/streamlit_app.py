@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
  */
 
 function summarise(j) {
+  if (j.fixed != null || j.variable != null) return `Loaded ${Number(j.loaded).toLocaleString("en-GB")} cost-model lines · ${j.fixed || 0} fixed · ${j.variable || 0} variable${j.stores ? ` · ${j.stores} stores` : ""}.`;
   if (j.loaded != null) return `Loaded ${Number(j.loaded).toLocaleString("en-GB")} actual lines${j.stores ? ` · ${j.stores} stores` : ""}${j.months ? ` · ${j.months} months` : ""}.`;
   if (j.rows != null) return `Loaded ${Number(j.rows).toLocaleString("en-GB")} rows${j.months?.length ? ` · ${j.months.length} month(s): ${j.months.join(", ")}` : ""}.`;
   if (j.name && j.lines != null) return `Imported the ${j.name} layout (${j.lines} lines)${j.needMap?.length ? ` · ${j.needMap.length} line(s) need a nominal mapped` : ""}.`;

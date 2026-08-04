@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { ingestActualsWorkbook } from "../../../lib/management-accounts";
+import { ingestCostModelWorkbook } from "../../../lib/cost-model";
 
 export async function POST(request) {
   const session = await getSession();
@@ -14,6 +15,11 @@ export async function POST(request) {
     if (body.action === "workbook") {
       if (!body.file) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
       const r = await ingestActualsWorkbook(Buffer.from(body.file, "base64"), actor);
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.action === "costModel") {
+      if (!body.file) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
+      const r = await ingestCostModelWorkbook(Buffer.from(body.file, "base64"), actor);
       return NextResponse.json({ ok: true, ...r });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

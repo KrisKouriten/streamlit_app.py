@@ -43,6 +43,15 @@ const LIVE = [
     uploads: [{ endpoint: "/api/plan", action: "workbook", fileField: "b64", label: "Upload budget / forecast model (Excel)" }],
     fullHref: "/finance-os/budget-forecast", fullLabel: "Open budget & forecast view ↗",
   },
+  {
+    key: "cost-model",
+    title: "Fixed & Variable cost model",
+    drives: "The Management Accounts Close accrual review — the expected figure per store × nominal (variance versus actuals).",
+    detail: "One row per store × nominal: Behaviour = FIXED (a monthly £ amount) or VARIABLE (a % of that store's revenue). At month-end the accrual review compares this expectation to what's posted; where no model line exists it falls back to the trailing run-rate.",
+    uploads: [{ endpoint: "/api/management-accounts", action: "costModel", fileField: "file", label: "Upload cost model (Excel / CSV)" }],
+    template: { name: "cost-model-template.csv", href: "Store,Nominal,Behaviour,Monthly Amount,% of Revenue\nCamden,ST: Rent,FIXED,12000,\nCamden,ST: Rates,FIXED,3500,\nCamden,ST: Cost of Goods Sold,VARIABLE,,40\nCamden,ST: Card Fees,VARIABLE,,1.5\n" },
+    fullHref: "/operate/management-close", fullLabel: "Open the accrual review ↗",
+  },
 ];
 
 const AWAITING = [
@@ -63,12 +72,6 @@ const AWAITING = [
     title: "Treasury",
     drives: "Treasury dashboard & the Cash / Treasury report perspective.",
     detail: "Awaiting a bank-facility / forward-cash feed (balances, facility limits, drawn, headroom, forward flows).",
-  },
-  {
-    key: "cost-split",
-    title: "Fixed & Variable cost tagging",
-    drives: "Benchmarks the Management Accounts Close analysis — variances split fixed vs variable, feeding the AI accrual recommendations (SOP §5.6).",
-    detail: "Awaiting the cost-classification input (nominal → fixed / variable, with the expected basis).",
   },
 ];
 
@@ -121,6 +124,10 @@ export default async function DataUploads() {
                   {f.uploads.map((u, i) => (
                     <InlineUpload key={i} endpoint={u.endpoint} action={u.action} fileField={u.fileField} label={u.label} />
                   ))}
+                  {f.template && (
+                    <a href={`data:text/csv;charset=utf-8,${encodeURIComponent(f.template.href)}`} download={f.template.name}
+                      style={{ fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Download template (CSV) ↓</a>
+                  )}
                 </div>
               ) : (
                 <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>Finance or admin access needed to upload.</div>
