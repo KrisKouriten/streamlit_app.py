@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, Badge } from "../../finance-os/ui";
+import { ACTIONS } from "../../../lib/accrual-rules";
 
 /* Run-rate accrual review — the month-end check on the uploaded provisional
    store P&Ls. Each store × nominal is compared to its trailing same-year
@@ -14,6 +15,9 @@ const TYPE_LABEL = { COMPLETENESS: "Nothing posted", REVERSAL: "Reversal", DRIFT
 const TYPE_TONE = { COMPLETENESS: "red", REVERSAL: "amber", DRIFT: "amber" };
 const BASIS_LABEL = { MODEL: "Model", RUN_RATE: "Run-rate" };
 const MATERIALITY_OPTS = [250, 500, 1000];
+// How each nominal's expectation is derived, for the by-store view.
+const SOURCE_LABEL = { FIXED: "Fixed £/mo", VARIABLE: "Variable % sales", RUN_RATE: "Run-rate", REVENUE: "Revenue", BELOW: "Below EBITDA", NONE: "—" };
+const SOURCE_TONE = { FIXED: "accent", VARIABLE: "accent", RUN_RATE: "muted", REVENUE: "green", BELOW: "muted", NONE: "muted" };
 
 function csvEscape(v) {
   const s = String(v ?? "");
@@ -22,6 +26,7 @@ function csvEscape(v) {
 
 export default function AccrualReviewUI({ review, targetMonth, materiality }) {
   const router = useRouter();
+  const [view, setView] = useState("overview");
 
   const csvHref = useMemo(() => {
     if (!review?.lines?.length) return null;
@@ -87,6 +92,18 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
         )}
       </div>
 
+      {/* tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--line)" }}>
+        {[["overview", "Overview"], ["store", "By store"]].map(([key, label]) => (
+          <button key={key} onClick={() => setView(key)}
+            style={{ appearance: "none", background: "none", border: "none", cursor: "pointer", padding: "8px 14px", fontSize: 13, fontWeight: 600,
+              color: view === key ? "var(--ink)" : "var(--faint)", borderBottom: view === key ? "2px solid var(--accent)" : "2px solid transparent", marginBottom: -1 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "overview" && (<>
       {/* headline tiles */}
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 18 }}>
         <Tile label="Estimated accrual" value={money(t.totalAccrual, { compact: true })} tone="var(--amber)" sub={`${t.flagged} cost line${t.flagged === 1 ? "" : "s"} flagged`} />
@@ -160,7 +177,92 @@ export default function AccrualReviewUI({ review, targetMonth, materiality }) {
           </table>
         </div>
       )}
+      </>)}
+
+      {view === "store" && <ByStore review={review} />}
     </Section>
+  );
+}
+
+// Per-store drill-in: every nominal for one store, its fixed/variable (or
+// run-rate) expectation next to what's posted, the variance and the action.
+function ByStore({ review }) {
+  const stores = useMemo(
+    () => review.storeDetail.slice().sort((a, b) => b.totals.accrual - a.totals.accrual),
+    [review.storeDetail]
+  );
+  const [store, setStore] = useState(stores[0]?.store || "");
+  const sel = stores.find((s) => s.store === store) || stores[0];
+
+  const csvHref = useMemo(() => {
+    if (!sel) return null;
+    const head = ["Store", "Nominal", "Type", "Expected", "Posted", "Variance", "Action", "Accrual"];
+    const body = sel.rows.map((r) => [sel.store, r.nominal, SOURCE_LABEL[r.source] || r.source, r.expected ?? "", r.posted, r.variance ?? "", ACTIONS[r.action]?.label || r.action, r.amount || ""]);
+    const csv = [head, ...body].map((r) => r.map(csvEscape).join(",")).join("\n");
+    return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+  }, [sel]);
+
+  if (!sel) return <div className="fos-card" style={{ padding: "16px 18px", fontSize: 13.5, color: "var(--faint)" }}>No store detail for this month.</div>;
+  const T = sel.totals;
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 14 }}>
+        <label style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+          <span style={ctlLabel}>Store</span>
+          <select value={store} onChange={(e) => setStore(e.target.value)}
+            className="fos-input" style={{ height: 34, fontSize: 13.5, padding: "0 8px", minWidth: 220 }}>
+            {stores.map((s) => <option key={s.store} value={s.store}>{s.store}{s.totals.accrual ? ` — ${money(s.totals.accrual, { compact: true })} to accrue` : ""}</option>)}
+          </select>
+        </label>
+        <div style={{ flex: 1 }} />
+        {csvHref && (
+          <a className="fos-btn-ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            href={csvHref} download={`accrual-${sel.store}-${review.target}.csv`}>Download {sel.store} (CSV)</a>
+        )}
+      </div>
+
+      {/* per-store tiles */}
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+        <Tile label="To accrue" value={money(T.accrual, { compact: true })} tone="var(--amber)" sub={`${T.flagged} line${T.flagged === 1 ? "" : "s"}`} />
+        <Tile label="Expected cost" value={money(T.expected, { compact: true })} sub="fixed + variable" />
+        <Tile label="Posted cost" value={money(T.posted, { compact: true })} sub={review.target} />
+      </div>
+
+      <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 760 }}>
+          <thead><tr>
+            {["Nominal", "Type", "Expected", "Posted", "Variance", "Action"].map((h, i) => (
+              <th key={i} style={{ textAlign: i >= 2 && i <= 4 ? "right" : "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {sel.rows.map((r, i) => {
+              const last = i === sel.rows.length - 1;
+              const bb = last ? "none" : "1px solid var(--hairline)";
+              const act = ACTIONS[r.action] || { label: r.action, tone: "muted", hint: "" };
+              const accrue = ["ACCRUE_FULL", "REACCRUE", "TOPUP"].includes(r.action);
+              return (
+                <tr key={r.nominal}>
+                  <td style={{ padding: "9px 14px", borderBottom: bb, fontWeight: 540 }}>{r.nominal}</td>
+                  <td style={{ padding: "9px 14px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={SOURCE_TONE[r.source] || "muted"}>{SOURCE_LABEL[r.source] || r.source}</Badge></td>
+                  <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--muted)" }}>{r.expected == null ? "—" : money(r.expected)}</td>
+                  <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: "var(--muted)" }}>{money(r.posted)}</td>
+                  <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, color: r.variance == null ? "var(--faint)" : (r.variance >= review.materiality ? "var(--amber)" : (r.variance <= -review.materiality ? "var(--accent)" : "var(--faint)")) }}>{r.variance == null ? "—" : money(r.variance)}</td>
+                  <td style={{ padding: "9px 14px", borderBottom: bb, whiteSpace: "normal", maxWidth: 320 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                      <Badge tone={act.tone}>{act.label}</Badge>
+                      {accrue && <span className="fos-num" style={{ fontWeight: 600, color: "var(--amber)" }}>{money(r.amount)}</span>}
+                    </span>
+                    <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{act.hint}</div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

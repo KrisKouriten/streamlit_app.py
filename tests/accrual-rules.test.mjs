@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeAccrualReview, ACCRUAL_TYPES, DEFAULT_MATERIALITY } from "../lib/accrual-rules.js";
+import { computeAccrualReview, ACCRUAL_TYPES, DEFAULT_MATERIALITY, ACTIONS } from "../lib/accrual-rules.js";
 
 const R = (unit, line, ym, value) => ({ unit, line_label: line, ym, value });
 
@@ -123,6 +123,61 @@ test("byType / byNominal / byStore aggregate the flagged lines", () => {
 test("target defaults to the latest month present", () => {
   const r = computeAccrualReview(rentSeries(0));
   assert.equal(r.target, "2026-04");
+});
+
+test("storeDetail: every nominal per store with an action", () => {
+  const rows = [
+    // Camden — revenue posted, rent nothing posted (accrue), rates in line, depreciation below-line
+    R("Camden", "ST: Sales", "2026-01", 100000), R("Camden", "ST: Sales", "2026-02", 100000), R("Camden", "ST: Sales", "2026-03", 100000), R("Camden", "ST: Sales", "2026-04", 100000),
+    R("Camden", "ST: Rent", "2026-01", 1000), R("Camden", "ST: Rent", "2026-02", 1000), R("Camden", "ST: Rent", "2026-03", 1000), R("Camden", "ST: Rent", "2026-04", 0),
+    R("Camden", "ST: Rates", "2026-01", 500), R("Camden", "ST: Rates", "2026-02", 500), R("Camden", "ST: Rates", "2026-03", 500), R("Camden", "ST: Rates", "2026-04", 500),
+    R("Camden", "ST: Depreciation", "2026-01", 200), R("Camden", "ST: Depreciation", "2026-04", 0),
+  ];
+  const r = computeAccrualReview(rows, { targetMonth: "2026-04" });
+  assert.equal(r.storeDetail.length, 1);
+  const cam = r.storeDetail[0];
+  assert.equal(cam.store, "Camden");
+  const byNom = Object.fromEntries(cam.rows.map((x) => [x.nominal, x]));
+  assert.equal(byNom["ST: Rent"].action, "ACCRUE_FULL");
+  assert.equal(byNom["ST: Rent"].amount, 1000);
+  assert.equal(byNom["ST: Rates"].action, "IN_LINE");
+  assert.equal(byNom["ST: Sales"].kind, "REVENUE");
+  assert.equal(byNom["ST: Sales"].action, "REVENUE_OK");
+  assert.equal(byNom["ST: Depreciation"].kind, "BELOW");
+  assert.equal(byNom["ST: Depreciation"].action, "BELOW_LINE");
+  // costs sort first, largest accrual on top
+  assert.equal(cam.rows[0].nominal, "ST: Rent");
+  assert.equal(cam.totals.accrual, 1000);
+  assert.equal(cam.totals.flagged, 1);
+});
+
+test("storeDetail: over-posted and no-basis actions, model source labels", () => {
+  const rows = [
+    R("Oxford", "ST: Sales", "2026-04", 100000),
+    R("Oxford", "ST: Rent", "2026-04", 5000),       // model fixed 3000 → over-posted by 2000
+    R("Oxford", "ST: COGS", "2026-04", 30000),      // model variable 40% → expected 40000, accrue
+    R("Oxford", "ST: Odd Cost", "2026-04", 800),    // no model, no history → no basis
+  ];
+  const expectations = { base: [
+    { store: "Oxford", line_label: "ST: Rent", behaviour: "FIXED", monthly_amount: 3000 },
+    { store: "Oxford", line_label: "ST: COGS", behaviour: "VARIABLE", pct_of_revenue: 0.4 },
+  ], monthRates: [] };
+  const r = computeAccrualReview(rows, { targetMonth: "2026-04", expectations });
+  const byNom = Object.fromEntries(r.storeDetail[0].rows.map((x) => [x.nominal, x]));
+  assert.equal(byNom["ST: Rent"].source, "FIXED");
+  assert.equal(byNom["ST: Rent"].action, "OVERPOSTED");
+  assert.equal(byNom["ST: Rent"].amount, 2000);
+  assert.equal(byNom["ST: COGS"].source, "VARIABLE");
+  assert.equal(byNom["ST: COGS"].action, "TOPUP");
+  assert.equal(byNom["ST: COGS"].amount, 10000);
+  assert.equal(byNom["ST: Odd Cost"].action, "NO_BASIS");
+  assert.equal(byNom["ST: Odd Cost"].expected, null);
+});
+
+test("ACTIONS exposes every code the engine emits", () => {
+  for (const c of ["ACCRUE_FULL", "REACCRUE", "TOPUP", "OVERPOSTED", "IN_LINE", "NO_BASIS", "REVENUE_MISSING", "REVENUE_OK", "BELOW_LINE"]) {
+    assert.ok(ACTIONS[c] && ACTIONS[c].label, `missing ${c}`);
+  }
 });
 
 test("run-rate basis is the default when no model is loaded", () => {
