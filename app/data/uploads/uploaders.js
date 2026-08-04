@@ -38,7 +38,9 @@ export function InlineUpload({ endpoint, action, fileField = "file", label = "Up
       const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || "Upload failed");
-      setMsg(summarise(j)); setTone("var(--green)");
+      const warns = Array.isArray(j.warnings) ? j.warnings : [];
+      setMsg(summarise(j) + (warns.length ? ` ⚠ ${warns[0]}` : ""));
+      setTone(warns.length ? "var(--amber)" : "var(--green)");
     } catch (x) {
       setMsg(x.message); setTone("var(--red)");
     } finally {
