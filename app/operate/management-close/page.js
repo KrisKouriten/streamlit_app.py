@@ -3,6 +3,7 @@ import { getSession, hasRole } from "../../../lib/auth";
 import { getPreclose, getCloseActions } from "../../../lib/preclose";
 import { getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, EntityScopeBanner } from "../../finance-os/ui";
+import CloseJourney from "../close-journey";
 import ManagementCloseUI from "./mc-ui";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function ManagementClose({ searchParams }) {
     <div className="fos-shell">
       <PageHeader crumb="Operate" title="Management accounts close"
         right={pre.period ? `Period ${pre.period} · checks before sign-off` : "Awaiting Xero actuals"} />
+      <CloseJourney active="management" />
       <EntityScopeBanner scope={scope} asAt={pre.dk ? `${String(pre.dk).slice(0, 4)}-${String(pre.dk).slice(4, 6)}-${String(pre.dk).slice(6, 8)}` : null} />
       <ManagementCloseUI pre={pre} actions={actions} canManage={canManage} monthsCovered={monthsCovered} />
     </div>

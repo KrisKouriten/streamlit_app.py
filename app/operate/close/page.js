@@ -4,6 +4,7 @@ import { getCloseBoard } from "../../../lib/close";
 import { getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, EntityScopeBanner } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
+import CloseJourney from "../close-journey";
 import CloseCockpitUI from "./close-ui";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export default async function CloseCockpit({ searchParams }) {
     <div className="fos-shell">
       <PageHeader crumb="Operate" title="Close Cockpit"
         right={board.period ? `Period ${board.period} · readiness & lock` : "Awaiting actuals"} />
+      <CloseJourney active="cockpit" />
       <EntityScopeBanner scope={scope} asAt={board.period ? `${board.period} close` : null} />
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "-0.5rem 0 1rem" }}>
         <PerspectivePanel pageId="month-end-close" pageName="Month-end Close" filters={{ period: board.period || undefined }} />
