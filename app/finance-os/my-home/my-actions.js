@@ -7,6 +7,14 @@ import { useState } from "react";
    the signed-in user on the server; nothing is shared or visible to anyone else.
    State is managed locally and persisted through /api/personal. */
 
+// UK-facing completion date: DD/MM/YYYY (done_at arrives as an ISO string).
+function fmtDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d)) return null;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
 async function post(body) {
   const res = await fetch("/api/personal", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -93,6 +101,9 @@ function TodoList({ todos, setTodos, fail, clearErr }) {
             <div key={t.todo_id} className="fos-row-hover" style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--hairline)" }}>
               <input type="checkbox" checked={t.done} onChange={() => toggle(t)} style={{ marginTop: 2, accentColor: "var(--accent)", cursor: "pointer" }} aria-label={`Mark "${t.body}" ${t.done ? "not done" : "done"}`} />
               <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.45, color: t.done ? "var(--faint)" : "var(--ink)", textDecoration: t.done ? "line-through" : "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{t.body}</span>
+              {t.done && fmtDate(t.done_at) && (
+                <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>Done {fmtDate(t.done_at)}</span>
+              )}
               <button onClick={() => remove(t)} style={iconBtn} title="Delete" aria-label="Delete task">✕</button>
             </div>
           ))}
