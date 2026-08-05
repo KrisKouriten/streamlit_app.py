@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../../lib/auth";
-import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance, setLc, reconcileLc, addLc, reconcileLcEntry, deleteLcEntry } from "../../../../lib/procurement-close";
+import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance, setLc, reconcileLc, addLc, updateLc, reconcileLcEntry, deleteLcEntry } from "../../../../lib/procurement-close";
 
 export const dynamic = "force-dynamic";
 const isFinance = (s) => hasRole(s, "ADMIN", "FINANCE");
@@ -30,6 +30,7 @@ export async function POST(request, { params }) {
       case "set-lc": return NextResponse.json(await setLc(id, body, session));
       case "reconcile-lc": return NextResponse.json(await reconcileLc(id, body, session));
       case "add-lc": return NextResponse.json(await addLc(id, body, session));
+      case "update-lc": return NextResponse.json(await updateLc(body.lc_id, body, session));
       case "reconcile-lc-entry": return NextResponse.json(await reconcileLcEntry(body.lc_id, body, session));
       case "delete-lc": return NextResponse.json(await deleteLcEntry(body.lc_id, session));
       case "reopen-finance": return NextResponse.json(await reopenFinance(id, session));

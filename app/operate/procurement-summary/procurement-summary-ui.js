@@ -25,6 +25,9 @@ const FILTERS = [
 ];
 
 const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? " · " + r.sku_or_range : ""}` : (r.category || "—"));
+// LC facility stage: Import loan while goods are in transit, Trade loan once
+// they arrive in Miniso UK's possession.
+const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
 
 export default function ProcurementSummaryUI({ initialRows = [] }) {
   const router = useRouter();
@@ -40,11 +43,12 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   const [chNote, setChNote] = useState("");
   const [lcFor, setLcFor] = useState(null);
   const [reconLc, setReconLc] = useState(null); // { lc_id, lc_settled_date, lc_settled_amount }
+  const [editLc, setEditLc] = useState(null);   // { lc_id, ...editable LC fields }
   const [lcForm, setLcForm] = useState(() => {
     const m = {};
     // The "Add LC" form starts blank; the bank defaults to the request's bank.
     for (const r of initialRows) m[r.purchase_id] = {
-      lc_reference: "", lc_amount: "", lc_bank: r.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: "", lc_payment_date: "",
+      dc_reference: "", lc_reference: "", lc_amount: "", lc_bank: r.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: "", lc_payment_date: "",
     };
     return m;
   });
@@ -121,11 +125,11 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   async function addLcRow(r) {
     const f = lcForm[r.purchase_id] || {};
     await op(r.purchase_id, {
-      op: "add-lc", lc_reference: f.lc_reference || null, lc_amount: f.lc_amount || null,
+      op: "add-lc", dc_reference: f.dc_reference || null, lc_reference: f.lc_reference || null, lc_amount: f.lc_amount || null,
       lc_bank: f.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: f.lc_confirmed_date || null, lc_payment_date: f.lc_payment_date || null,
     }, "LC logged.");
     // clear the add form for the next one
-    setLcForm((s) => ({ ...s, [r.purchase_id]: { ...s[r.purchase_id], lc_reference: "", lc_amount: "", lc_confirmed_date: "", lc_payment_date: "" } }));
+    setLcForm((s) => ({ ...s, [r.purchase_id]: { ...s[r.purchase_id], dc_reference: "", lc_reference: "", lc_amount: "", lc_confirmed_date: "", lc_payment_date: "" } }));
   }
   async function reconcileEntry(r) {
     if (!reconLc) return;
@@ -135,6 +139,24 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   async function deleteLcRow(r, lc) {
     if (!window.confirm(`Delete LC ${lc.lc_reference}? This cannot be undone.`)) return;
     await op(r.purchase_id, { op: "delete-lc", lc_id: lc.lc_id }, "LC removed.");
+  }
+  function openEditLc(lc) {
+    setReconLc(null);
+    setEditLc(editLc?.lc_id === lc.lc_id ? null : {
+      lc_id: lc.lc_id, dc_reference: lc.dc_reference || "", lc_reference: lc.lc_reference || "", lc_amount: lc.lc_amount != null ? String(lc.lc_amount) : "",
+      lc_bank: lc.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: lc.lc_confirmed_date || "", lc_payment_date: lc.lc_payment_date || "",
+      actual_payment_date: lc.actual_payment_date || "", loan_type: lc.loan_type || "IMPORT", goods_arrived_date: lc.goods_arrived_date || "",
+    });
+  }
+  const editField = (k, v) => setEditLc((s) => ({ ...s, [k]: v }));
+  async function saveEditLc(r) {
+    const f = editLc;
+    await op(r.purchase_id, {
+      op: "update-lc", lc_id: f.lc_id, dc_reference: f.dc_reference, lc_reference: f.lc_reference, lc_amount: f.lc_amount || null,
+      lc_bank: f.lc_bank, lc_confirmed_date: f.lc_confirmed_date || null, lc_payment_date: f.lc_payment_date || null,
+      actual_payment_date: f.actual_payment_date || null, loan_type: f.loan_type, goods_arrived_date: f.goods_arrived_date || null,
+    }, "LC updated.");
+    setEditLc(null);
   }
 
   function download() {
@@ -291,25 +313,50 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                             {lcs.length > 0 && (
                               <div className="fos-tbl" style={{ overflowX: "auto", marginBottom: 14 }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
-                                  <thead><tr>{["LC reference", "Amount", "Bank", "Confirmed", "Expected", "Status", ""].map((h, i) => (
-                                    <th key={i} style={{ textAlign: i === 1 ? "right" : "left", padding: "6px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>))}</tr></thead>
+                                  <thead><tr>{["DC reference", "LC reference", "Amount", "Bank", "Loan", "Expected", "Actual paid", "Status", ""].map((h, i) => (
+                                    <th key={i} style={{ textAlign: i === 2 ? "right" : "left", padding: "6px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>))}</tr></thead>
                                   <tbody>
-                                    {lcs.map((l) => (
+                                    {lcs.map((l) => {
+                                      const loan = LOAN_META[l.loan_type] || LOAN_META.IMPORT;
+                                      return (
                                       <Fragment key={l.lc_id}>
                                         <tr>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.dc_reference || "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", fontWeight: 550 }}>{l.lc_reference}</td>
                                           <td className="fos-num" style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{l.lc_amount != null ? money(l.lc_amount) : "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.lc_bank || "—"}</td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_confirmed_date || "—"}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}><Badge tone={loan.tone}>{loan.label}</Badge></td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_payment_date || "—"}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap", color: l.actual_payment_date ? "var(--ink)" : "var(--faint)" }}>{l.actual_payment_date || "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_settled ? <Badge tone="green">Settled {l.lc_settled_date || ""}</Badge> : <Badge tone="amber">Pending</Badge>}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", whiteSpace: "nowrap" }}>
-                                            {!l.lc_settled && <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => setReconLc(reconLc?.lc_id === l.lc_id ? null : { lc_id: l.lc_id, lc_settled_date: "", lc_settled_amount: l.lc_amount != null ? String(l.lc_amount) : "" })}>Reconcile</button>}
+                                            <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => openEditLc(l)}>Edit</button>
+                                            {!l.lc_settled && <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => { setEditLc(null); setReconLc(reconLc?.lc_id === l.lc_id ? null : { lc_id: l.lc_id, lc_settled_date: "", lc_settled_amount: l.lc_amount != null ? String(l.lc_amount) : "" }); }}>Reconcile</button>}
                                             <button style={ghost} disabled={isBusy} onClick={() => deleteLcRow(r, l)}>Delete</button>
                                           </td>
                                         </tr>
+                                        {editLc?.lc_id === l.lc_id && (
+                                          <tr><td colSpan={9} style={{ padding: "10px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
+                                            <div style={{ fontSize: 11.5, fontWeight: 650, marginBottom: 8 }}>Edit LC {l.lc_reference}</div>
+                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
+                                              <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)} /></Field>
+                                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => editField("lc_reference", e.target.value)} /></Field>
+                                              <Field label="LC amount (£)"><input type="number" min="0" step="0.01" style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
+                                              <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_bank} onChange={(e) => editField("lc_bank", e.target.value)} /></Field>
+                                              <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_confirmed_date} onChange={(e) => editField("lc_confirmed_date", e.target.value)} /></Field>
+                                              <Field label="Expected payment"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_payment_date} onChange={(e) => editField("lc_payment_date", e.target.value)} /></Field>
+                                              <Field label="Actual payment date"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.actual_payment_date} onChange={(e) => editField("actual_payment_date", e.target.value)} /></Field>
+                                              <Field label="Loan type"><select style={{ ...inputSt, width: "100%" }} value={editLc.loan_type} onChange={(e) => editField("loan_type", e.target.value)}><option value="IMPORT">Import loan (in transit)</option><option value="TRADE">Trade loan (arrived — held by Miniso UK)</option></select></Field>
+                                              <Field label="Goods arrived date"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.goods_arrived_date} onChange={(e) => editField("goods_arrived_date", e.target.value)} /></Field>
+                                            </div>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                              <button style={btn("var(--accent)")} disabled={isBusy || !(editLc.lc_reference || "").trim()} onClick={() => saveEditLc(r)}>Save changes</button>
+                                              <button style={ghost} onClick={() => setEditLc(null)}>Cancel</button>
+                                            </div>
+                                          </td></tr>
+                                        )}
                                         {reconLc?.lc_id === l.lc_id && !l.lc_settled && (
-                                          <tr><td colSpan={7} style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
+                                          <tr><td colSpan={9} style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
                                             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                                               <Field label="Settled date"><input type="date" style={{ ...inputSt, width: 150 }} value={reconLc.lc_settled_date} onChange={(e) => setReconLc((s) => ({ ...s, lc_settled_date: e.target.value }))} /></Field>
                                               <Field label="Settled amount (£)"><input type="number" min="0" step="0.01" style={{ ...inputSt, width: 130, textAlign: "right" }} value={reconLc.lc_settled_amount} onChange={(e) => setReconLc((s) => ({ ...s, lc_settled_amount: e.target.value }))} /></Field>
@@ -319,7 +366,8 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                                           </td></tr>
                                         )}
                                       </Fragment>
-                                    ))}
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </div>
@@ -329,7 +377,8 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                             {r.finance_status !== "CLOSED" && (
                               <div style={{ borderTop: lcs.length ? "1px solid var(--line)" : "none", paddingTop: lcs.length ? 12 : 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Add {lcs.length ? "another" : "an"} LC</div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 820 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
+                                  <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. DC-2026-014" value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)} /></Field>
                                   <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. HSBC-LC-2026-014" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} /></Field>
                                   <Field label="LC amount (£)"><input type="number" min="0" step="0.01" style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
                                   <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} /></Field>
