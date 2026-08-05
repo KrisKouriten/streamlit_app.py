@@ -101,9 +101,10 @@ function TodoList({ todos, setTodos, fail, clearErr }) {
             <div key={t.todo_id} className="fos-row-hover" style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--hairline)" }}>
               <input type="checkbox" checked={t.done} onChange={() => toggle(t)} style={{ marginTop: 2, accentColor: "var(--accent)", cursor: "pointer" }} aria-label={`Mark "${t.body}" ${t.done ? "not done" : "done"}`} />
               <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.45, color: t.done ? "var(--faint)" : "var(--ink)", textDecoration: t.done ? "line-through" : "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{t.body}</span>
-              {t.done && fmtDate(t.done_at) && (
-                <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>Done {fmtDate(t.done_at)}</span>
-              )}
+              {(() => {
+                const label = t.done ? (fmtDate(t.done_at) && `Done ${fmtDate(t.done_at)}`) : (fmtDate(t.created_at) && `Added ${fmtDate(t.created_at)}`);
+                return label ? <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>{label}</span> : null;
+              })()}
               <button onClick={() => remove(t)} style={iconBtn} title="Delete" aria-label="Delete task">✕</button>
             </div>
           ))}
@@ -176,7 +177,8 @@ function Notes({ notes, setNotes, fail, clearErr }) {
               ) : (
                 <>
                   <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.body}</div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginTop: 6 }}>
+                    {fmtDate(n.updated_at) && <span style={{ fontSize: 11, color: "var(--faint)", marginRight: "auto" }}>Updated {fmtDate(n.updated_at)}</span>}
                     <button onClick={() => { setEditId(n.note_id); setEditText(n.body); }} style={iconBtn} title="Edit">Edit</button>
                     <button onClick={() => remove(n)} style={iconBtn} title="Delete">Delete</button>
                   </div>
