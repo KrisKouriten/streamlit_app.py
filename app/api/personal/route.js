@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "../../../lib/auth";
-import { addNote, updateNote, deleteNote, addTodo, setTodoDone, deleteTodo, clearDoneTodos, getMyActions } from "../../../lib/personal";
+import { addNote, updateNote, deleteNote, addTodo, setTodoDone, setTodoDue, deleteTodo, clearDoneTodos, getMyActions } from "../../../lib/personal";
 
 /*
  * My Actions & Notes — private per-user. Every handler resolves the user from
@@ -27,8 +27,9 @@ export async function POST(request) {
       case "addNote": return NextResponse.json({ ok: true, note: await addNote(uid, body.body) });
       case "updateNote": return NextResponse.json({ ok: true, note: await updateNote(uid, body.id, body.body) });
       case "deleteNote": return NextResponse.json({ ok: true, ...(await deleteNote(uid, body.id)) });
-      case "addTodo": return NextResponse.json({ ok: true, todo: await addTodo(uid, body.body) });
+      case "addTodo": return NextResponse.json({ ok: true, todo: await addTodo(uid, body.body, body.due) });
       case "setTodoDone": return NextResponse.json({ ok: true, todo: await setTodoDone(uid, body.id, body.done) });
+      case "setTodoDue": return NextResponse.json({ ok: true, todo: await setTodoDue(uid, body.id, body.due) });
       case "deleteTodo": return NextResponse.json({ ok: true, ...(await deleteTodo(uid, body.id)) });
       case "clearDone": return NextResponse.json({ ok: true, ...(await clearDoneTodos(uid)) });
       default: return NextResponse.json({ error: "Unknown action" }, { status: 400 });

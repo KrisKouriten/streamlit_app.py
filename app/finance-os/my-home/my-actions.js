@@ -7,12 +7,21 @@ import { useState } from "react";
    the signed-in user on the server; nothing is shared or visible to anyone else.
    State is managed locally and persisted through /api/personal. */
 
-// UK-facing completion date: DD/MM/YYYY (done_at arrives as an ISO string).
+// UK-facing date: DD/MM/YYYY. A plain YYYY-MM-DD (a due date) is formatted
+// directly to avoid any timezone day-shift; timestamps go via Date.
 function fmtDate(v) {
   if (!v) return null;
+  const s = String(v);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(v);
   if (isNaN(d)) return null;
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+// Today as YYYY-MM-DD in local time — for overdue comparison (string-safe).
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 async function post(body) {
@@ -53,23 +62,38 @@ export default function MyActionsNotes({ initialNotes = [], initialTodos = [] })
 
 function TodoList({ todos, setTodos, fail, clearErr }) {
   const [text, setText] = useState("");
+  const [due, setDue] = useState("");
   const [busy, setBusy] = useState(false);
   const openCount = todos.filter((t) => !t.done).length;
   const doneCount = todos.length - openCount;
+  const today = todayISO();
+  // open tasks first, then soonest deadline (undated last), then newest.
+  const sortTodos = (xs) => xs.slice().sort((a, b) =>
+    (a.done === b.done ? 0 : a.done ? 1 : -1) ||
+    ((a.due_date ? 0 : 1) - (b.due_date ? 0 : 1)) ||
+    String(a.due_date || "").localeCompare(String(b.due_date || "")) ||
+    b.todo_id - a.todo_id);
 
   async function add(e) {
     e.preventDefault();
     const body = text.trim();
     if (!body || busy) return;
     clearErr(); setBusy(true);
-    try { const { todo } = await post({ action: "addTodo", body }); setTodos((xs) => [todo, ...xs]); setText(""); }
+    try { const { todo } = await post({ action: "addTodo", body, due: due || null }); setTodos((xs) => sortTodos([todo, ...xs])); setText(""); setDue(""); }
     catch (x) { fail(x); } finally { setBusy(false); }
   }
   async function toggle(t) {
     clearErr();
     try {
       const { todo } = await post({ action: "setTodoDone", id: t.todo_id, done: !t.done });
-      setTodos((xs) => xs.map((x) => (x.todo_id === t.todo_id ? todo : x)).sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1)));
+      setTodos((xs) => sortTodos(xs.map((x) => (x.todo_id === t.todo_id ? todo : x))));
+    } catch (x) { fail(x); }
+  }
+  async function setTaskDue(t, value) {
+    clearErr();
+    try {
+      const { todo } = await post({ action: "setTodoDue", id: t.todo_id, due: value || null });
+      setTodos((xs) => sortTodos(xs.map((x) => (x.todo_id === t.todo_id ? todo : x))));
     } catch (x) { fail(x); }
   }
   async function remove(t) {
@@ -89,8 +113,10 @@ function TodoList({ todos, setTodos, fail, clearErr }) {
         <span style={heading}>To-do list</span>
         <span style={{ fontSize: 11, color: "var(--faint)" }}>{openCount} open{doneCount ? ` · ${doneCount} done` : ""}</span>
       </div>
-      <form onSubmit={add} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a task…" style={inputStyle} maxLength={4000} aria-label="Add a task" />
+      <form onSubmit={add} style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a task…" style={{ ...inputStyle, minWidth: 160 }} maxLength={4000} aria-label="Add a task" />
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} title="Deadline (optional)" aria-label="Deadline (optional)"
+          style={{ height: 34, fontSize: 12.5, padding: "0 8px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--card)", color: due ? "var(--ink)" : "var(--faint)", colorScheme: "dark" }} />
         <button type="submit" disabled={busy || !text.trim()} style={{ ...addBtn, opacity: busy || !text.trim() ? 0.6 : 1 }}>Add</button>
       </form>
       {todos.length === 0 ? (
@@ -101,9 +127,17 @@ function TodoList({ todos, setTodos, fail, clearErr }) {
             <div key={t.todo_id} className="fos-row-hover" style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--hairline)" }}>
               <input type="checkbox" checked={t.done} onChange={() => toggle(t)} style={{ marginTop: 2, accentColor: "var(--accent)", cursor: "pointer" }} aria-label={`Mark "${t.body}" ${t.done ? "not done" : "done"}`} />
               <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.45, color: t.done ? "var(--faint)" : "var(--ink)", textDecoration: t.done ? "line-through" : "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{t.body}</span>
-              {(() => {
-                const label = t.done ? (fmtDate(t.done_at) && `Done ${fmtDate(t.done_at)}`) : (fmtDate(t.created_at) && `Added ${fmtDate(t.created_at)}`);
-                return label ? <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>{label}</span> : null;
+              {t.done ? (
+                fmtDate(t.done_at) && <span style={{ fontSize: 11, color: "var(--faint)", whiteSpace: "nowrap", marginTop: 2 }}>Done {fmtDate(t.done_at)}</span>
+              ) : (() => {
+                const overdue = t.due_date && t.due_date < today;
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 1, whiteSpace: "nowrap" }}>
+                    {t.due_date && <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? "var(--red)" : "var(--muted)" }}>{overdue ? "Overdue" : "Due"} {fmtDate(t.due_date)}</span>}
+                    <input type="date" value={t.due_date || ""} onChange={(e) => setTaskDue(t, e.target.value)} title={t.due_date ? "Change deadline" : "Set a deadline"} aria-label="Deadline"
+                      style={{ width: t.due_date ? 20 : 118, fontSize: 11.5, padding: t.due_date ? 0 : "0 6px", height: 24, borderRadius: 6, border: t.due_date ? "none" : "1px solid var(--line)", background: t.due_date ? "transparent" : "var(--card)", color: t.due_date ? "transparent" : "var(--faint)", colorScheme: "dark", cursor: "pointer" }} />
+                  </span>
+                );
               })()}
               <button onClick={() => remove(t)} style={iconBtn} title="Delete" aria-label="Delete task">✕</button>
             </div>
