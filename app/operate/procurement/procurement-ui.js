@@ -122,6 +122,14 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
   );
 }
 
+// A labelled field. Defined at module scope (not inside a component) so its
+// identity is stable across renders — otherwise every keystroke remounts the
+// input and it loses focus after a single character.
+const FIELD_LAB = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
+function Field({ label, children }) {
+  return <label style={{ display: "block" }}><span style={FIELD_LAB}>{label}</span>{children}</label>;
+}
+
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
 // in the placeholders so it's obvious what each field wants.
 function AddLine({ source, onDone }) {
@@ -145,8 +153,6 @@ function AddLine({ source, onDone }) {
     finally { setBusy(false); }
   }
   const inp = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
-  const lab = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
-  const Field = ({ label, children }) => <label style={{ display: "block" }}><span style={lab}>{label}</span>{children}</label>;
   return (
     <form onSubmit={submit} className="fos-card" style={{ padding: "15px 17px", marginBottom: 14 }}>
       <div style={{ fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>Add a {isMiniso ? "Miniso" : "Local"} purchase</div>
@@ -257,8 +263,6 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
   const version = otbVersions.find((v) => String(v.otb_version_id) === String(activeVersionId)) || null;
 
   const inp = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
-  const lab = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
-  const Field = ({ label, children }) => <label style={{ display: "block" }}><span style={lab}>{label}</span>{children}</label>;
   const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
   const ghost = { fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 

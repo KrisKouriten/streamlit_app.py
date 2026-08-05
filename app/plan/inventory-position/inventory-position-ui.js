@@ -15,6 +15,11 @@ const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, lett
 const inputSt = { fontSize: 13, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
 const th = { textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
 const td = { padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" };
+// Module-scope so its identity is stable across renders — a Field defined inside
+// the component would remount its input on every keystroke and lose focus.
+function Field({ label, children }) {
+  return <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={labelSt}>{label}</span>{children}</label>;
+}
 const tdR = { ...td, textAlign: "right" };
 const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
@@ -152,7 +157,6 @@ function AddPosition({ location, busy, op }) {
   const empty = { channel_code: isTransit ? "MINISO_MDS" : "", store_code: "", store_name: "", stock_value: "", reserved_value: "", damaged_value: "", confidence: isTransit ? "0.9" : "", data_through: "" };
   const [f, setF] = useState(empty);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const Field = ({ label, children }) => <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={labelSt}>{label}</span>{children}</label>;
   async function submit() {
     const j = await op({ op: "save", row: { ...f, location_type: location } }, "Position saved.");
     if (j) setF(empty);
