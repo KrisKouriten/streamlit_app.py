@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
+import { cashOutFor, PROC_STATUS_META } from "../../../lib/procurement-rules";
 
 /* Procurement Request UI: three sections. Miniso / Local are the cash-tracker
    purchases (monthly cash budget vs committed spend, bucketed by supplier payment
@@ -28,7 +29,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -110,6 +111,8 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
+      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} onErr={setErr} onDone={() => router.refresh()} />
+
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
           <AddLine source={tab} onDone={() => router.refresh()} />
@@ -183,6 +186,67 @@ function AddLine({ source, onDone }) {
         {msg && <span style={{ fontSize: 12, color: msg === "Added." ? "var(--green)" : "var(--red)" }}>{msg}</span>}
       </div>
     </form>
+  );
+}
+
+// The raised orders with their approval lifecycle — raise → Head of Department
+// sign-off → Finance → approved; cancel is the soft action, delete (Finance
+// only, once head-approved) the hard one.
+const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
+function OrdersPanel({ orders, roles, canManage, onErr, onDone }) {
+  const [busy, setBusy] = useState(null);
+  const { isHod, isFinance } = roles || {};
+  if (!orders.length) return null;
+
+  async function act(id, action, extra) {
+    onErr(""); setBusy(`${id}:${action}`);
+    try { await post({ action, id, ...extra }); onDone(); }
+    catch (x) { onErr(x.message); }
+    finally { setBusy(null); }
+  }
+  const cancel = (o) => { const reason = window.prompt("Cancel this order — reason (optional):", ""); if (reason === null) return; act(o.purchase_id, "cancel", { reason }); };
+  const del = (o) => { if (window.confirm(`Delete this order (${o.supplier}) permanently? This cannot be undone.`)) act(o.purchase_id, "delete"); };
+
+  return (
+    <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete once head-approved">
+      <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 820 }}>
+          <thead><tr>
+            {["Supplier", "Category", "Order", "Cash-out", "Amount", "Status", ""].map((h, i) => (
+              <th key={i} style={{ textAlign: i === 4 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {orders.map((o, i) => {
+              const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
+              const bb = i === orders.length - 1 ? "none" : "1px solid var(--hairline)";
+              const cancelled = o.approval_status === "CANCELLED";
+              const btn = { fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", whiteSpace: "nowrap" };
+              return (
+                <tr key={o.purchase_id} style={{ opacity: cancelled ? 0.55 : 1 }}>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}{o.reference ? <span style={{ color: "var(--faint)", fontWeight: 400 }}> · {o.reference}</span> : null}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap", color: "var(--muted)" }}>{monthLabel(cashOutFor(o))}</td>
+                  <td className="fos-num" style={{ padding: "9px 12px", textAlign: "right", borderBottom: bb }}>{money(o.amount_gbp)}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
+                      <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                        {isHod && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
+                        {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => act(o.purchase_id, "finance-approve")}>Approve (Finance)</button>}
+                        {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
+                        {isFinance && hodApprovedStatus(o.approval_status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)" }} onClick={() => del(o)}>Delete</button>}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 

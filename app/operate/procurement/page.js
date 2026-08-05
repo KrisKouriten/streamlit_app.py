@@ -19,6 +19,7 @@ export default async function Procurement({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
   const canManage = hasRole(session, "ADMIN", "FINANCE", "OPS");
+  const roles = { canManage, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin: hasRole(session, "ADMIN") };
   const sp = (await searchParams) || {};
   const [pr, otbVersions] = await Promise.all([
     getProcurement(),
@@ -40,6 +41,7 @@ export default async function Procurement({ searchParams }) {
         <PerspectivePanel pageId="procurement" pageName="Procurement" />
       </div>
       <ProcurementUI data={pr.summary} ready={pr.ready} loaded={pr.loaded} illustrative={pr.illustrative} canManage={canManage}
+        orders={pr.orders || []} roles={roles}
         otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts} />
     </div>
   );

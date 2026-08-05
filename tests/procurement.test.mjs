@@ -60,3 +60,39 @@ test("CSV parses sources, months, terms; bad rows error not load", () => {
   assert.equal(records[1].status, "PAID");
   assert.equal(errors.length, 2);
 });
+
+import { canHodApprove, canFinanceApprove, canCancelProcurement, canDeleteProcurement, PROC_STATUS_META } from "../lib/procurement-rules.js";
+
+test("approval lifecycle gates", () => {
+  // HoD sign-off only from PENDING
+  assert.equal(canHodApprove({ approval_status: "PENDING" }), true);
+  assert.equal(canHodApprove({ approval_status: "HOD_APPROVED" }), false);
+  assert.equal(canHodApprove({ approval_status: "APPROVED" }), false);
+  // Finance can approve pending or head-approved
+  assert.equal(canFinanceApprove({ approval_status: "PENDING" }), true);
+  assert.equal(canFinanceApprove({ approval_status: "HOD_APPROVED" }), true);
+  assert.equal(canFinanceApprove({ approval_status: "APPROVED" }), false);
+  assert.equal(canFinanceApprove({ approval_status: "CANCELLED" }), false);
+  // Cancel anything not already cancelled
+  assert.equal(canCancelProcurement({ approval_status: "PENDING" }), true);
+  assert.equal(canCancelProcurement({ approval_status: "APPROVED" }), true);
+  assert.equal(canCancelProcurement({ approval_status: "CANCELLED" }), false);
+});
+
+test("delete gate: finance only, once head-approved", () => {
+  // not finance → blocked
+  assert.equal(canDeleteProcurement({ approval_status: "APPROVED" }, { isFinance: false }).ok, false);
+  // finance but not yet head-approved → blocked
+  const pending = canDeleteProcurement({ approval_status: "PENDING" }, { isFinance: true });
+  assert.equal(pending.ok, false);
+  assert.match(pending.reason, /Head of Department/);
+  // finance + head-approved → allowed
+  assert.equal(canDeleteProcurement({ approval_status: "HOD_APPROVED" }, { isFinance: true }).ok, true);
+  assert.equal(canDeleteProcurement({ approval_status: "APPROVED" }, { isFinance: true }).ok, true);
+  // admin override
+  assert.equal(canDeleteProcurement({ approval_status: "PENDING" }, { isAdmin: true }).ok, true);
+});
+
+test("status meta covers every status", () => {
+  for (const s of ["PENDING", "HOD_APPROVED", "APPROVED", "CANCELLED"]) assert.ok(PROC_STATUS_META[s]?.label);
+});
