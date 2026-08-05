@@ -21,6 +21,8 @@ const REQ_ACTIONS = {
 };
 const CSV_TEMPLATE = "Source,Supplier,Category,Order Month,Amount,Terms (days),Status,Reference\nMiniso,MINISO HQ,Core range,2026-07,420000,60,Committed,PO-1\nLocal,Design360,Fixtures,2026-07,42000,30,Committed,PO-2\n";
 const monthLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }); };
+// The submitter, stored as an email or name — show a readable form.
+const submitterName = (v) => (v ? String(v).split("@")[0].replace(/[._]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");
 
 async function post(body) {
   const res = await fetch("/api/procurement", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -212,8 +214,8 @@ function OrdersPanel({ orders, roles, canManage, onErr, onDone }) {
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 820 }}>
           <thead><tr>
-            {["Supplier", "Category", "Order", "Cash-out", "Amount", "Status", ""].map((h, i) => (
-              <th key={i} style={{ textAlign: i === 4 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+            {["Supplier", "Category", "Submitted by", "Order", "Cash-out", "Amount", "Status", ""].map((h, i) => (
+              <th key={i} style={{ textAlign: i === 5 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
@@ -226,6 +228,7 @@ function OrdersPanel({ orders, roles, canManage, onErr, onDone }) {
                 <tr key={o.purchase_id} style={{ opacity: cancelled ? 0.55 : 1 }}>
                   <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}{o.reference ? <span style={{ color: "var(--faint)", fontWeight: 400 }}> · {o.reference}</span> : null}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap", color: "var(--muted)" }}>{monthLabel(cashOutFor(o))}</td>
                   <td className="fos-num" style={{ padding: "9px 12px", textAlign: "right", borderBottom: bb }}>{money(o.amount_gbp)}</td>

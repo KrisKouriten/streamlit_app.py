@@ -9,6 +9,8 @@ import {
 import DateField from "../../finance-os/date-field";
 
 const gbp = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+// The submitter, stored as an email or name — show a readable form.
+const submitterName = (v) => (v ? String(v).split("@")[0].replace(/[._]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");
 
 // The "Self-approval status" panel shown before submitting — POs used, cumulative
 // value vs the cap, this P.O, and the routing outcome with the binding reason.
@@ -319,7 +321,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
-              <thead><tr>{["P.O number", "Supplier", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
+              <thead><tr>{["P.O number", "Supplier", "Submitted by", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
@@ -330,6 +332,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                   <tr key={p.po_id}>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{poRef(p)}{p.self_approved ? <span title="Self-approved (within the self-approval limit)" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>· self</span> : null}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(p.created_by)}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.department}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.po_category}{p.is_marketing ? (p.marketing_levy ? " · levy" : " · invoice") : ""}</td>
                     <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{money(p.payment_value, p.currency)}</td>
