@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "../../../lib/auth";
 import { getMyHome, greeting } from "../../../lib/my-home";
+import { getMyActions } from "../../../lib/personal";
 import { HeroBand, Panel, Badge } from "../ui";
 import PageIntel from "../../page-intel";
 import RecentFavourites from "./recent-favourites";
+import MyActionsNotes from "./my-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ export default async function MyFinanceHome() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const data = await getMyHome(session);
+  const [data, actions] = await Promise.all([getMyHome(session), getMyActions(session.id)]);
   const hour = new Date().getHours();
   const asAt = data.financeAsAt || data.tradingAsAt;
 
@@ -36,6 +38,7 @@ export default async function MyFinanceHome() {
       </header>
 
       <HeroBand stats={data.counts} />
+      <MyActionsNotes initialNotes={actions.notes} initialTodos={actions.todos} />
       <RecentFavourites />
       <PageIntel pageName="My Finance Home" report={null}
         related={[
