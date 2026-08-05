@@ -35,7 +35,7 @@ const css = `
   --glass:rgba(23,22,19,.6); --glass-line:rgba(255,255,255,.08);
   --grain-opacity:.028;
   --radius:12px; --radius-lg:16px;
-  --page-max:1440px; --page-narrow:1080px;
+  --page-max:none; --page-narrow:1080px;
   --ease:cubic-bezier(.22,1,.36,1); --t-fast:.15s; --t-med:.3s; --t-slow:.55s;
   --sans:"InterVariable","Helvetica Neue",Helvetica,"Arial Nova",Arial,system-ui,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
