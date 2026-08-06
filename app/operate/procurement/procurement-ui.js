@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META } from "../../../lib/procurement-rules";
+import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 
-/* Procurement Request UI: three sections. Miniso / Local are the cash-tracker
+/* Procurement Request UI: four sections. Miniso / Local are the cash-tracker
    purchases (monthly cash budget vs committed spend, bucketed by supplier payment
    terms). Merchandising requests raise an OTB-validated channel request (moved
-   here from the OTB workspace) against the approved Open-to-Buy. */
+   here from the OTB workspace) against the approved Open-to-Buy. Exchange rates
+   holds the USD→GBP spot / hedged / costing rates Finance converts at. */
 
-const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["MERCH", "Merchandising requests"]];
+const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["MERCH", "Merchandising requests"], ["FX", "Exchange rates"]];
+// Currencies a purchase can be raised in. USD converts to GBP at a chosen rate.
+const CCY_OPTS = [["GBP", "£ GBP"], ["USD", "$ USD"]];
+const CCY_SYMBOL = { GBP: "£", USD: "$" };
+const ccyMoney = (v, ccy) => (isForeignCurrency(ccy) ? `${CCY_SYMBOL[ccy] || ""}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : money(v));
 const VAL_TONE = { WITHIN_OTB: "green", OTB_WARNING: "amber", EXCEEDS_OTB: "red", NO_APPROVED_OTB: "muted", APPROVED_EXCEPTION: "accent" };
 const REQ_ACTIONS = {
   DRAFT: [["submit", "Submit"]],
@@ -31,7 +37,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -44,6 +50,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
   }
 
   const isMerch = tab === "MERCH";
+  const isFx = tab === "FX";
   const s = data[tab];
 
   async function saveBudget(ym, value) {
@@ -67,7 +74,9 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {err && <div style={{ fontSize: 13, color: "var(--red)", marginBottom: 14 }}>{err}</div>}
 
-      {isMerch ? (
+      {isFx ? (
+        <FxPanel rates={fxRates} isFinance={roles.isFinance} onErr={setErr} onDone={() => router.refresh()} />
+      ) : isMerch ? (
         <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} />
       ) : (
       <>
@@ -113,11 +122,11 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
-      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} onErr={setErr} onDone={() => router.refresh()} />
+      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} fxRates={fxRates} onErr={setErr} onDone={() => router.refresh()} />
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
-          <AddLine source={tab} onDone={() => router.refresh()} />
+          <AddLine source={tab} fxRates={fxRates} onDone={() => router.refresh()} />
           <Upload onDone={() => router.refresh()} />
         </Panel>
       )}
@@ -137,13 +146,18 @@ function Field({ label, children }) {
 
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
 // in the placeholders so it's obvious what each field wants.
-function AddLine({ source, onDone }) {
+function AddLine({ source, fxRates = [], onDone }) {
   const isMiniso = source === "MINISO";
-  const empty = { supplier: "", category: "", order_ym: "", delivery_ym: "", amount_gbp: "", terms_days: "", pickup_date: "", status: "COMMITTED", reference: "" };
+  // Miniso HQ raises in USD; local suppliers in GBP.
+  const defaultCcy = isMiniso ? "USD" : "GBP";
+  const empty = { supplier: "", category: "", order_ym: "", delivery_ym: "", amount_gbp: "", currency: defaultCcy, terms_days: "", pickup_date: "", status: "COMMITTED", reference: "" };
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const foreign = isForeignCurrency(f.currency);
+  const spot = findRate(fxRates, f.currency, "SPOT");
+  const gbpPreview = foreign ? convertToGbp(f.amount_gbp, spot) : null;
   const eg = isMiniso
     ? { supplier: "e.g. MINISO HQ (Guangzhou)", category: "e.g. Core range", amount: "e.g. 420000", ref: "e.g. PO-1042" }
     : { supplier: "e.g. Design360", category: "e.g. Fixtures", amount: "e.g. 42000", terms: "e.g. 30 days", ref: "e.g. PO-2087" };
@@ -171,7 +185,8 @@ function AddLine({ source, onDone }) {
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
-        <Field label="Amount (£)"><input required type="number" min="0" step="0.01" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        <Field label="Currency"><select value={f.currency} onChange={set("currency")} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+        <Field label={`Amount (${CCY_SYMBOL[f.currency] || f.currency})`}><input required type="number" min="0" step="0.01" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
         {isMiniso ? (
           <>
             <Field label="Pickup date"><input required type="date" value={f.pickup_date} onChange={set("pickup_date")} style={inp} /></Field>
@@ -183,6 +198,13 @@ function AddLine({ source, onDone }) {
         <Field label="Status"><select value={f.status} onChange={set("status")} style={inp}><option value="COMMITTED">Committed</option><option value="PAID">Paid</option></select></Field>
         <Field label="Reference"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
       </div>
+      {foreign && (
+        <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 11, lineHeight: 1.5 }}>
+          {spot == null
+            ? <>No USD spot rate is set yet — add one on the <strong>Exchange rates</strong> tab before raising a USD order.</>
+            : <>Provisionally ≈ <strong>{money(gbpPreview)}</strong> at the {money(1)}=${spot} spot rate. Finance re-strikes the GBP cost at the chosen rate on approval.</>}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 13 }}>
         <button type="submit" className="fos-btn" disabled={busy} style={{ height: 34, fontSize: 12.5 }}>{busy ? "Adding…" : "Add purchase"}</button>
         {msg && <span style={{ fontSize: 12, color: msg === "Added." ? "var(--green)" : "var(--red)" }}>{msg}</span>}
@@ -195,24 +217,27 @@ function AddLine({ source, onDone }) {
 // sign-off → Finance → approved; cancel is the soft action, delete (Finance
 // only, once head-approved) the hard one.
 const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
-function OrdersPanel({ orders, roles, canManage, onErr, onDone }) {
+function OrdersPanel({ orders, roles, canManage, fxRates = [], onErr, onDone }) {
   const [busy, setBusy] = useState(null);
+  const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const { isHod, isFinance } = roles || {};
   if (!orders.length) return null;
 
   async function act(id, action, extra) {
     onErr(""); setBusy(`${id}:${action}`);
-    try { await post({ action, id, ...extra }); onDone(); }
+    try { await post({ action, id, ...extra }); setFxApprove(null); onDone(); }
     catch (x) { onErr(x.message); }
     finally { setBusy(null); }
   }
   const cancel = (o) => { const reason = window.prompt("Cancel this order — reason (optional):", ""); if (reason === null) return; act(o.purchase_id, "cancel", { reason }); };
   const del = (o) => { if (window.confirm(`Delete this order (${o.supplier}) permanently? This cannot be undone.`)) act(o.purchase_id, "delete"); };
+  // GBP orders approve in one click; a foreign order opens the rate pickers first.
+  const financeApprove = (o) => (isForeignCurrency(o.currency) ? setFxApprove(fxApprove === o.purchase_id ? null : o.purchase_id) : act(o.purchase_id, "finance-approve"));
 
   return (
     <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete once head-approved">
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 820 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 860 }}>
           <thead><tr>
             {["Supplier", "Category", "Submitted by", "Order", "Cash-out", "Amount", "Status", ""].map((h, i) => (
               <th key={i} style={{ textAlign: i === 5 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
@@ -221,35 +246,164 @@ function OrdersPanel({ orders, roles, canManage, onErr, onDone }) {
           <tbody>
             {orders.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
-              const bb = i === orders.length - 1 ? "none" : "1px solid var(--hairline)";
+              const last = i === orders.length - 1 && fxApprove !== o.purchase_id;
+              const bb = last ? "none" : "1px solid var(--hairline)";
               const cancelled = o.approval_status === "CANCELLED";
+              const foreign = isForeignCurrency(o.currency);
+              const approved = o.approval_status === "APPROVED";
               const btn = { fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", whiteSpace: "nowrap" };
               return (
-                <tr key={o.purchase_id} style={{ opacity: cancelled ? 0.55 : 1 }}>
+                <Fragment key={o.purchase_id}>
+                <tr style={{ opacity: cancelled ? 0.55 : 1 }}>
                   <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}{o.reference ? <span style={{ color: "var(--faint)", fontWeight: 400 }}> · {o.reference}</span> : null}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap", color: "var(--muted)" }}>{monthLabel(cashOutFor(o))}</td>
-                  <td className="fos-num" style={{ padding: "9px 12px", textAlign: "right", borderBottom: bb }}>{money(o.amount_gbp)}</td>
+                  <td className="fos-num" style={{ padding: "9px 12px", textAlign: "right", borderBottom: bb, whiteSpace: "nowrap" }}>
+                    {money(o.amount_gbp)}
+                    {foreign && <div style={{ fontSize: 10.5, color: "var(--faint)", fontWeight: 400 }}>{ccyMoney(o.amount_ccy, o.currency)} {o.currency}{approved && o.cost_rate_type ? ` · ${FX_RATE_LABEL[o.cost_rate_type] || o.cost_rate_type}` : ""}</div>}
+                  </td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={meta.tone}>{meta.label}</Badge></td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
                     {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
                         {isHod && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
-                        {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => act(o.purchase_id, "finance-approve")}>Approve (Finance)</button>}
+                        {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
                         {isFinance && hodApprovedStatus(o.approval_status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)" }} onClick={() => del(o)}>Delete</button>}
                       </span>
                     )}
                   </td>
                 </tr>
+                {fxApprove === o.purchase_id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                      <FxApprove order={o} rates={fxRates} busy={busy} onCancel={() => setFxApprove(null)} onConfirm={(picks) => act(o.purchase_id, "finance-approve", picks)} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
     </Panel>
+  );
+}
+
+// The two FX rate picks Finance makes when approving a foreign-currency order:
+// the actual-cost rate settles the cashflow; the arrival rate values stock. The
+// gap between the two GBP figures is the FX gain/loss booked to the P&L.
+function FxApprove({ order, rates, busy, onCancel, onConfirm }) {
+  const [cost, setCost] = useState("SPOT");
+  const [stock, setStock] = useState("COSTING");
+  const costRate = findRate(rates, order.currency, cost);
+  const stockRate = findRate(rates, order.currency, stock);
+  const cashflow = convertToGbp(order.amount_ccy, costRate);
+  const stockVal = convertToGbp(order.amount_ccy, stockRate);
+  const variance = fxVariance(stockVal, cashflow);
+  const sel = { height: 30, fontSize: 12, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", width: "100%" };
+  const rateOpts = (ccy) => FX_RATE_TYPES.map((t) => { const r = findRate(rates, ccy, t.key); return <option key={t.key} value={t.key}>{t.label}{r != null ? ` · ${money(1)}=$${r}` : " · not set"}</option>; });
+  const missing = costRate == null || stockRate == null;
+  return (
+    <div style={{ padding: "14px 16px" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 650, marginBottom: 3 }}>Approve {ccyMoney(order.amount_ccy, order.currency)} {order.currency} — pick the conversion rates</div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>The <strong>actual-cost</strong> rate is what settles in cashflow; the <strong>arrival valuation</strong> rate is the value booked to closing stock. Their difference posts to the P&L.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
+        <div>
+          <span style={FIELD_LAB}>Actual cost (cashflow)</span>
+          <select value={cost} onChange={(e) => setCost(e.target.value)} style={sel}>{rateOpts(order.currency)}</select>
+          <div style={{ fontSize: 12, marginTop: 6, color: "var(--ink)" }}>Pays <strong>{cashflow == null ? "—" : money(cashflow)}</strong></div>
+        </div>
+        <div>
+          <span style={FIELD_LAB}>Value reported on arrival (stock)</span>
+          <select value={stock} onChange={(e) => setStock(e.target.value)} style={sel}>{rateOpts(order.currency)}</select>
+          <div style={{ fontSize: 12, marginTop: 6, color: "var(--ink)" }}>Books <strong>{stockVal == null ? "—" : money(stockVal)}</strong> to stock</div>
+        </div>
+        <div>
+          <span style={FIELD_LAB}>FX to P&amp;L</span>
+          <div className="fos-num" style={{ fontSize: 18, fontWeight: 650, marginTop: 2, color: variance == null ? "var(--muted)" : variance >= 0 ? "var(--green)" : "var(--red)" }}>{variance == null ? "—" : money(variance)}</div>
+          <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>stock value − cash cost</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+        <button className="fos-btn" disabled={busy || missing} style={{ height: 32, fontSize: 12.5 }} onClick={() => onConfirm({ cost_rate_type: cost, stock_rate_type: stock })}>Approve at these rates</button>
+        <button className="fos-btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
+        {missing && <span style={{ fontSize: 11.5, color: "var(--amber)" }}>Set the {order.currency} rates on the Exchange rates tab first.</span>}
+      </div>
+    </div>
+  );
+}
+
+/* Exchange rates — the USD→GBP rates Finance converts procurement at. Three
+   rate types (spot / hedged / costing), quoted as USD per £1 (GBPUSD). Editable
+   by Finance; everyone else sees the current rates read-only. */
+function FxPanel({ rates = [], isFinance, onErr, onDone }) {
+  const rowFor = (rt) => rates.find((r) => String(r.currency).toUpperCase() === "USD" && String(r.rate_type).toUpperCase() === rt) || {};
+  const [busy, setBusy] = useState(null);
+
+  async function save(rt, rate, note) {
+    onErr(""); setBusy(rt);
+    try { await post({ action: "set-fx-rate", currency: "USD", rate_type: rt, rate: Number(rate), note }); onDone(); }
+    catch (x) { onErr(x.message); }
+    finally { setBusy(null); }
+  }
+
+  if (!rates.length) {
+    return <Empty>Run migration <span style={{ fontFamily: "var(--mono)" }}>085_fx_rates.sql</span> (idempotent) to enable USD exchange rates, then refresh.</Empty>;
+  }
+
+  const inp = { height: 30, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" };
+  return (
+    <Panel title="USD → GBP exchange rates" note="quoted as USD per £1 (GBPUSD) — GBP = USD amount ÷ rate">
+      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.55, maxWidth: 620 }}>
+        A USD procurement order is provisionally converted at the <strong>spot</strong> rate when raised. On Finance approval the <strong>actual-cost</strong> rate settles the cashflow and the <strong>arrival valuation</strong> rate values closing stock — the gap between the two posts to the P&amp;L.
+      </div>
+      <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+          <thead><tr>{["Rate", "What it's for", "USD per £1", "Updated", isFinance ? "" : null].filter((h) => h !== null).map((h, i) => (
+            <th key={i} style={{ textAlign: i === 2 ? "right" : "left", padding: "10px 14px", color: "var(--faint)", fontWeight: 600, fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+          ))}</tr></thead>
+          <tbody>
+            {FX_RATE_TYPES.map((t, i) => {
+              const row = rowFor(t.key);
+              const bb = i === FX_RATE_TYPES.length - 1 ? "none" : "1px solid var(--hairline)";
+              return (
+                <tr key={t.key}>
+                  <Td>{t.label}</Td>
+                  <td style={{ padding: "9px 14px", borderBottom: bb, color: "var(--muted)" }}>{t.hint}</td>
+                  <td className="fos-num" style={{ padding: "9px 14px", textAlign: "right", borderBottom: bb, fontWeight: 600 }}>{row.rate != null ? Number(row.rate).toFixed(4) : "—"}</td>
+                  <td style={{ padding: "9px 14px", borderBottom: bb, color: "var(--faint)", fontSize: 11.5, whiteSpace: "nowrap" }}>{row.updated_at ? new Date(row.updated_at).toLocaleDateString("en-GB") : "—"}{row.updated_by && row.updated_by !== "seed" ? ` · ${submitterName(row.updated_by)}` : ""}</td>
+                  {isFinance && (
+                    <td style={{ padding: "9px 14px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
+                      <RateEditor rate={row.rate} note={row.note} busy={busy === t.key} onSave={(rate, note) => save(t.key, rate, note)} inp={inp} />
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {!isFinance && <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 10 }}>Only Finance can amend the exchange rates.</div>}
+    </Panel>
+  );
+}
+
+// Inline rate + note editor for one FX rate row.
+function RateEditor({ rate, note, busy, onSave, inp }) {
+  const [r, setR] = useState(rate != null ? String(rate) : "");
+  const [n, setN] = useState(note || "");
+  useEffect(() => { setR(rate != null ? String(rate) : ""); setN(note || ""); }, [rate, note]);
+  const dirty = r !== (rate != null ? String(rate) : "") || n !== (note || "");
+  return (
+    <span style={{ display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+      <input type="number" step="0.0001" min="0" value={r} onChange={(e) => setR(e.target.value)} placeholder="1.2700" style={{ ...inp, width: 92, textAlign: "right" }} className="fos-num" />
+      <input value={n} onChange={(e) => setN(e.target.value)} placeholder="note (optional)" style={{ ...inp, width: 160 }} />
+      <button className="fos-btn" disabled={busy || !dirty || !(Number(r) > 0)} style={{ height: 30, fontSize: 12 }} onClick={() => onSave(r, n)}>{busy ? "Saving…" : "Save"}</button>
+    </span>
   );
 }
 
