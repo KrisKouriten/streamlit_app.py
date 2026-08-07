@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement } from "../../../lib/procurement";
+import { setFxRate } from "../../../lib/fx";
 
 // Role gates per action. Raising / editing needs procurement management; the
 // Head of Department (EXEC) signs off first, then Finance; only Finance can
@@ -43,7 +44,11 @@ export async function POST(request) {
       }
       case "finance-approve": {
         const d = deny(FIN, "Finance approval requires the FINANCE or ADMIN role"); if (d) return d;
-        return NextResponse.json(await financeApproveProcurement(body.id, actor));
+        return NextResponse.json(await financeApproveProcurement(body.id, actor, { cost_rate_type: body.cost_rate_type, stock_rate_type: body.stock_rate_type }));
+      }
+      case "set-fx-rate": {
+        const d = deny(FIN, "Setting exchange rates requires the FINANCE or ADMIN role"); if (d) return d;
+        return NextResponse.json(await setFxRate(body, actor));
       }
       case "cancel": {
         const d = deny(MANAGE, "Cancelling requires ADMIN, FINANCE or OPS"); if (d) return d;
