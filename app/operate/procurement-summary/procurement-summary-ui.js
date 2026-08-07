@@ -5,11 +5,15 @@ import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
+  isForeignRow, stockValue, fxToPL,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
+// Original foreign-currency amount, e.g. "$12,700 USD".
+const CCY_SYMBOL = { USD: "$", GBP: "£", EUR: "€", CNY: "¥" };
+const ccyAmt = (v, ccy) => `${CCY_SYMBOL[ccy] || ""}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy || ""}`.trim();
 const inputSt = { fontSize: 13, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
 const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
@@ -160,15 +164,18 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   }
 
   function download() {
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Inventory (costing)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const lines = [head.join(",")];
     for (const r of rows) {
+      const sv = stockValue(r), v = fxToPL(r);
       lines.push([
         procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r),
+        r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
+        sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
         r.finance_status, r.payment_status, r.invoice_number || "", r.invoice_amount != null ? r.invoice_amount : "",
       ].map(esc).join(","));
     }
@@ -227,9 +234,9 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No procurement purchases in this view.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1180 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1320 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Invoice no", "Invoice net", "Status", "Payment", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (costing)", "Invoice no", "Invoice net", "Status", "Payment", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -250,7 +257,22 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{channelCategory(r)}</td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {money(lineValue(r))}
+                          {isForeignRow(r) && r.amount_ccy != null && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{ccyAmt(r.amount_ccy, r.currency)}{r.cost_rate_type ? ` @ ${r.cost_rate_type.toLowerCase()}` : ""}</div>}
                           {fs === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Committed {money(committedAmount(r))}</div>}
+                        </td>
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                          {(() => {
+                            const sv = stockValue(r);
+                            if (sv == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const v = fxToPL(r);
+                            return (
+                              <>
+                                {money(sv)}
+                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>at {(r.stock_rate_type || "costing").toLowerCase()} rate</div>
+                                {v != null && <div style={{ fontSize: 10.5, marginTop: 2, color: v >= 0 ? "var(--green)" : "var(--red)" }}>FX to P&amp;L {v >= 0 ? "+" : ""}{money(v)}</div>}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{r.invoice_number || "—"}</td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>{r.invoice_amount != null ? money(r.invoice_amount) : "—"}</td>
@@ -295,7 +317,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                       </tr>
                       {lcFor === id && settlesByLc(r) && (
                         <tr>
-                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={12} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             {(() => {
                               const lcs = r.lcs || [];
                               const totalLogged = lcs.reduce((s, l) => s + (Number(l.lc_amount) || 0), 0);
@@ -399,7 +421,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                       )}
                       {challengeFor === id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={12} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Challenge {procRef(r)}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 8, marginBottom: 10 }}>
                               {PROC_CHALLENGE_REASONS.map((x) => (
