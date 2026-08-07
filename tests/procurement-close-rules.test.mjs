@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { isForeignRow, stockValue, fxToPL } from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
@@ -87,4 +88,16 @@ test("paymentStatusOf + procRef + isMerchRequest", () => {
 
 test("vocab", () => {
   assert.deepEqual(PROC_FINANCE_STATUSES, ["PENDING", "APPROVED", "CHALLENGED", "CLOSED"]);
+});
+
+test("FX helpers: foreign flag, stock value, FX to P&L", () => {
+  assert.equal(isForeignRow({ currency: "USD" }), true);
+  assert.equal(isForeignRow({ currency: "GBP" }), false);
+  assert.equal(isForeignRow({}), false);                    // defaults to GBP
+  assert.equal(stockValue({ stock_value_gbp: 10160 }), 10160);
+  assert.equal(stockValue({}), null);
+  // costing valuation £10,160 vs cash cost £10,000 → +£160 to P&L
+  assert.equal(fxToPL({ stock_value_gbp: 10160, amount_gbp: 10000 }), 160);
+  assert.equal(fxToPL({ amount_gbp: 10000 }), null);        // not yet valued
+  assert.equal(fxToPL({ stock_value_gbp: 9500, amount_gbp: 10000 }), -500);
 });
