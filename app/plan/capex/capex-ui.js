@@ -40,6 +40,28 @@ const card = { background: "var(--surface)", border: "1px solid var(--line)", bo
 const field = { display: "flex", flexDirection: "column", gap: 5 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
 const inputSt = { fontSize: 13.5, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
+
+// Group a raw numeric string with comma thousands separators for display, e.g.
+// "5000000" → "5,000,000". Keeps a trailing "." or decimals while typing.
+function groupThousands(v) {
+  if (v == null || v === "") return "";
+  const s = String(v).replace(/,/g, "");
+  const neg = s.startsWith("-") ? "-" : "";
+  const clean = s.replace(/[^0-9.]/g, "");
+  const [intPart, ...rest] = clean.split(".");
+  const grouped = (intPart || "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const dec = rest.length ? "." + rest.join("") : (clean.endsWith(".") ? "." : "");
+  return neg + grouped + dec;
+}
+// A £-amount input that shows comma-grouped thousands while storing a clean
+// number string. `onValue` receives the raw (comma-free) value.
+function MoneyInput({ value, onValue, style, placeholder }) {
+  return (
+    <input type="text" inputMode="decimal" style={style} placeholder={placeholder}
+      value={groupThousands(value)}
+      onChange={(e) => { const raw = e.target.value.replace(/,/g, ""); if (raw === "" || /^\d*\.?\d*$/.test(raw)) onValue(raw); }} />
+  );
+}
 const btn = (bg, fg = "#fff") => ({ fontSize: 13, fontWeight: 650, padding: "8px 16px", borderRadius: 9, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const th = { textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
@@ -125,6 +147,7 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
   const openProject = (id) => router.push(`${base}&p=${id}`);
 
   const setNpK = (k) => (e) => setNp((s) => ({ ...s, [k]: e.target.value }));
+  const setNpV = (k) => (raw) => setNp((s) => ({ ...s, [k]: raw }));
 
   // Percentage form fields → fractions; blank → omitted.
   const PCT_FIELDS = ["revenue_growth_pct", "gross_margin_pct", "payroll_pct", "opex_pct", "tax_rate", "discount_rate"];
@@ -233,13 +256,13 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
                   <div style={{ ...labelSt, margin: "16px 0 8px" }}>Investment components (£)</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
                     {INVESTMENT_COMPONENTS.map((k) => (
-                      <label key={k} style={field}><span style={labelSt}>{COMPONENT_LABEL[k]}</span><input type="number" step="1" style={inputSt} value={np[k]} onChange={setNpK(k)} /></label>
+                      <label key={k} style={field}><span style={labelSt}>{COMPONENT_LABEL[k]}</span><MoneyInput style={inputSt} value={np[k]} onValue={setNpV(k)} /></label>
                     ))}
                   </div>
 
                   <div style={{ ...labelSt, margin: "16px 0 8px" }}>Model assumptions</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
-                    <label style={field}><span style={labelSt}>Year 1 revenue (£)</span><input type="number" step="1" style={inputSt} value={np.year1_revenue} onChange={setNpK("year1_revenue")} /></label>
+                    <label style={field}><span style={labelSt}>Year 1 revenue (£)</span><MoneyInput style={inputSt} value={np.year1_revenue} onValue={setNpV("year1_revenue")} /></label>
                     <label style={field}><span style={labelSt}>Revenue growth (%)</span><input type="number" step="0.1" style={inputSt} value={np.revenue_growth_pct} onChange={setNpK("revenue_growth_pct")} /></label>
                     <label style={field}><span style={labelSt}>Gross margin (%)</span><input type="number" step="0.1" style={inputSt} value={np.gross_margin_pct} onChange={setNpK("gross_margin_pct")} /></label>
                     <label style={field}><span style={labelSt}>Payroll (%)</span><input type="number" step="0.1" style={inputSt} value={np.payroll_pct} onChange={setNpK("payroll_pct")} /></label>
@@ -252,8 +275,8 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
 
                   <div style={{ ...labelSt, margin: "16px 0 8px" }}>Delivery (£)</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
-                    <label style={field}><span style={labelSt}>Committed amount</span><input type="number" step="1" style={inputSt} value={np.committed_amount} onChange={setNpK("committed_amount")} /></label>
-                    <label style={field}><span style={labelSt}>Spent amount</span><input type="number" step="1" style={inputSt} value={np.spent_amount} onChange={setNpK("spent_amount")} /></label>
+                    <label style={field}><span style={labelSt}>Committed amount</span><MoneyInput style={inputSt} value={np.committed_amount} onValue={setNpV("committed_amount")} /></label>
+                    <label style={field}><span style={labelSt}>Spent amount</span><MoneyInput style={inputSt} value={np.spent_amount} onValue={setNpV("spent_amount")} /></label>
                   </div>
 
                   <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
@@ -341,6 +364,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
   }));
   const [showEdit, setShowEdit] = useState(false);
   const setEK = (k) => (e) => setEdit((s) => ({ ...s, [k]: e.target.value }));
+  const setEV = (k) => (raw) => setEdit((s) => ({ ...s, [k]: raw }));
 
   function saveAssumptions() {
     const patch = { status: edit.status };
@@ -439,7 +463,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
           {showEdit && (
             <div style={{ padding: "14px 16px", borderRadius: 10, border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--line))", background: "var(--accent-bg)" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
-                <label style={field}><span style={labelSt}>Year 1 revenue (£)</span><input type="number" step="1" style={inputSt} value={edit.year1_revenue} onChange={setEK("year1_revenue")} /></label>
+                <label style={field}><span style={labelSt}>Year 1 revenue (£)</span><MoneyInput style={inputSt} value={edit.year1_revenue} onValue={setEV("year1_revenue")} /></label>
                 <label style={field}><span style={labelSt}>Revenue growth (%)</span><input type="number" step="0.1" style={inputSt} value={edit.revenue_growth_pct} onChange={setEK("revenue_growth_pct")} /></label>
                 <label style={field}><span style={labelSt}>Gross margin (%)</span><input type="number" step="0.1" style={inputSt} value={edit.gross_margin_pct} onChange={setEK("gross_margin_pct")} /></label>
                 <label style={field}><span style={labelSt}>Payroll (%)</span><input type="number" step="0.1" style={inputSt} value={edit.payroll_pct} onChange={setEK("payroll_pct")} /></label>
