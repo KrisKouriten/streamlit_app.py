@@ -20,6 +20,31 @@ export const dynamic = "force-dynamic";
 
 const PO_TONE = { DRAFT: "muted", PENDING_SIGNOFF: "amber", APPROVED: "green", REJECTED: "red", CANCELLED: "muted" };
 
+// The procurement register is split by source (Miniso HQ / Local / other merch
+// requests). Columns are shared; the Miniso table additionally shows whether a
+// Letter of Credit has been issued yet against each order.
+const hasLc = (r) => !!(r.lc_reference && String(r.lc_reference).trim());
+function procRegisterColumns({ lc = false } = {}) {
+  const cols = [
+    { label: "Reference", render: (r) => procRef(r) },
+    { label: "Supplier", render: (r) => r.supplier || "—" },
+    { label: "Channel / SKU", render: (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? ` · ${r.sku_or_range}` : ""}` : (r.category || "—")) },
+    { label: "Net value", align: "right", render: (r) => money(procLineValue(r)) },
+    { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
+    { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(procCommitted(r)) : "—") },
+    { label: "Payment", render: (r) => { const ps = procPayment(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
+    { label: "Status", render: (r) => { const st = procDisplayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
+  ];
+  // LC column sits just before Payment on the Miniso table only.
+  if (lc) cols.splice(6, 0, { label: "LC issued", render: (r) => (hasLc(r) ? <Badge tone="green">Yes</Badge> : <Badge tone="amber">Not yet</Badge>) });
+  return cols;
+}
+const PROC_REGISTER_GROUPS = [
+  ["MINISO", "Miniso HQ purchases", true],
+  ["LOCAL", "Local purchases", false],
+  ["OTHER", "Other merch requests", false],
+];
+
 export default async function DepartmentBudgetDashboard({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -193,22 +218,22 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                 </Panel>
               )}
 
-              <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · Summary + Close`}>
-                <Table
-                  columns={[
-                    { label: "Reference", render: (r) => procRef(r) },
-                    { label: "Source", render: (r) => r.source || "—" },
-                    { label: "Supplier", render: (r) => r.supplier || "—" },
-                    { label: "Channel / SKU", render: (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? ` · ${r.sku_or_range}` : ""}` : (r.category || "—")) },
-                    { label: "Net value", align: "right", render: (r) => money(procLineValue(r)) },
-                    { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
-                    { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(procCommitted(r)) : "—") },
-                    { label: "Payment", render: (r) => { const ps = procPayment(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
-                    { label: "Status", render: (r) => { const st = procDisplayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
-                  ]}
-                  rows={d.proc.register}
-                  empty="No procurement purchases yet."
-                />
+              <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · split by source`}>
+                {(() => {
+                  const reg = d.proc.register || [];
+                  const groups = PROC_REGISTER_GROUPS
+                    .map(([key, label, lc]) => [key, label, lc, reg.filter((r) => (key === "OTHER" ? (r.source !== "MINISO" && r.source !== "LOCAL") : r.source === key))])
+                    .filter(([, , , rows]) => rows.length);
+                  if (!groups.length) return <div style={{ fontSize: 13, color: "var(--faint)" }}>No procurement purchases yet.</div>;
+                  return groups.map(([key, label, lc, rows]) => (
+                    <div key={key} style={{ marginBottom: 18 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 650, margin: "2px 0 8px" }}>
+                        {label} <span style={{ color: "var(--faint)", fontWeight: 500, fontSize: 11.5 }}>· {rows.length} purchase{rows.length === 1 ? "" : "s"}</span>
+                      </div>
+                      <Table columns={procRegisterColumns({ lc })} rows={rows} empty="—" />
+                    </div>
+                  ));
+                })()}
               </Panel>
             </>
           )}
