@@ -18,12 +18,13 @@ const yrs = (n, dp = 1) => (n == null ? "—" : Number(n).toFixed(dp) + " yrs");
 
 // Investment types — hardcoded for the type select (do NOT import from lib).
 const INVESTMENT_TYPES = ["NEW_STORE", "REFURBISHMENT", "WAREHOUSE", "OFFICE", "IT", "DISTRIBUTION", "FRANCHISE", "ACQUISITION", "OTHER"];
-// The nine investment components, with humanised labels for the input grid.
-const INVESTMENT_COMPONENTS = ["fit_out", "fixtures", "it", "inventory", "professional_fees", "marketing", "working_capital", "contingency", "other"];
+// The investment components, with humanised labels for the input grid.
+const INVESTMENT_COMPONENTS = ["fit_out", "fixtures", "it", "inventory", "professional_fees", "marketing", "working_capital", "rent", "business_rates", "service_charge", "contingency", "other"];
 const COMPONENT_LABEL = {
   fit_out: "Fit-out", fixtures: "Fixtures", it: "IT", inventory: "Inventory",
   professional_fees: "Professional fees", marketing: "Marketing",
-  working_capital: "Working capital", contingency: "Contingency", other: "Other",
+  working_capital: "Working capital", rent: "Rent", business_rates: "Business rates",
+  service_charge: "Service charge", contingency: "Contingency", other: "Other",
 };
 const STATUSES = ["PLANNED", "APPROVED", "COMMITTED", "ON_HOLD", "COMPLETE"];
 
@@ -83,7 +84,7 @@ function Kpi({ label, value, tone }) {
 const EMPTY_PROJECT = {
   name: "", investment_type: "NEW_STORE", region: "", owner: "", status: "PLANNED", priority: "",
   fit_out: "", fixtures: "", it: "", inventory: "", professional_fees: "", marketing: "",
-  working_capital: "", contingency: "", other: "",
+  working_capital: "", rent: "", business_rates: "", service_charge: "", contingency: "", other: "",
   year1_revenue: "", revenue_growth_pct: "", gross_margin_pct: "", payroll_pct: "", opex_pct: "",
   years: "10", depreciation_years: "7", tax_rate: "25", discount_rate: "10",
   committed_amount: "", spent_amount: "",

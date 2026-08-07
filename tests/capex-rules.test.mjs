@@ -76,5 +76,15 @@ test("clearsHurdle compares IRR to the hurdle rate", () => {
 
 test("vocab constants", () => {
   assert.ok(INVESTMENT_TYPES.includes("NEW_STORE"));
-  assert.equal(INVESTMENT_COMPONENTS.length, 9);
+  assert.equal(INVESTMENT_COMPONENTS.length, 12);
+  assert.ok(["rent", "business_rates", "service_charge"].every((k) => INVESTMENT_COMPONENTS.includes(k)));
+});
+
+test("occupancy costs count as investment but are excluded from depreciation", () => {
+  const inv = { fit_out: 100000, rent: 20000, business_rates: 5000, service_charge: 3000 };
+  assert.equal(totalInvestment(inv), 128000);
+  // depreciable base excludes rent / business rates / service charge (and inventory + working capital)
+  const m = projectModel({ investment: inv, year1_revenue: 0, gross_margin_pct: 0, depreciation_years: 4, years: 4 });
+  // depreciable = 100,000 (fit-out only) over 4 years → 25,000/yr; occupancy excluded
+  assert.equal(m.rows[0].depreciation, 25000);
 });
