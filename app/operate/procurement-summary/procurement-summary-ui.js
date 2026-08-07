@@ -14,6 +14,14 @@ const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, lett
 // Original foreign-currency amount, e.g. "$12,700 USD".
 const CCY_SYMBOL = { USD: "$", GBP: "£", EUR: "€", CNY: "¥" };
 const ccyAmt = (v, ccy) => `${CCY_SYMBOL[ccy] || ""}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy || ""}`.trim();
+// Render any date value safely — never a raw Date object (React can't render one).
+// Accepts a 'YYYY-MM-DD' string or a Date; shows UK-style DD/MM/YYYY.
+const fmtDate = (v) => {
+  if (!v) return "—";
+  const s = typeof v === "string" ? v : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+};
 const inputSt = { fontSize: 13, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
 const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
@@ -348,9 +356,9 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                                           <td className="fos-num" style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{l.lc_amount != null ? money(l.lc_amount) : "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.lc_bank || "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}><Badge tone={loan.tone}>{loan.label}</Badge></td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_payment_date || "—"}</td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap", color: l.actual_payment_date ? "var(--ink)" : "var(--faint)" }}>{l.actual_payment_date || "—"}</td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_settled ? <Badge tone="green">Settled {l.lc_settled_date || ""}</Badge> : <Badge tone="amber">Pending</Badge>}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{fmtDate(l.lc_payment_date)}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap", color: l.actual_payment_date ? "var(--ink)" : "var(--faint)" }}>{fmtDate(l.actual_payment_date)}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_settled ? <Badge tone="green">Settled {l.lc_settled_date ? fmtDate(l.lc_settled_date) : ""}</Badge> : <Badge tone="amber">Pending</Badge>}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", whiteSpace: "nowrap" }}>
                                             <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => openEditLc(l)}>Edit</button>
                                             {!l.lc_settled && <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => { setEditLc(null); setReconLc(reconLc?.lc_id === l.lc_id ? null : { lc_id: l.lc_id, lc_settled_date: "", lc_settled_amount: l.lc_amount != null ? String(l.lc_amount) : "" }); }}>Reconcile</button>}
