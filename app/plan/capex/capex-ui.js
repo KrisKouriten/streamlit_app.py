@@ -19,13 +19,16 @@ const yrs = (n, dp = 1) => (n == null ? "—" : Number(n).toFixed(dp) + " yrs");
 // Investment types — hardcoded for the type select (do NOT import from lib).
 const INVESTMENT_TYPES = ["NEW_STORE", "REFURBISHMENT", "WAREHOUSE", "OFFICE", "IT", "DISTRIBUTION", "FRANCHISE", "ACQUISITION", "OTHER"];
 // The investment components, with humanised labels for the input grid.
-const INVESTMENT_COMPONENTS = ["fit_out", "fixtures", "it", "inventory", "professional_fees", "marketing", "working_capital", "rent", "business_rates", "service_charge", "contingency", "other"];
+const INVESTMENT_COMPONENTS = ["fit_out", "fixtures", "it", "inventory", "professional_fees", "marketing", "working_capital", "contingency", "other"];
 const COMPONENT_LABEL = {
   fit_out: "Fit-out", fixtures: "Fixtures", it: "IT", inventory: "Inventory",
   professional_fees: "Professional fees", marketing: "Marketing",
-  working_capital: "Working capital", rent: "Rent", business_rates: "Business rates",
-  service_charge: "Service charge", contingency: "Contingency", other: "Other",
+  working_capital: "Working capital", contingency: "Contingency", other: "Other",
 };
+// Occupancy costs are recurring annual operating assumptions (charged in the P&L
+// every year), not upfront investment — entered under Model assumptions.
+const OCCUPANCY_COMPONENTS = ["rent", "business_rates", "service_charge"];
+const OCCUPANCY_LABEL = { rent: "Rent (£/yr)", business_rates: "Business rates (£/yr)", service_charge: "Service charge (£/yr)" };
 const STATUSES = ["PLANNED", "APPROVED", "COMMITTED", "ON_HOLD", "COMPLETE"];
 
 const typeLabel = (t) => (t === "IT" ? "IT" : t ? t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");
@@ -140,10 +143,14 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
     finally { setBusy(false); }
   }
 
-  const base = `/plan/capex?scenario=${encodeURIComponent(scenario)}&year=${fiscalYear}`;
+  // Portfolio + appraisal live at /plan/capex; capital allocation is its own
+  // route (/plan/capex/allocation) so the sidebar highlights it correctly.
+  const qs = `scenario=${encodeURIComponent(scenario)}&year=${fiscalYear}`;
+  const base = `/plan/capex?${qs}`;
+  const allocBase = `/plan/capex/allocation?${qs}`;
   const goPortfolio = () => router.push(base);
-  const goAllocation = () => router.push(`${base}&view=allocation`);
-  const goYear = (y) => router.push(`/plan/capex?scenario=${encodeURIComponent(scenario)}&year=${y}${view === "allocation" ? "&view=allocation" : ""}`);
+  const goAllocation = () => router.push(allocBase);
+  const goYear = (y) => router.push(`${view === "allocation" ? "/plan/capex/allocation" : "/plan/capex"}?scenario=${encodeURIComponent(scenario)}&year=${y}`);
   const openProject = (id) => router.push(`${base}&p=${id}`);
 
   const setNpK = (k) => (e) => setNp((s) => ({ ...s, [k]: e.target.value }));
@@ -151,7 +158,7 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
 
   // Percentage form fields → fractions; blank → omitted.
   const PCT_FIELDS = ["revenue_growth_pct", "gross_margin_pct", "payroll_pct", "opex_pct", "tax_rate", "discount_rate"];
-  const NUM_FIELDS = ["priority", "year1_revenue", "years", "depreciation_years", "committed_amount", "spent_amount", ...INVESTMENT_COMPONENTS];
+  const NUM_FIELDS = ["priority", "year1_revenue", "years", "depreciation_years", "committed_amount", "spent_amount", ...INVESTMENT_COMPONENTS, ...OCCUPANCY_COMPONENTS];
 
   function createProject() {
     if (!np.name.trim()) { setError("Give the project a name."); return; }
@@ -271,7 +278,11 @@ export default function CapexWorkspace({ projects = [], portfolio = null, alloca
                     <label style={field}><span style={labelSt}>Depreciation years</span><input type="number" step="1" style={inputSt} value={np.depreciation_years} onChange={setNpK("depreciation_years")} /></label>
                     <label style={field}><span style={labelSt}>Tax rate (%)</span><input type="number" step="0.1" style={inputSt} value={np.tax_rate} onChange={setNpK("tax_rate")} /></label>
                     <label style={field}><span style={labelSt}>Discount rate (%)</span><input type="number" step="0.1" style={inputSt} value={np.discount_rate} onChange={setNpK("discount_rate")} /></label>
+                    {OCCUPANCY_COMPONENTS.map((k) => (
+                      <label key={k} style={field}><span style={labelSt}>{OCCUPANCY_LABEL[k]}</span><MoneyInput style={inputSt} value={np[k]} onValue={setNpV(k)} /></label>
+                    ))}
                   </div>
+                  <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 6, lineHeight: 1.5 }}>Occupancy (rent, business rates, service charge) is charged as a recurring annual operating cost above EBITDA — not part of the upfront investment.</div>
 
                   <div style={{ ...labelSt, margin: "16px 0 8px" }}>Delivery (£)</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
@@ -360,6 +371,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
     opex_pct: selected.opex_pct == null ? "" : String(Number(selected.opex_pct) * 100),
     tax_rate: selected.tax_rate == null ? "" : String(Number(selected.tax_rate) * 100),
     discount_rate: selected.discount_rate == null ? "" : String(Number(selected.discount_rate) * 100),
+    rent: selected.rent ?? "", business_rates: selected.business_rates ?? "", service_charge: selected.service_charge ?? "",
     status: selected.status || "PLANNED",
   }));
   const [showEdit, setShowEdit] = useState(false);
@@ -372,10 +384,13 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
     for (const k of ["revenue_growth_pct", "gross_margin_pct", "payroll_pct", "opex_pct", "tax_rate", "discount_rate"]) {
       if (edit[k] !== "") patch[k] = Number(edit[k]) / 100;
     }
+    for (const k of ["rent", "business_rates", "service_charge"]) {
+      if (edit[k] !== "" && edit[k] != null) patch[k] = Number(edit[k]);
+    }
     post(`/api/capex/${selected.project_id}`, { patch });
   }
 
-  const MODEL_COLS = ["Revenue", "Gross profit", "Payroll", "Opex", "EBITDA", "EBITDA margin", "Depreciation", "EBIT", "Tax", "Profit", "FCF", "Cumulative FCF"];
+  const MODEL_COLS = ["Revenue", "Gross profit", "Payroll", "Opex", "Occupancy", "EBITDA", "EBITDA margin", "Depreciation", "EBIT", "Tax", "Profit", "FCF", "Cumulative FCF"];
 
   return (
     <>
@@ -434,6 +449,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.grossProfit)}</td>
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.payroll)}</td>
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.opex)}</td>
+                      <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.occupancy)}</td>
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.ebitda)}</td>
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{pct(r.ebitdaMargin)}</td>
                       <td className="fos-num" style={{ ...td, textAlign: "right", fontFamily: "var(--mono)" }}>{money(r.depreciation)}</td>
@@ -470,6 +486,9 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
                 <label style={field}><span style={labelSt}>Opex (%)</span><input type="number" step="0.1" style={inputSt} value={edit.opex_pct} onChange={setEK("opex_pct")} /></label>
                 <label style={field}><span style={labelSt}>Tax rate (%)</span><input type="number" step="0.1" style={inputSt} value={edit.tax_rate} onChange={setEK("tax_rate")} /></label>
                 <label style={field}><span style={labelSt}>Discount rate (%)</span><input type="number" step="0.1" style={inputSt} value={edit.discount_rate} onChange={setEK("discount_rate")} /></label>
+                <label style={field}><span style={labelSt}>Rent (£/yr)</span><MoneyInput style={inputSt} value={edit.rent} onValue={setEV("rent")} /></label>
+                <label style={field}><span style={labelSt}>Business rates (£/yr)</span><MoneyInput style={inputSt} value={edit.business_rates} onValue={setEV("business_rates")} /></label>
+                <label style={field}><span style={labelSt}>Service charge (£/yr)</span><MoneyInput style={inputSt} value={edit.service_charge} onValue={setEV("service_charge")} /></label>
                 <label style={field}><span style={labelSt}>Status</span>
                   <select style={inputSt} value={edit.status} onChange={setEK("status")}>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
