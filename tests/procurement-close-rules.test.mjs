@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isForeignRow, stockValue, fxToPL } from "../lib/procurement-close-rules.js";
+import { isForeignRow, stockValue, fxToPL, inventoryCostFx } from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
@@ -100,4 +100,15 @@ test("FX helpers: foreign flag, stock value, FX to P&L", () => {
   assert.equal(fxToPL({ stock_value_gbp: 10160, amount_gbp: 10000 }), 160);
   assert.equal(fxToPL({ amount_gbp: 10000 }), null);        // not yet valued
   assert.equal(fxToPL({ stock_value_gbp: 9500, amount_gbp: 10000 }), -500);
+});
+
+test("inventoryCostFx: £ inventory value at the costing FX rate", () => {
+  // foreign: $12,700 at a 1.27 USD/£ costing rate → £10,000
+  assert.equal(inventoryCostFx({ currency: "USD", amount_ccy: 12700, amount_gbp: 9800 }, 1.27), 10000);
+  // GBP order: just the GBP value
+  assert.equal(inventoryCostFx({ currency: "GBP", amount_gbp: 5000 }, 1.27), 5000);
+  // foreign but no costing rate → fall back to a booked stock valuation
+  assert.equal(inventoryCostFx({ currency: "USD", amount_ccy: 12700, amount_gbp: 9800, stock_value_gbp: 10160 }, null), 10160);
+  // foreign, no rate and no booked valuation → fall back to the GBP cash value
+  assert.equal(inventoryCostFx({ currency: "USD", amount_ccy: 12700, amount_gbp: 9800 }, null), 9800);
 });
