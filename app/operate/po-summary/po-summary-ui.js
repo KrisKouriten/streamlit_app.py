@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayStatus, CHALLENGE_REASONS, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf } from "../../../lib/po-rules";
+import MoneyInput from "../../money-input";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -203,7 +204,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           <input style={{ ...inputSt, width: 120 }} placeholder="—" value={inv[p.po_id]?.number || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "number", e.target.value)} />
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          <input type="number" min="0" step="0.01" style={{ ...inputSt, width: 110, textAlign: "right" }} placeholder="—" value={inv[p.po_id]?.amount || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "amount", e.target.value)} />
+                          <MoneyInput style={{ ...inputSt, width: 110, textAlign: "right" }} placeholder="—" value={inv[p.po_id]?.amount || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "amount", e.target.value)} />
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {!signed ? (
