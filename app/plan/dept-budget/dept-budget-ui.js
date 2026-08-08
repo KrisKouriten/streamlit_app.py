@@ -10,6 +10,7 @@ import {
   KINDS, KIND_LABEL, CLASSIFICATIONS, CLASSIFICATION_LABEL, PHASINGS, PHASING_LABEL,
   defaultKindFor, initiativeInvestment, commercialSummary, objectiveOutcome,
 } from "../../../lib/dept-initiative-rules";
+import MoneyInput from "../../money-input";
 
 /* Departmental Budgets — the budget control centre. A budget opens with an
    executive summary (target · proposed · remaining · vs prior year · completion ·
@@ -257,7 +258,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
               {loaded.isFinance && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                   <span style={labelSt}>Set target £</span>
-                  <input value={targetDraft} onChange={(e) => setTargetDraft(e.target.value)} placeholder="e.g. 1200000" inputMode="decimal" style={{ ...inputSt, width: 140 }} />
+                  <MoneyInput value={targetDraft} onChange={(e) => setTargetDraft(e.target.value)} placeholder="e.g. 1200000" inputMode="decimal" style={{ ...inputSt, width: 140 }} />
                   <button onClick={saveTarget} disabled={busy} style={ghost}>Save target</button>
                   <span style={{ fontSize: 11, color: "var(--faint)" }}>Finance sets the top-down envelope.</span>
                 </div>
@@ -480,7 +481,7 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
                 <>
                   <td style={{ ...td }}>
                     {lineEdit
-                      ? <input value={total === 0 ? "" : total} onChange={(e) => setAnnual(line._key, e.target.value)} inputMode="decimal" style={{ ...cellIn, width: 84 }} title="Full-year — spreads evenly across months" />
+                      ? <MoneyInput value={total === 0 ? "" : total} onChange={(e) => setAnnual(line._key, e.target.value)} inputMode="decimal" style={{ ...cellIn, width: 84 }} title="Full-year — spreads evenly across months" />
                       : <span style={{ fontWeight: 700 }}>{money0(total)}</span>}
                   </td>
                   <td style={{ ...td, color: v.abs > 0 ? "var(--amber)" : v.abs < 0 ? "var(--green)" : "var(--faint)" }}>{v.abs ? `${v.abs > 0 ? "+" : ""}${money0(v.abs)}` : "—"}</td>
@@ -492,7 +493,7 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
                 <>
                   {MONTH_KEYS.map((k) => (
                     <td key={k} style={{ ...td, padding: "2px 3px" }}>
-                      {lineEdit ? <input value={line[k] === 0 ? "" : line[k]} onChange={(e) => upd(line._key, k, e.target.value)} inputMode="decimal" style={cellIn} /> : <span>{Number(line[k]) ? money0(line[k]) : "—"}</span>}
+                      {lineEdit ? <MoneyInput value={line[k] === 0 ? "" : line[k]} onChange={(e) => upd(line._key, k, e.target.value)} inputMode="decimal" style={cellIn} /> : <span>{Number(line[k]) ? money0(line[k]) : "—"}</span>}
                     </td>
                   ))}
                   <td style={{ ...td, fontWeight: 700 }}>{money0(total)}</td>
@@ -517,14 +518,14 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
                     {MONTHS.map((m, i) => (
                       <label key={m} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <span style={{ fontSize: 8.5, color: "var(--faint)", textAlign: "center" }}>{m}</span>
-                        <input value={line[MONTH_KEYS[i]] === 0 ? "" : line[MONTH_KEYS[i]]} onChange={(e) => upd(line._key, MONTH_KEYS[i], e.target.value)} inputMode="decimal" style={cellIn} />
+                        <MoneyInput value={line[MONTH_KEYS[i]] === 0 ? "" : line[MONTH_KEYS[i]]} onChange={(e) => upd(line._key, MONTH_KEYS[i], e.target.value)} inputMode="decimal" style={cellIn} />
                       </label>
                     ))}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <span style={labelSt}>Prior-year actual (£) & commentary</span>
                     <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                      <input value={line.prior_year === 0 ? "" : line.prior_year} onChange={(e) => upd(line._key, "prior_year", e.target.value)} inputMode="decimal" placeholder="Prior year" style={{ ...cellIn, width: 100 }} />
+                      <MoneyInput value={line.prior_year === 0 ? "" : line.prior_year} onChange={(e) => upd(line._key, "prior_year", e.target.value)} inputMode="decimal" placeholder="Prior year" style={{ ...cellIn, width: 100 }} />
                       <textarea value={line.commentary || ""} onChange={(e) => upd(line._key, "commentary", e.target.value)} placeholder="Business purpose / explanation of change (required for material lines)" rows={2} style={{ ...inputSt, flex: 1, minWidth: 240, resize: "vertical" }} />
                     </div>
                   </div>
@@ -829,12 +830,12 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectiv
                 </td>
                 <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>{ro ? (c.driver || "—") : <input value={c.driver || ""} onChange={(e) => setCost(i, "driver", e.target.value)} placeholder="e.g. No. of campaigns" style={{ ...inputSt, width: 150, padding: "4px 6px", fontSize: 12 }} />}</td>
                 <td style={{ ...td, padding: "3px 4px" }}>{ro ? (c.quantity ?? "—") : <input value={c.quantity ?? ""} onChange={(e) => setCost(i, "quantity", e.target.value)} inputMode="decimal" placeholder="0" style={{ ...cellIn, width: 58 }} />}</td>
-                <td style={{ ...td, padding: "3px 4px" }}>{ro ? (c.unit_cost != null && c.unit_cost !== "" ? money0(c.unit_cost) : "—") : <input value={c.unit_cost ?? ""} onChange={(e) => setCost(i, "unit_cost", e.target.value)} inputMode="decimal" placeholder="0" style={{ ...cellIn, width: 78 }} />}</td>
+                <td style={{ ...td, padding: "3px 4px" }}>{ro ? (c.unit_cost != null && c.unit_cost !== "" ? money0(c.unit_cost) : "—") : <MoneyInput value={c.unit_cost ?? ""} onChange={(e) => setCost(i, "unit_cost", e.target.value)} inputMode="decimal" placeholder="0" style={{ ...cellIn, width: 78 }} />}</td>
                 <td style={{ ...td, padding: "3px 4px" }}>
                   {ro ? money0(c.amount)
                     : hasBuild
                       ? <span title="Quantity × Unit cost" style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{money0(eff)}</span>
-                      : <input value={c.amount ?? ""} onChange={(e) => setCost(i, "amount", e.target.value)} inputMode="decimal" placeholder="lump sum" style={{ ...cellIn, width: 90 }} />}
+                      : <MoneyInput value={c.amount ?? ""} onChange={(e) => setCost(i, "amount", e.target.value)} inputMode="decimal" placeholder="lump sum" style={{ ...cellIn, width: 90 }} />}
                 </td>
                 <td style={{ ...td, textAlign: "left", padding: "3px 4px" }}>
                   {ro ? PHASING_LABEL[c.phasing] : (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META } from "../../../lib/procurement-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
+import MoneyInput from "../../money-input";
 
 /* Procurement Request UI: four sections. Miniso / Local are the cash-tracker
    purchases (monthly cash budget vs committed spend, bucketed by supplier payment
@@ -95,7 +96,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
                 <Td>{monthLabel(m.ym)}</Td>
                 <Td r>{money(m.committed)}</Td>
                 <Td r>{canManage ? (
-                  <input defaultValue={m.budget ?? ""} placeholder="—" onBlur={(e) => { if (e.target.value !== String(m.budget ?? "")) saveBudget(m.ym, e.target.value || 0); }}
+                  <input type="number" defaultValue={m.budget ?? ""} placeholder="—" onBlur={(e) => { if (e.target.value !== String(m.budget ?? "")) saveBudget(m.ym, e.target.value || 0); }}
                     style={{ width: 100, textAlign: "right", height: 26, fontSize: 12.5, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" }} className="fos-num" />
                 ) : (m.budget == null ? "—" : money(m.budget))}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
@@ -186,7 +187,7 @@ function AddLine({ source, fxRates = [], onDone }) {
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
         <Field label="Currency"><select value={f.currency} onChange={set("currency")} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-        <Field label={`Amount (${CCY_SYMBOL[f.currency] || f.currency})`}><input required type="number" min="0" step="0.01" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        <Field label={`Amount (${CCY_SYMBOL[f.currency] || f.currency})`}><MoneyInput required value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
         {isMiniso ? (
           <>
             <Field label="Pickup date"><input required type="date" value={f.pickup_date} onChange={set("pickup_date")} style={inp} /></Field>
@@ -551,11 +552,11 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
             <Field label="Channel"><select style={inp} value={f.channel_code} onChange={set("channel_code")}><option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
             <Field label="Supplier"><input style={inp} value={f.supplier} onChange={set("supplier")} placeholder="e.g. MINISO HQ" /></Field>
             <Field label="Category"><input style={inp} value={f.category} onChange={set("category")} placeholder="e.g. Core range" /></Field>
-            <Field label="Amount (£)"><input type="number" step="0.01" min="0" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
+            <Field label="Amount (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
             <Field label="OTB period"><input placeholder="YYYY-MM" style={inp} value={f.otb_period} onChange={set("otb_period")} /></Field>
             <Field label="Units"><input type="number" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.units} onChange={set("units")} /></Field>
-            <Field label="Freight (£)"><input type="number" step="0.01" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.freight} onChange={set("freight")} /></Field>
-            <Field label="Duty (£)"><input type="number" step="0.01" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.duty} onChange={set("duty")} /></Field>
+            <Field label="Freight (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.freight} onChange={set("freight")} /></Field>
+            <Field label="Duty (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.duty} onChange={set("duty")} /></Field>
             <Field label="FX rate"><input type="number" step="0.0001" style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.fx_rate} onChange={set("fx_rate")} /></Field>
             <Field label="Expected receipt"><input type="date" style={inp} value={f.expected_receipt_date} onChange={set("expected_receipt_date")} /></Field>
             <Field label="Reason"><input style={inp} value={f.reason} onChange={set("reason")} /></Field>

@@ -8,6 +8,7 @@ import {
   isForeignRow, stockValue, fxToPL,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
+import MoneyInput from "../../money-input";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -313,7 +314,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                             {fs === "APPROVED" && !settlesByLc(r) && (
                               <>
                                 <input style={{ ...inputSt, width: 110 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
-                                <input type="number" min="0" step="0.01" style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
+                                <MoneyInput style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
                                 {financeActionError("invoice", r) === null && <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
                                 {financeActionError("payment", r) === null && (
                                   <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
@@ -382,7 +383,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                               <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)} /></Field>
                                               <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => editField("lc_reference", e.target.value)} /></Field>
-                                              <Field label={`LC amount (${curSym(r)})`}><input type="number" min="0" step="0.01" style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
+                                              <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
                                               <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_bank} onChange={(e) => editField("lc_bank", e.target.value)} /></Field>
                                               <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_confirmed_date} onChange={(e) => editField("lc_confirmed_date", e.target.value)} /></Field>
                                               <Field label="Expected payment"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_payment_date} onChange={(e) => editField("lc_payment_date", e.target.value)} /></Field>
@@ -400,7 +401,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                                           <tr><td colSpan={9} style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
                                             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                                               <Field label="Settled date"><input type="date" style={{ ...inputSt, width: 150 }} value={reconLc.lc_settled_date} onChange={(e) => setReconLc((s) => ({ ...s, lc_settled_date: e.target.value }))} /></Field>
-                                              <Field label={`Settled amount (${curSym(r)})`}><input type="number" min="0" step="0.01" style={{ ...inputSt, width: 130, textAlign: "right" }} value={reconLc.lc_settled_amount} onChange={(e) => setReconLc((s) => ({ ...s, lc_settled_amount: e.target.value }))} /></Field>
+                                              <Field label={`Settled amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: 130, textAlign: "right" }} value={reconLc.lc_settled_amount} onChange={(e) => setReconLc((s) => ({ ...s, lc_settled_amount: e.target.value }))} /></Field>
                                               <button style={btn("var(--green)")} disabled={isBusy} onClick={() => reconcileEntry(r)}>Mark settled</button>
                                               <button style={ghost} onClick={() => setReconLc(null)}>Cancel</button>
                                             </div>
@@ -421,7 +422,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                   <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. DC-2026-014" value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)} /></Field>
                                   <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. HSBC-LC-2026-014" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} /></Field>
-                                  <Field label={`LC amount (${curSym(r)})`}><input type="number" min="0" step="0.01" style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
+                                  <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
                                   <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} /></Field>
                                   <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_confirmed_date || ""} onChange={(e) => setLcField(id, "lc_confirmed_date", e.target.value)} /></Field>
                                   <Field label="Expected payment"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_payment_date || ""} onChange={(e) => setLcField(id, "lc_payment_date", e.target.value)} /></Field>

@@ -7,6 +7,7 @@ import {
   termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
+import MoneyInput from "../../money-input";
 
 const gbp = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 // The submitter, stored as an email or name — show a readable form.
@@ -196,7 +197,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
             <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{dueTouched ? "set manually" : "auto: P.O date + payment terms"}</span>
           </label>
           <label style={field}><span style={labelSt}>Currency *</span><select style={inputSt} value={f.currency} onChange={set("currency")}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-          <label style={field}><span style={labelSt}>Net value (£) *</span><input type="number" min="0" step="0.01" style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
+          <label style={field}><span style={labelSt}>Net value (£) *</span><MoneyInput style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
           <label style={field}><span style={labelSt}>P.O category *</span><select style={inputSt} value={f.po_category} onChange={set("po_category")}><option value="">—</option>{PO_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Fulfilment start date</span><DateField value={f.fulfilment_start_date} onChange={setDate("fulfilment_start_date")} /></label>
           <label style={field}><span style={labelSt}>Fulfilment period (days)</span><input type="number" min="0" step="1" style={inputSt} placeholder="e.g. 30" value={f.fulfilment_days} onChange={set("fulfilment_days")} /></label>
