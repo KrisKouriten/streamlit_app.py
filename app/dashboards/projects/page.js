@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
-import { getBusinessProjects } from "../../../lib/business-projects";
+import { getProjectsWithSpend } from "../../../lib/business-projects";
 import { summarise, groupByCategory, groupByMonth } from "../../../lib/business-projects-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, Bar, ProvenanceBadge, IllustrativeBanner, money, num } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
 /*
  * Projects Dashboard — an outward, read-only report over the Business Projects
  * register (Plan — HO). Budget commitment, delivery timeline and delivery
- * confidence (RAG/status) come straight from the register; there is no
- * project-tagged spend feed, so this reports COMMITMENT & STATUS, not burn —
- * stated plainly rather than faked.
+ * confidence (RAG/status) come straight from the register. Planned costs
+ * (finance.business_project_cost) and ACTUAL P.O burn (POs tagged to a project)
+ * now roll up per project via getProjectsWithSpend, so this reports commitment,
+ * status AND burn — variance = planned − actual.
  */
 
 const RAG_TONE = { red: "red", amber: "amber", green: "green" };
@@ -27,11 +28,14 @@ export default async function ProjectsDashboard() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { ready, projects } = await getBusinessProjects();
+  const { ready, projects } = await getProjectsWithSpend();
   const summary = summarise(projects);
   const byCategory = groupByCategory(projects);
   const byMonth = groupByMonth(projects);
   const maxCat = Math.max(1, ...byCategory.map((c) => c.budget));
+  // Portfolio burn: planned costs and actual P.O spend across every project.
+  const totalPlanned = projects.reduce((a, p) => a + (Number(p.planned) || 0), 0);
+  const totalActual = projects.reduce((a, p) => a + (Number(p.actual) || 0), 0);
   // Honesty: the register ships with illustrative seed rows. If every project
   // is still seed data, say so; once real projects are entered it reads as real.
   const allSeed = ready && projects.length > 0 && projects.every((p) => p.created_by === "seed");
@@ -68,6 +72,7 @@ export default async function ProjectsDashboard() {
 
           <StatRow>
             <Stat label="Committed budget" value={money(summary.budget, { compact: true })} sub="Open projects (excludes delivered)" />
+            <Stat label="Actual (P.O burn)" value={money(totalActual, { compact: true })} sub={`vs ${money(totalPlanned, { compact: true })} planned`} />
             <Stat label="Projects" value={num(summary.total)} sub={`${summary.active} active · ${summary.byStatus.Planned} planned`} />
             <Stat label="At risk" value={num(summary.atRisk)} sub="Red RAG" tone={summary.atRisk ? "red" : "green"} />
             <Stat label="Watch" value={num(summary.rag.amber)} sub="Amber RAG" tone={summary.rag.amber ? "amber" : "muted"} />
@@ -97,23 +102,24 @@ export default async function ProjectsDashboard() {
             />
           </Panel>
 
-          <Panel title="Portfolio" note="every project in the register">
+          <Panel title="Portfolio" note="budget · planned cost · actual P.O burn · every project">
             <Table
               columns={[
-                { label: "Project", render: (r) => r.name },
-                { label: "Category", render: (r) => r.category || "—" },
-                { label: "Owner", render: (r) => r.owner || "—" },
+                { label: "Project", render: (r) => <a href={`/plan/business-projects/${r.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{r.name}</a> },
                 { label: "Status", render: (r) => <Badge tone={STATUS_TONE[r.status] || "muted"}>{r.status}</Badge> },
                 { label: "RAG", render: (r) => <Badge tone={RAG_TONE[r.rag] || "muted"}>{r.rag}</Badge> },
                 { label: "Target", render: (r) => monthLabel(r.target_ym) },
                 { label: "Budget", align: "right", render: (r) => money(r.budget, { compact: true }) },
+                { label: "Planned", align: "right", render: (r) => money(r.planned, { compact: true }) },
+                { label: "Actual (P.O)", align: "right", render: (r) => money(r.actual, { compact: true }) },
+                { label: "Variance", align: "right", tone: (r) => ((Number(r.planned) || 0) - (Number(r.actual) || 0)) < 0 ? "red" : undefined, render: (r) => money((Number(r.planned) || 0) - (Number(r.actual) || 0), { compact: true }) },
               ]}
               rows={projects}
             />
           </Panel>
 
           <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 4, maxWidth: "82ch", lineHeight: 1.6 }}>
-            Source: Business Projects register (Plan — HO). Committed budget counts open projects only. This dashboard reports budget commitment and delivery confidence (RAG/status) — spend-to-date (burn) is not shown because there is no project-tagged actuals feed yet.
+            Source: Business Projects register (Plan — HO). Committed budget counts open projects only. Planned cost comes from each project&rsquo;s per-department cost lines; actual P.O burn is the total of Purchase Orders tagged to the project on the P.O Requests screen. Variance = planned − actual (a negative variance means burn is running ahead of the plan).
           </div>
         </>
       )}

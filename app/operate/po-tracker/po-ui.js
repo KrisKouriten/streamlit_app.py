@@ -61,10 +61,10 @@ const EMPTY = {
   payment_value: "", po_category: "",
   fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
-  marketing_budget_category: "", marketing_campaign: "",
+  marketing_budget_category: "", marketing_campaign: "", business_project_id: "",
 };
 
-export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], selfApproveLimit = 0 }) {
+export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0 }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -206,6 +206,13 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
               <option value="">— choose —</option>
               {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
+          </label>
+          <label style={field}><span style={labelSt}>Business project</span>
+            <select style={inputSt} value={f.business_project_id} onChange={set("business_project_id")}>
+              <option value="">— none —</option>
+              {businessProjects.map((p) => <option key={p.id} value={p.id}>{p.name}{p.status && p.status !== "Active" ? ` (${p.status})` : ""}</option>)}
+            </select>
+            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{businessProjects.length ? "Allocate this spend to a business project (Plan — HO)." : "No business projects set up yet."}</span>
           </label>
         </div>
 
