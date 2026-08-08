@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, isAdmin } from "../../../lib/auth";
 import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
+import { getBusinessProjects } from "../../../lib/business-projects";
 import { getStoreList } from "../../../lib/store-sales";
 import { listSignoffs, getPoSelfApproveLimit } from "../../../lib/governance";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
@@ -20,14 +21,19 @@ export default async function PurchaseOrderRequests() {
   const admin = isAdmin(session);
   const email = (session.email || "").toLowerCase();
 
-  const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit] = await Promise.all([
+  const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit, projects] = await Promise.all([
     listPos({ limit: 100 }),
     getDepartments(),
     getStoreList().catch(() => []),
     listSignoffs().catch(() => []),
     marketingCampaignSuggestions().catch(() => []),
     getPoSelfApproveLimit().catch(() => 0),
+    getBusinessProjects().catch(() => ({ projects: [] })),
   ]);
+  // Live business projects to allocate P.O spend against (exclude finished ones).
+  const businessProjects = (projects.projects || [])
+    .filter((p) => p.status !== "Done")
+    .map((p) => ({ id: p.id, name: p.name, status: p.status }));
 
   // Departments this user can sign off for (from governance.department_signoff).
   // Admins can sign off any department, so this list is only consulted for
@@ -53,6 +59,7 @@ export default async function PurchaseOrderRequests() {
           isAdmin={admin}
           approverDepts={approverDepts}
           marketingCampaigns={marketingCampaigns}
+          businessProjects={businessProjects}
           selfApproveLimit={selfApproveLimit}
         />
       )}

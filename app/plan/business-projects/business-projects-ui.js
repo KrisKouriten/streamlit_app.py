@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { STATUSES, RAGS } from "../../../lib/business-projects-rules";
 
@@ -75,7 +76,7 @@ export default function BusinessProjectsUI({ projects, summary }) {
             {projects.length === 0 && <tr><td colSpan={7} style={{ ...td(false), color: "var(--faint)" }}>No projects yet — add the first one.</td></tr>}
             {projects.map((p) => (
               <tr key={p.id}>
-                <td style={td(false)}><div style={{ fontWeight: 600 }}>{p.name}</div>{p.notes && <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "normal", maxWidth: 320 }}>{p.notes}</div>}</td>
+                <td style={td(false)}><div style={{ fontWeight: 600 }}><Link href={`/plan/business-projects/${p.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{p.name}</Link></div>{p.notes && <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "normal", maxWidth: 320 }}>{p.notes}</div>}</td>
                 <td style={{ ...td(false), color: "var(--muted)" }}>{p.category || "—"}</td>
                 <td style={{ ...td(false), color: "var(--muted)" }}>{p.owner || "—"}</td>
                 <td style={td(false)}>
