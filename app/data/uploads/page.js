@@ -44,6 +44,14 @@ const LIVE = [
     fullHref: "/finance-os/budget-forecast", fullLabel: "Open budget & forecast view ↗",
   },
   {
+    key: "sales",
+    title: "Store Sales & KPI",
+    drives: "All store sales & KPI reports (trading) — net sales, margin, LFL, footfall, ATV & conversion.",
+    detail: "Upload the daily store-sales export (the \"Combined\" sheet: one row per store per day — net sales, gross profit, transactions, footfall, units, returns and the valid-day flag). Each upload is a full refresh: it replaces every actual day for the calendar year(s) the file covers, so re-uploading a fuller year-to-date is always safe. Stores new to the file are added automatically.",
+    uploads: [{ endpoint: "/api/store-sales", action: "workbook", fileField: "file", label: "Upload store sales & KPI (Excel)" }],
+    fullHref: "/finance-os/store-sales", fullLabel: "Open Store Sales & KPI →",
+  },
+  {
     key: "cost-model",
     title: "Fixed, Variable & Labour cost model",
     drives: "The Management Accounts Close accrual review — the expected figure per store × nominal (variance versus actuals).",
@@ -55,12 +63,6 @@ const LIVE = [
 ];
 
 const AWAITING = [
-  {
-    key: "sales",
-    title: "Sales data",
-    drives: "All store sales & KPI reports (trading).",
-    detail: "A self-serve in-app uploader for the weekly/period store-sales export. Today this is loaded outside the app — hand over the column layout and I'll build the uploader.",
-  },
   {
     key: "inventory",
     title: "Inventory",
