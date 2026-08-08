@@ -5,7 +5,7 @@ import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, stockValue, fxToPL,
+  isForeignRow, fxToPL, inventoryCostFx,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
@@ -53,7 +53,7 @@ const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_ra
 // they arrive in Miniso UK's possession.
 const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
 
-export default function ProcurementSummaryUI({ initialRows = [] }) {
+export default function ProcurementSummaryUI({ initialRows = [], costingRate = null }) {
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
   const [source, setSource] = useState("");
@@ -184,14 +184,14 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
   }
 
   function download() {
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Inventory (costing)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const lines = [head.join(",")];
     for (const r of rows) {
-      const sv = stockValue(r), v = fxToPL(r);
+      const sv = inventoryCostFx(r, costingRate), v = fxToPL(r);
       lines.push([
         procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r),
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
@@ -256,7 +256,7 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1320 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (costing)", "Invoice no", "Invoice net", "Status", "Payment", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Invoice no", "Invoice net", "Status", "Payment", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -282,13 +282,13 @@ export default function ProcurementSummaryUI({ initialRows = [] }) {
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
-                            const sv = stockValue(r);
-                            if (sv == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const inv = inventoryCostFx(r, costingRate);
+                            if (inv == null) return <span style={{ color: "var(--faint)" }}>—</span>;
                             const v = fxToPL(r);
                             return (
                               <>
-                                {money(sv)}
-                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>at {(r.stock_rate_type || "costing").toLowerCase()} rate</div>
+                                {money(inv)}
+                                {isForeignRow(r) && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{r.amount_ccy != null ? `${ccyAmt(r.amount_ccy, r.currency)} ` : ""}at costing FX</div>}
                                 {v != null && <div style={{ fontSize: 10.5, marginTop: 2, color: v >= 0 ? "var(--green)" : "var(--red)" }}>FX to P&amp;L {v >= 0 ? "+" : ""}{money(v)}</div>}
                               </>
                             );
