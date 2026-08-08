@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
-import { listProjects, getPortfolio, getProject, getAllocation } from "../../../lib/capex";
 import { PageHeader } from "../../finance-os/ui";
 import CapexWorkspace from "./capex-ui";
+import { loadCapexData } from "./shared";
 
 export const dynamic = "force-dynamic";
 
@@ -31,36 +31,14 @@ export default async function CapexInvestment({ searchParams }) {
     );
   }
 
-  const sp = (await searchParams) || {};
-  const scenario = sp.scenario || "BASE";
-  const fiscalYear = sp.year ? Number(sp.year) : 2026;
-  const view = sp.view === "allocation" ? "allocation" : "portfolio";
-  const selectedId = sp.p || null;
-
-  const [projects, portfolio, allocation] = await Promise.all([
-    listProjects({ scenario }).catch(() => []),
-    getPortfolio({ scenario, fiscalYear }).catch(() => null),
-    getAllocation(fiscalYear).catch(() => null),
-  ]);
-
-  const selected = selectedId ? await getProject(selectedId).catch(() => null) : null;
-
+  const data = await loadCapexData(searchParams);
   const canManage = hasRole(session, "ADMIN", "FINANCE", "EXEC");
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
       <PageHeader crumb="Plan — Finance" title="Capex Investment"
         right="Investment appraisal, the 10-year model and capital allocation across the portfolio" />
-      <CapexWorkspace
-        projects={projects}
-        portfolio={portfolio}
-        allocation={allocation}
-        selected={selected}
-        view={view}
-        scenario={scenario}
-        fiscalYear={fiscalYear}
-        canManage={canManage}
-      />
+      <CapexWorkspace {...data} canManage={canManage} />
     </div>
   );
 }

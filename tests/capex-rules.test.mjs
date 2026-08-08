@@ -76,15 +76,25 @@ test("clearsHurdle compares IRR to the hurdle rate", () => {
 
 test("vocab constants", () => {
   assert.ok(INVESTMENT_TYPES.includes("NEW_STORE"));
-  assert.equal(INVESTMENT_COMPONENTS.length, 12);
-  assert.ok(["rent", "business_rates", "service_charge"].every((k) => INVESTMENT_COMPONENTS.includes(k)));
+  assert.equal(INVESTMENT_COMPONENTS.length, 9);
+  // occupancy components are a model assumption, NOT an investment component
+  assert.ok(["rent", "business_rates", "service_charge"].every((k) => !INVESTMENT_COMPONENTS.includes(k)));
 });
 
-test("occupancy costs count as investment but are excluded from depreciation", () => {
-  const inv = { fit_out: 100000, rent: 20000, business_rates: 5000, service_charge: 3000 };
-  assert.equal(totalInvestment(inv), 128000);
-  // depreciable base excludes rent / business rates / service charge (and inventory + working capital)
-  const m = projectModel({ investment: inv, year1_revenue: 0, gross_margin_pct: 0, depreciation_years: 4, years: 4 });
-  // depreciable = 100,000 (fit-out only) over 4 years → 25,000/yr; occupancy excluded
-  assert.equal(m.rows[0].depreciation, 25000);
+test("occupancy is a recurring annual cost, not upfront investment", () => {
+  const inv = { fit_out: 100000 };
+  // occupancy is excluded from totalInvestment (it's an operating cost, not capex)
+  assert.equal(totalInvestment({ ...inv, rent: 20000, business_rates: 5000, service_charge: 3000 }), 100000);
+  const m = projectModel({
+    investment: inv, rent: 20000, business_rates: 5000, service_charge: 3000,
+    year1_revenue: 500000, gross_margin_pct: 0.6, payroll_pct: 0, opex_pct: 0,
+    depreciation_years: 4, years: 4, tax_rate: 0,
+  });
+  // t0 outflow is fit-out only (100k); occupancy is not in the initial outlay
+  assert.equal(m.fcfSeries[0], -100000);
+  assert.equal(m.rows[0].depreciation, 25000);        // 100k / 4
+  // occupancy = 20k + 5k + 3k = 28k charged above EBITDA every year
+  assert.equal(m.rows[0].occupancy, 28000);
+  assert.equal(m.rows[0].ebitda, 272000);              // 300k GP − 28k occupancy
+  assert.equal(m.rows[3].occupancy, 28000);            // held flat across the horizon
 });
