@@ -4,6 +4,7 @@ import { getProcurement } from "../../../lib/procurement";
 import { getFxRates } from "../../../lib/fx";
 import { listOtbVersions } from "../../../lib/otb";
 import { listMerchRequests } from "../../../lib/otb-procurement";
+import { listSuppliers } from "../../../lib/suppliers";
 import { OTB_CHANNELS, CHANNEL_LABEL } from "../../../lib/otb-rules";
 import { PageHeader } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
@@ -22,10 +23,11 @@ export default async function Procurement({ searchParams }) {
   const canManage = hasRole(session, "ADMIN", "FINANCE", "OPS");
   const roles = { canManage, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin: hasRole(session, "ADMIN") };
   const sp = (await searchParams) || {};
-  const [pr, otbVersions, fxRates] = await Promise.all([
+  const [pr, otbVersions, fxRates, supplierList] = await Promise.all([
     getProcurement(),
     listOtbVersions().catch(() => []),
     getFxRates().catch(() => []),
+    listSuppliers({ activeOnly: true }).catch(() => ({ suppliers: [] })),
   ]);
   // The approved / draft OTB versions a request can be raised against, newest first.
   const versions = (otbVersions || []).filter((v) => v.status !== "ARCHIVED");
@@ -44,7 +46,8 @@ export default async function Procurement({ searchParams }) {
       </div>
       <ProcurementUI data={pr.summary} ready={pr.ready} loaded={pr.loaded} illustrative={pr.illustrative} canManage={canManage}
         orders={pr.orders || []} roles={roles} fxRates={fxRates || []}
-        otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts} />
+        otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts}
+        supplierNames={(supplierList.suppliers || []).map((s) => s.name)} />
     </div>
   );
 }

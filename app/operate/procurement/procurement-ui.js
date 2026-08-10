@@ -38,7 +38,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [] }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [] }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -62,6 +62,8 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
   return (
     <>
+      {/* Shared canonical-supplier suggestions for the free-text supplier inputs. */}
+      <datalist id="fos-suppliers">{supplierNames.map((n) => <option key={n} value={n} />)}</datalist>
       {illustrative && !isMerch && <IllustrativeBanner>These purchases are illustrative — upload the merch team's PO/purchase extract (with supplier payment terms) and the real cash-budget control replaces them.</IllustrativeBanner>}
 
       <div style={{ display: "inline-flex", gap: 3, marginBottom: 20, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
@@ -182,7 +184,7 @@ function AddLine({ source, fxRates = [], onDone }) {
           : <>Enter a purchase directly — no spreadsheet needed. The cash-out month is the order month-end plus the supplier&rsquo;s payment terms.</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
-        <Field label="Supplier"><input required value={f.supplier} onChange={set("supplier")} placeholder={eg.supplier} style={inp} /></Field>
+        <Field label="Supplier"><input required list="fos-suppliers" value={f.supplier} onChange={set("supplier")} placeholder={eg.supplier} style={inp} /></Field>
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
@@ -550,7 +552,7 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
           <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>Enter the channel, supplier and landed-cost detail. The available-OTB preview updates as you type.</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
             <Field label="Channel"><select style={inp} value={f.channel_code} onChange={set("channel_code")}><option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Supplier"><input style={inp} value={f.supplier} onChange={set("supplier")} placeholder="e.g. MINISO HQ" /></Field>
+            <Field label="Supplier"><input style={inp} list="fos-suppliers" value={f.supplier} onChange={set("supplier")} placeholder="e.g. MINISO HQ" /></Field>
             <Field label="Category"><input style={inp} value={f.category} onChange={set("category")} placeholder="e.g. Core range" /></Field>
             <Field label="Amount (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
             <Field label="OTB period"><input placeholder="YYYY-MM" style={inp} value={f.otb_period} onChange={set("otb_period")} /></Field>
