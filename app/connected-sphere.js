@@ -104,41 +104,55 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     }
 
     const STARS = [];
-    for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9 });
+    for (let i = 0; i < 240; i++) {
+      const r = rnd();
+      const col = r < 0.6 ? "247,249,255" : r < 0.82 ? "205,218,255" : r < 0.93 ? GOLD_B : "224,168,214";
+      STARS.push({ x: rnd(), y: rnd(), r: 0.45 + rnd() * 1.5, a: 0.35 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9, col });
+    }
     // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
     // of stars across the sky with a warm central bulge and a dark dust lane, so the
     // sphere floats above the galaxy's horizon. Stars are held in band-local
     // coordinates (u along the plane, v across it) and concentrated toward the
     // centre; a few are cool and blue. Static — a horizon, not a spinning disc.
-    // Star colours along the plane — warm gold and white dominate for elegance,
-    // with reds, oranges and purples scattered as accents (and a few cool blues).
-    const WHITE = "245,247,255", ORANGE = "240,150,80", RED = "216,84,74",
-          PURPLE = "176,120,214", BLUE = "170,198,255";
+    // A Milky-Way region in the style of a long exposure, dialled well back so the
+    // sphere stays the hero: a dense fine starfield (mostly white and pale blue,
+    // warm near the centre), broad mottled clouds of violet/purple/magenta gas with
+    // a warm galactic-centre glow, and irregular dark dust. Stars are held in
+    // band-local coordinates (u along the plane, v across it).
+    const WHITE = "245,247,255", PALEBLUE = "200,214,255",
+          WARM_S = "255,244,224", MAGENTA_S = "224,168,214";
     function bandColor(core) {
       const r = rnd();
-      if (core > 0.62 && r < 0.5) return "255,252,244";        // white-hot in the bulge
-      if (r < 0.40) return GOLD_B;                             // warm gold — dominant
-      if (r < 0.58) return WHITE;
-      if (r < 0.70) return ORANGE;
-      if (r < 0.80) return RED;
-      if (r < 0.90) return PURPLE;
-      return BLUE;
+      if (core > 0.6 && r < 0.42) return WARM_S;               // warm stars near the centre
+      if (r < 0.50) return WHITE;
+      if (r < 0.74) return PALEBLUE;
+      if (r < 0.86) return GOLD_B;
+      if (r < 0.94) return "236,168,96";
+      return MAGENTA_S;
     }
     const BAND = [];
-    for (let i = 0; i < 520; i++) {
+    for (let i = 0; i < 760; i++) {
       const u = rnd() * 2 - 1;                                 // along the plane, -1..1
-      const v = (rnd() + rnd() + rnd() - 1.5) * 0.36;          // gaussian across the plane
-      const core = Math.exp(-(u * u) * 1.6);                   // brighter toward the bulge
-      BAND.push({ u, v, b: (0.35 + rnd() * 0.55) * (0.5 + core * 0.7),
-        sz: 0.4 + rnd() * (Math.abs(v) < 0.25 ? 1.3 : 0.8), col: bandColor(core) });
+      const v = (rnd() + rnd() + rnd() - 1.5) * 0.42;          // gaussian across the plane
+      const core = Math.exp(-(u * u) * 1.4);                   // brighter toward the centre
+      BAND.push({ u, v, b: (0.30 + rnd() * 0.5) * (0.45 + core * 0.7),
+        sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
     }
-    // Emission-nebula clouds strung along the plane — soft coloured haze that gives
-    // the band broad washes of red, orange and purple behind the stars.
-    const CLOUD_COLS = [RED, ORANGE, PURPLE, "233,120,60", "150,110,205", ORANGE, RED];
-    const CLOUDS = [];
-    for (let i = 0; i < 7; i++) {
-      CLOUDS.push({ u: (rnd() * 2 - 1) * 0.86, v: (rnd() * 2 - 1) * 0.3,
-        r: 0.12 + rnd() * 0.16, a: 0.05 + rnd() * 0.05, col: CLOUD_COLS[i] });
+    // Broad nebula gas — violet/purple/magenta/blue washes, warm near the centre.
+    const NEB_COOL = ["150,110,205", "176,120,214", "196,110,180", "110,130,210", "120,110,196"];
+    const NEB_WARM = ["236,196,150", "224,150,96"];
+    const NEBULA = [];
+    for (let i = 0; i < 17; i++) {
+      const u = (rnd() * 2 - 1) * 0.95, v = (rnd() * 2 - 1) * 0.62;
+      const warm = Math.abs(u) < 0.32 && Math.abs(v) < 0.35 && rnd() > 0.4;
+      NEBULA.push({ u, v, r: 0.18 + rnd() * 0.26, a: 0.03 + rnd() * 0.045,
+        col: warm ? NEB_WARM[i % NEB_WARM.length] : NEB_COOL[i % NEB_COOL.length] });
+    }
+    // Irregular dark dust that mottles the band into lanes.
+    const DUST = [];
+    for (let i = 0; i < 11; i++) {
+      DUST.push({ u: (rnd() * 2 - 1) * 0.9, v: (rnd() * 2 - 1) * 0.28,
+        r: 0.08 + rnd() * 0.14, a: 0.12 + rnd() * 0.16 });
     }
     const GAL_ANGLE = -0.13;
 
@@ -176,55 +190,47 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       ctx.clearRect(0, 0, W, H);
 
-      // Edge-on galaxy backdrop — a luminous band with a warm central bulge and a
-      // dark dust lane; the sphere floats in front of it.
+      // Milky-Way backdrop — mottled nebula gas, a warm galactic-centre glow, a
+      // dense starfield and irregular dark dust; the sphere sits in front.
       const gca = Math.cos(GAL_ANGLE), gsa = Math.sin(GAL_ANGLE);
-      const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.85 * W, thick = 0.18 * H;
+      const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.9 * W, thick = 0.30 * H;
+      const maxWH = Math.max(W, H);
+      const toScreen = (u, v) => {
+        const lx = u * halfLen, ly = v * thick;
+        return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
+      };
       ctx.globalCompositeOperation = ADD;
-      // Central bulge — an elongated warm glow along the plane.
-      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE); ctx.scale(1, 0.32);
-      const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.34);
-      bg.addColorStop(0, "rgba(255,250,236,0.5)");
-      bg.addColorStop(0.3, "rgba(" + GOLD_B + ",0.22)");
-      bg.addColorStop(1, "rgba(" + GOLD + ",0)");
-      ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, 0, W * 0.34, 0, 6.283); ctx.fill();
-      ctx.restore();
-      // Coloured nebula clouds behind the stars.
-      for (const c of CLOUDS) {
-        const lx = c.u * halfLen, ly = c.v * thick;
-        const px = bx + lx * gca - ly * gsa, py = by + lx * gsa + ly * gca;
-        const cr = c.r * H * 1.1;
+      // Broad nebula gas — soft overlapping colour washes.
+      for (const c of NEBULA) {
+        const [px, py] = toScreen(c.u, c.v), cr = c.r * maxWH;
         const cg = ctx.createRadialGradient(px, py, 0, px, py, cr);
         cg.addColorStop(0, "rgba(" + c.col + "," + c.a + ")");
+        cg.addColorStop(0.6, "rgba(" + c.col + "," + (c.a * 0.4) + ")");
         cg.addColorStop(1, "rgba(" + c.col + ",0)");
         ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(px, py, cr, 0, 6.283); ctx.fill();
       }
-      // Band haze — two lobes either side of the plane, dimmest along the lane.
-      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE);
-      const hb = ctx.createLinearGradient(0, -thick, 0, thick);
-      hb.addColorStop(0.0, "rgba(" + AMBER + ",0)");
-      hb.addColorStop(0.34, "rgba(" + GOLD_B + ",0.10)");
-      hb.addColorStop(0.5, "rgba(" + GOLD_B + ",0.035)");
-      hb.addColorStop(0.66, "rgba(" + GOLD_B + ",0.10)");
-      hb.addColorStop(1.0, "rgba(" + AMBER + ",0)");
-      ctx.fillStyle = hb; ctx.fillRect(-halfLen, -thick, halfLen * 2, thick * 2);
-      ctx.restore();
-      // Stars strung along the plane.
+      // Warm galactic-centre glow.
+      const [cxg, cyg] = toScreen(0, 0.05);
+      const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
+      coreGas.addColorStop(0, "rgba(255,246,226,0.32)");
+      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.14)");
+      coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
+      ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
+      // Dense starfield strung along the plane.
       for (const p of BAND) {
-        const lx = p.u * halfLen, ly = p.v * thick;
-        const px = bx + lx * gca - ly * gsa, py = by + lx * gsa + ly * gca;
+        const [px, py] = toScreen(p.u, p.v);
         ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
-      // Dark dust lane cutting along the plane, across the bulge.
-      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE);
-      const lane = ctx.createLinearGradient(0, -thick * 0.17, 0, thick * 0.17);
-      lane.addColorStop(0, "rgba(4,4,11,0)");
-      lane.addColorStop(0.5, "rgba(4,4,11,0.5)");
-      lane.addColorStop(1, "rgba(4,4,11,0)");
-      ctx.fillStyle = lane; ctx.fillRect(-halfLen, -thick * 0.17, halfLen * 2, thick * 0.34);
-      ctx.restore();
+      // Irregular dark dust mottling the plane into lanes.
+      for (const d of DUST) {
+        const [px, py] = toScreen(d.u, d.v), dr = d.r * maxWH;
+        const dg = ctx.createRadialGradient(px, py, 0, px, py, dr);
+        dg.addColorStop(0, "rgba(5,5,14," + d.a + ")");
+        dg.addColorStop(1, "rgba(5,5,14,0)");
+        ctx.fillStyle = dg; ctx.beginPath(); ctx.arc(px, py, dr, 0, 6.283); ctx.fill();
+      }
 
       // Stars — a gentle twinkle; a few "newborn" ones carry a soft halo.
       for (const st of STARS) {
@@ -233,13 +239,13 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         if (st.glow) {
           ctx.globalCompositeOperation = ADD;
           const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, st.r * 7);
-          g.addColorStop(0, "rgba(" + GOLD_B + "," + (a * 0.5) + ")");
-          g.addColorStop(1, "rgba(" + GOLD_B + ",0)");
+          g.addColorStop(0, "rgba(" + st.col + "," + (a * 0.5) + ")");
+          g.addColorStop(1, "rgba(" + st.col + ",0)");
           ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, st.r * 7, 0, 6.283); ctx.fill();
           ctx.globalCompositeOperation = "source-over";
         }
         ctx.beginPath(); ctx.arc(sx, sy, st.r, 0, 6.283);
-        ctx.fillStyle = "rgba(" + GOLD_B + "," + a + ")"; ctx.fill();
+        ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
       }
 
       ctx.lineWidth = 1;
