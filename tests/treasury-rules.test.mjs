@@ -3,7 +3,49 @@ import assert from "node:assert/strict";
 import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
+  reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
 } from "../lib/treasury-rules.js";
+
+test("reconcileDcFacility matches LC refs to facility drawings, per DC", () => {
+  const dcs = [
+    { dc_id: 1, purchase_id: 10, dc_reference: "DC UK1233788", dc_value: 200000, currency: "USD", purchase_ref: "LC91" },
+    { dc_id: 2, purchase_id: 10, dc_reference: "DC UK1233789", dc_value: 154000, currency: "USD", purchase_ref: "LC91" },
+  ];
+  const lcs = [
+    { purchase_id: 10, dc_reference: "DC UK1233788", lc_reference: "LAIUK1080844", lc_amount: 154000, lc_settled: false },
+    { purchase_id: 10, dc_reference: "DC UK1233788", lc_reference: "TBC",          lc_amount: 20000,  lc_settled: false }, // placeholder → not on facility
+    { purchase_id: 10, dc_reference: "DC UK1233789", lc_reference: "LAIUK1082310", lc_amount: 154000, lc_settled: false },
+  ];
+  const facility = [
+    { reference: "LAIUK1080844", customer_reference: "LC91A", loan_amount: 154000, outstanding_amount: 154000, due_date: "2027-01-31", status: "Disbursed" },
+    // LAIUK1082310 NOT in the facility extract yet → gap
+  ];
+  const { rows, totals } = reconcileDcFacility(dcs, lcs, facility);
+  const a = rows.find((g) => g.dc_id === 1);
+  assert.equal(a.lcLogged, 174000);          // 154000 + 20000 logged
+  assert.equal(a.facilityDrawn, 154000);     // only the matched LC is drawn
+  assert.equal(a.remaining, 26000);          // 200000 − 174000 (vs logged)
+  assert.equal(a.gap, 20000);                // logged not yet on facility (the TBC)
+  assert.equal(a.onFacilityCount, 1);
+  assert.deepEqual(a.notOnFacility, ["TBC"]); // placeholder LC flagged as not-yet
+  const b = rows.find((g) => g.dc_id === 2);
+  assert.equal(b.facilityDrawn, 0);          // LAIUK1082310 not on facility yet
+  assert.equal(b.notOnFacilityCount, 1);
+  assert.equal(totals.totalValue, 354000);
+  assert.equal(totals.totalDrawn, 154000);
+  assert.equal(totals.notOnFacilityCount, 2);
+});
+
+test("lcOnFacility / isRealLcRef handle placeholders and either match key", () => {
+  const idx = facilityRefIndex([{ reference: "LAIUK1", customer_reference: "CUST-9", loan_amount: 100 }]);
+  assert.ok(lcOnFacility({ lc_reference: "laiuk1" }, idx));      // case-insensitive on reference
+  assert.ok(lcOnFacility({ lc_reference: "cust-9" }, idx));      // matches customer_reference too
+  assert.equal(lcOnFacility({ lc_reference: "NOPE" }, idx), null);
+  assert.equal(lcOnFacility({ lc_reference: "TBC" }, idx), null); // placeholder → null
+  assert.equal(isRealLcRef("TBC"), false);
+  assert.equal(isRealLcRef("LAIUK1080844"), true);
+  assert.equal(normRef("  laiuk 1080844 "), "LAIUK 1080844");
+});
 
 test("facilitySummary rolls drawings by driver, product, currency and month", () => {
   const rows = [

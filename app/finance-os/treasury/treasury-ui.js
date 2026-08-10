@@ -85,7 +85,7 @@ export default function TreasuryUI({ data, canManage }) {
       </div>
 
       {tab === "overview" && <Overview data={data} />}
-      {tab === "facility" && <Facility facility={data.facility} position={data.position} lifecycle={data.lifecycle} />}
+      {tab === "facility" && <Facility facility={data.facility} position={data.position} lifecycle={data.lifecycle} dcRecon={data.dcRecon} />}
       {tab === "loans" && <TermLoans loans={data.loans} canManage={canManage} busy={busy} op={op} />}
       {tab === "hedging" && <Hedging hedging={data.hedging} canManage={canManage} busy={busy} op={op} />}
       {tab === "sales" && <SalesIncome sales={data.sales} canManage={canManage} busy={busy} op={op} />}
@@ -172,7 +172,7 @@ function SplitCard({ title, rows = [] }) {
 }
 
 // ---- Bank trade facility (read-only) ----
-function Facility({ facility, position, lifecycle }) {
+function Facility({ facility, position, lifecycle, dcRecon }) {
   const rows = facility.rows || [];
   const s = facility.summary || {};
   const [driver, setDriver] = useState("");
@@ -214,6 +214,7 @@ function Facility({ facility, position, lifecycle }) {
       </div>
 
       <FacilityPosition position={position} />
+      <DcFacilityRecon dcRecon={dcRecon} />
       <FacilityLifecycle lifecycle={lifecycle} />
 
       <div style={card}>
@@ -280,6 +281,60 @@ function FacilityPosition({ position }) {
           No HSBC facility limit set yet — set it on <Link href="/operate/suppliers" style={{ color: "var(--accent)" }}>Suppliers &amp; Credit</Link> to see headroom.
         </div>
       )}
+    </div>
+  );
+}
+
+// DC ↔ bank trade facility reconciliation. Per DC: value, LCs logged, what HSBC
+// has actually drawn on the facility (matched by LC reference), balance remaining,
+// and which LCs haven't appeared on the facility yet.
+function DcFacilityRecon({ dcRecon }) {
+  const r = dcRecon || {};
+  if (r.ready === false) return null;               // pre-093 — nothing to show
+  const rows = r.rows || [];
+  const t = r.totals || {};
+  if (!rows.length) return null;
+  const ccy = t.currency || "USD";
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 2 }}>DC drawdown vs bank trade facility</div>
+      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14 }}>
+        Each DC&rsquo;s value against what&rsquo;s logged in Procurement and what HSBC has actually drawn on the facility (matched by LC reference). Amounts in {ccy}.
+      </div>
+      <StatRow>
+        <Stat label="DC value" value={ccyMoney(t.totalValue || 0, ccy)} sub={`${t.dcCount || 0} DC${t.dcCount === 1 ? "" : "s"}`} />
+        <Stat label="Logged (LCs)" value={ccyMoney(t.totalLogged || 0, ccy)} />
+        <Stat label="Drawn on facility" value={ccyMoney(t.totalDrawn || 0, ccy)} sub={t.gap ? `${ccyMoney(t.gap, ccy)} not yet drawn` : "fully drawn"} />
+        <Stat label="Balance remaining" value={ccyMoney(t.totalRemaining || 0, ccy)} sub="vs DC value" />
+        <Stat label="LCs not on facility" value={String(t.notOnFacilityCount || 0)} sub="awaiting HSBC" />
+      </StatRow>
+      <div style={{ overflowX: "auto", marginTop: 14 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 900 }}>
+          <thead><tr>
+            {["DC reference", "Request", "LCs", "DC value", "Logged", "Drawn on facility", "Remaining", "Not on facility yet"].map((h, i) => (
+              <th key={h} style={{ ...th, textAlign: i >= 2 && i <= 6 ? "right" : "left" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {rows.map((g) => (
+              <tr key={`${g.purchase_ref}·${g.dc_reference}`}>
+                <td style={td}>{dash(g.dc_reference)}{g.over && <span style={{ color: "var(--red)", marginLeft: 6, fontSize: 11 }}>over value</span>}</td>
+                <td style={td}>{dash(g.purchase_ref)}</td>
+                <td style={tdR}>{g.lcCount}</td>
+                <td style={tdR}>{g.dc_value != null ? ccyMoney(g.dc_value, g.currency) : "—"}</td>
+                <td style={tdR}>{ccyMoney(g.lcLogged, g.currency)}</td>
+                <td style={tdR}>{ccyMoney(g.facilityDrawn, g.currency)}</td>
+                <td style={{ ...tdR, color: g.over ? "var(--red)" : "var(--ink)", fontWeight: 600 }}>{g.remaining != null ? ccyMoney(g.remaining, g.currency) : "—"}</td>
+                <td style={tdR}>
+                  {g.notOnFacilityCount
+                    ? <Badge tone="amber">{g.notOnFacilityCount}: {g.notOnFacility.join(", ")}</Badge>
+                    : <Badge tone="green">all drawn</Badge>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

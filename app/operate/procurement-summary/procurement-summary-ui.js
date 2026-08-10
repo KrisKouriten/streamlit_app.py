@@ -482,7 +482,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}><Badge tone={loan.tone}>{loan.label}</Badge></td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{fmtDate(l.lc_payment_date)}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap", color: l.actual_payment_date ? "var(--ink)" : "var(--faint)" }}>{fmtDate(l.actual_payment_date)}</td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>{l.lc_settled ? <Badge tone="green">Settled {l.lc_settled_date ? fmtDate(l.lc_settled_date) : ""}</Badge> : <Badge tone="amber">Pending</Badge>}</td>
+                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>
+                                            {l.lc_settled ? <Badge tone="green">Settled {l.lc_settled_date ? fmtDate(l.lc_settled_date) : ""}</Badge> : <Badge tone="amber">Pending</Badge>}
+                                            {!l.lc_settled && l.on_facility === false && <span title="This LC reference hasn't appeared on the HSBC bank trade facility yet (Treasury)." style={{ marginLeft: 6 }}><Badge tone="red">Not on facility</Badge></span>}
+                                            {!l.lc_settled && l.on_facility === true && <span title="Matched to a drawing on the HSBC bank trade facility." style={{ marginLeft: 6 }}><Badge tone="green">On facility</Badge></span>}
+                                          </td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", whiteSpace: "nowrap" }}>
                                             <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => openEditLc(l)}>Edit</button>
                                             {!l.lc_settled && <button style={{ ...ghost, marginRight: 6 }} disabled={isBusy} onClick={() => { setEditLc(null); setReconLc(reconLc?.lc_id === l.lc_id ? null : { lc_id: l.lc_id, lc_settled_date: "", lc_settled_amount: l.lc_amount != null ? String(l.lc_amount) : "" }); }}>Reconcile</button>}
