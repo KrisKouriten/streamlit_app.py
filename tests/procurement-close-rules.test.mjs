@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isForeignRow, stockValue, fxToPL, inventoryCostFx } from "../lib/procurement-close-rules.js";
+import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp } from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
@@ -100,6 +100,21 @@ test("FX helpers: foreign flag, stock value, FX to P&L", () => {
   assert.equal(fxToPL({ stock_value_gbp: 10160, amount_gbp: 10000 }), 160);
   assert.equal(fxToPL({ amount_gbp: 10000 }), null);        // not yet valued
   assert.equal(fxToPL({ stock_value_gbp: 9500, amount_gbp: 10000 }), -500);
+});
+
+test("reportBasis defaults to SPOT and normalises", () => {
+  assert.equal(reportBasis({}), "SPOT");
+  assert.equal(reportBasis({ report_rate_type: "hedged" }), "HEDGED");
+  assert.equal(reportBasis({ report_rate_type: "bogus" }), "SPOT");
+});
+
+test("reportedGbp converts at the reporting-basis rate", () => {
+  // $12,700 at a 1.27 spot rate → £10,000; at a 1.30 hedged rate → £9,769.23
+  const row = { currency: "USD", amount_ccy: 12700, amount_gbp: 9800 };
+  assert.equal(reportedGbp(row, 1.27), 10000);
+  assert.equal(Math.round(reportedGbp(row, 1.30) * 100) / 100, 9769.23);
+  assert.equal(reportedGbp({ currency: "GBP", amount_gbp: 5000 }, 1.27), 5000); // GBP passthrough
+  assert.equal(reportedGbp(row, null), 9800); // no rate → fall back to booked GBP
 });
 
 test("inventoryCostFx: £ inventory value at the costing FX rate", () => {

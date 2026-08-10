@@ -5,7 +5,7 @@ import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
@@ -127,6 +127,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   };
   const approve = (r) => op(r.purchase_id, { op: "approve" }, "Approved.");
   const reopen = (r) => op(r.purchase_id, { op: "reopen-finance" }, "Re-opened.");
+  const setReportBasis = (r, basis) => op(r.purchase_id, { op: "set-report-basis", basis }, `Reporting on ${basis === "HEDGED" ? "hedged" : "spot"} rate.`);
 
   function openChallenge(r) {
     setChallengeFor(r.purchase_id);
@@ -184,7 +185,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   }
 
   function download() {
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -195,6 +196,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
       lines.push([
         procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r),
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
+        reportBasis(r), r.report_gbp != null ? r.report_gbp : "",
         sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
         r.finance_status, r.payment_status, r.invoice_number || "", r.invoice_amount != null ? r.invoice_amount : "",
       ].map(esc).join(","));
@@ -350,6 +352,33 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>
                               Miniso HQ inventory settles by {r.lc_bank || LC_BANK_DEFAULT} LC — one request can be split across several LC applications. Log each LC, then reconcile it once it settles. The request is marked paid once every LC has settled.
                             </div>
+
+                            {/* Reporting basis — which FX rate the reported GBP uses on the Procurement / Merchandising views. */}
+                            {isForeignRow(r) && (() => {
+                              const basis = reportBasis(r);
+                              return (
+                                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14, padding: "10px 12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 9 }}>
+                                  <span style={labelSt}>Reporting basis</span>
+                                  <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 9 }}>
+                                    {["SPOT", "HEDGED"].map((b) => {
+                                      const on = basis === b;
+                                      return (
+                                        <button key={b} disabled={isBusy || on} onClick={() => setReportBasis(r, b)} style={{
+                                          fontSize: 12, fontWeight: on ? 650 : 500, padding: "5px 14px", borderRadius: 7, cursor: on ? "default" : "pointer",
+                                          background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+                                          color: on ? "var(--ink)" : "var(--muted)",
+                                        }}>{b === "SPOT" ? "Spot rate" : "Hedged rate"}</button>
+                                      );
+                                    })}
+                                  </div>
+                                  <span style={{ fontSize: 11.5, color: "var(--faint)", lineHeight: 1.5, flex: "1 1 240px", minWidth: 200 }}>
+                                    {r.amount_ccy != null ? `${ccyAmt(r.amount_ccy, r.currency)} reported as ` : "Reported as "}
+                                    <strong style={{ color: "var(--ink)" }}>{r.report_gbp != null ? money(r.report_gbp) : "—"}</strong>
+                                    {" "}at the {basis === "HEDGED" ? "hedged" : "spot"} rate on the Procurement request &amp; Merchandising dashboards. This does not change the recorded cash cost or the costing-FX stock valuation.
+                                  </span>
+                                </div>
+                              );
+                            })()}
 
                             {/* Logged LCs */}
                             {lcs.length > 0 && (
