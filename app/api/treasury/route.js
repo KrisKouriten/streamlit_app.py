@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import {
-  saveTermLoan, deleteTermLoan, saveHedge, deleteHedge, saveSalesIncome, saveCashRecon,
+  saveTermLoan, deleteTermLoan, saveHedge, deleteHedge, saveSalesIncome, saveCashRecon, uploadTradeFacility,
 } from "../../../lib/treasury";
 
 // Treasury desk mutations — term loans, hedging contracts, sales income and store
@@ -21,6 +21,10 @@ export async function POST(request) {
       case "delete-hedge": return NextResponse.json(await deleteHedge(body.id, session));
       case "save-sales": return NextResponse.json(await saveSalesIncome(body.row || {}, session));
       case "save-recon": return NextResponse.json(await saveCashRecon(body.row || {}, session));
+      case "upload-facility": {
+        if (!body.csv?.trim()) return NextResponse.json({ error: "No CSV content" }, { status: 400 });
+        return NextResponse.json(await uploadTradeFacility(body.csv, session));
+      }
       default: return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
   } catch (e) {

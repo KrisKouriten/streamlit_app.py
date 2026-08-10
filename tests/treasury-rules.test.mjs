@@ -4,7 +4,36 @@ import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
   reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
+  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS,
 } from "../lib/treasury-rules.js";
+
+test("parseFacilityCsv maps headers, coerces types, parses UK + ISO dates", () => {
+  const csv = [
+    "Reference,Beneficiary,Customer Reference,Currency,Loan Amount,Outstanding,Due Date,Start Date,Product,Cost Driver,Settlement Month,Facility GBP,Days",
+    "LAIUK1080844,Miniso,LC91A,USD,\"154,000.00\",154000,31/01/2027,2026-07-15,Post-shipment buyer loan,Miniso LC's,2027-01,\"£114,000\",180",
+  ].join("\n");
+  const { rows, errors } = parseFacilityCsv(csv);
+  assert.equal(errors.length, 0);
+  assert.equal(rows.length, 1);
+  const r = rows[0];
+  assert.equal(r.reference, "LAIUK1080844");
+  assert.equal(r.customer_reference, "LC91A");
+  assert.equal(r.payment_currency, "USD");
+  assert.equal(r.loan_amount, 154000);
+  assert.equal(r.due_date, "2027-01-31");       // DD/MM/YYYY → ISO
+  assert.equal(r.loan_start_date, "2026-07-15"); // ISO passthrough
+  assert.equal(r.payment_month, "2027-01-01");   // YYYY-MM → first of month
+  assert.equal(r.facility_payment_gbp, 114000);  // £ + comma stripped
+  assert.equal(r.loan_period_days, 180);
+});
+
+test("parseFacilityCsv requires a reference column and flags duplicates", () => {
+  assert.ok(parseFacilityCsv("Beneficiary,Amount\nMiniso,100").errors[0].includes("reference"));
+  const dup = parseFacilityCsv("reference,loan_amount\nLAIUK1,100\nLAIUK1,200");
+  assert.equal(dup.rows.length, 1);
+  assert.ok(dup.errors.some((e) => e.includes("duplicate")));
+  assert.ok(FACILITY_UPLOAD_COLUMNS.includes("reference"));
+});
 
 test("reconcileDcFacility matches LC refs to facility drawings, per DC", () => {
   const dcs = [
