@@ -100,10 +100,15 @@ function Overview({ data }) {
   const h = data.hedging.summary || {};
   const s = data.sales.summary || {};
   const r = data.recon.summary || {};
+  const p = data.position || null;
+  const pHasLimit = p && p.limit != null;
   return (
     <div>
       <StatRow>
         <Stat label="Trade facility drawn" value={money(f.totalGbp || 0, { compact: true })} sub={`${f.drawings || 0} drawings`} />
+        <Stat label="Facility headroom" value={pHasLimit ? money(p.headroom, { compact: true }) : "—"}
+          tone={p?.over ? "red" : undefined}
+          sub={pHasLimit ? (p.over ? "over facility limit" : `${pct(p.utilisation)} utilised`) : "limit not set"} />
         <Stat label="Term loan balance" value={money(l.balance || 0, { compact: true })} sub={l.count ? `${l.count} facilities · ${l.weightedRate}%` : "none recorded"} />
         <Stat label="Hedging net MtM" value={money(h.netMtmGbp || 0, { compact: true })} sub={`${h.openCount || 0} open`} tone={(h.netMtmGbp || 0) < 0 ? "red" : undefined} />
         <Stat label="Sales income invoiced" value={money(s.invoiced || 0, { compact: true })} sub={`${money(s.outstanding || 0, { compact: true })} outstanding`} />
