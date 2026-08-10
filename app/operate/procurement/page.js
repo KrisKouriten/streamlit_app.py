@@ -47,7 +47,8 @@ export default async function Procurement({ searchParams }) {
       <ProcurementUI data={pr.summary} ready={pr.ready} loaded={pr.loaded} illustrative={pr.illustrative} canManage={canManage}
         orders={pr.orders || []} roles={roles} fxRates={fxRates || []}
         otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts}
-        supplierNames={(supplierList.suppliers || []).map((s) => s.name)} />
+        supplierNames={(supplierList.suppliers || []).map((s) => s.name)}
+        suppliers={(supplierList.suppliers || []).map((s) => ({ name: s.name, source_type: s.source_type, payment_days: s.payment_days }))} />
     </div>
   );
 }

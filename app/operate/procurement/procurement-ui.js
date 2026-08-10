@@ -38,7 +38,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [] }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [], suppliers = [] }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -80,7 +80,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
       {isFx ? (
         <FxPanel rates={fxRates} isFinance={roles.isFinance} onErr={setErr} onDone={() => router.refresh()} />
       ) : isMerch ? (
-        <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} />
+        <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} suppliers={suppliers} />
       ) : (
       <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
@@ -129,7 +129,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
-          <AddLine source={tab} fxRates={fxRates} onDone={() => router.refresh()} />
+          <AddLine source={tab} fxRates={fxRates} suppliers={suppliers} onDone={() => router.refresh()} />
           <Upload onDone={() => router.refresh()} />
         </Panel>
       )}
@@ -149,7 +149,7 @@ function Field({ label, children }) {
 
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
 // in the placeholders so it's obvious what each field wants.
-function AddLine({ source, fxRates = [], onDone }) {
+function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
   const isMiniso = source === "MINISO";
   // Miniso HQ raises in USD; local suppliers in GBP.
   const defaultCcy = isMiniso ? "USD" : "GBP";
@@ -158,6 +158,18 @@ function AddLine({ source, fxRates = [], onDone }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  // Supplier is chosen from the master (keeps names consistent). The Miniso tab
+  // lists MINISO-classified suppliers; the Local tab lists everything else. If
+  // none match yet, fall back to the whole list so the picker is never empty.
+  const bySource = suppliers.filter((sp) => (isMiniso ? sp.source_type === "MINISO" : sp.source_type !== "MINISO"));
+  const supplierOpts = bySource.length ? bySource : suppliers;
+  // Picking a supplier pre-fills the payment terms from the master (Local only —
+  // Miniso HQ is fixed 180-day from pickup).
+  function pickSupplier(e) {
+    const name = e.target.value;
+    const sup = suppliers.find((sp) => sp.name === name);
+    setF((p) => ({ ...p, supplier: name, terms_days: !isMiniso && sup && sup.payment_days != null ? String(sup.payment_days) : p.terms_days }));
+  }
   const foreign = isForeignCurrency(f.currency);
   const spot = findRate(fxRates, f.currency, "SPOT");
   const gbpPreview = foreign ? convertToGbp(f.amount_gbp, spot) : null;
@@ -184,7 +196,12 @@ function AddLine({ source, fxRates = [], onDone }) {
           : <>Enter a purchase directly — no spreadsheet needed. The cash-out month is the order month-end plus the supplier&rsquo;s payment terms.</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
-        <Field label="Supplier"><input required list="fos-suppliers" value={f.supplier} onChange={set("supplier")} placeholder={eg.supplier} style={inp} /></Field>
+        <Field label="Supplier">
+          <select required value={f.supplier} onChange={pickSupplier} style={inp}>
+            <option value="">{supplierOpts.length ? "— choose supplier —" : "No suppliers — add on Suppliers & Credit"}</option>
+            {supplierOpts.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
+          </select>
+        </Field>
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
@@ -477,7 +494,7 @@ function Upload({ onDone }) {
    it is validated live against the approved Open-to-Buy before it becomes a
    commitment, then moves through merch → OTB → finance review and can generate a
    formal P.O without rekeying. */
-function MerchRequests({ otbVersions = [], activeVersionId = null, requests = [], channelOpts = [], canManage }) {
+function MerchRequests({ otbVersions = [], activeVersionId = null, requests = [], channelOpts = [], canManage, suppliers = [] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -552,7 +569,12 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
           <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>Enter the channel, supplier and landed-cost detail. The available-OTB preview updates as you type.</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
             <Field label="Channel"><select style={inp} value={f.channel_code} onChange={set("channel_code")}><option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Supplier"><input style={inp} list="fos-suppliers" value={f.supplier} onChange={set("supplier")} placeholder="e.g. MINISO HQ" /></Field>
+            <Field label="Supplier">
+              <select style={inp} value={f.supplier} onChange={set("supplier")}>
+                <option value="">{suppliers.length ? "— choose supplier —" : "No suppliers — add on Suppliers & Credit"}</option>
+                {suppliers.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
+              </select>
+            </Field>
             <Field label="Category"><input style={inp} value={f.category} onChange={set("category")} placeholder="e.g. Core range" /></Field>
             <Field label="Amount (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
             <Field label="OTB period"><input placeholder="YYYY-MM" style={inp} value={f.otb_period} onChange={set("otb_period")} /></Field>
