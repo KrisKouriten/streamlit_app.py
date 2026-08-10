@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { money, StatRow, Stat, Badge } from "../ui";
-import { SALES_STREAMS, cashReconVariance, cashReconStatus } from "../../../lib/treasury-rules";
+import Link from "next/link";
+import { money, pct, StatRow, Stat, Badge } from "../ui";
+import { SALES_STREAMS, LC_STAGES, cashReconVariance, cashReconStatus } from "../../../lib/treasury-rules";
 
 /*
  * Treasury desk. Six tabs: an overview, the seeded HSBC bank trade facility, the
@@ -28,6 +29,7 @@ const TABS = [
   ["sales", "Sales income"],
   ["recon", "Store cash rec."],
 ];
+const LC_TONE = Object.fromEntries(LC_STAGES.map((s) => [s.code, s.tone]));
 const mLabel = (m) => {
   if (!m) return "—";
   const s = typeof m === "string" ? m : (m instanceof Date ? m.toISOString() : String(m));
@@ -35,6 +37,16 @@ const mLabel = (m) => {
   return x ? new Date(Date.UTC(+x[1], +x[2] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "—";
 };
 const dLabel = (d) => { if (!d) return "—"; const x = new Date(d); return isNaN(x) ? d : x.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); };
+const dash = (v) => (v == null || v === "" ? "—" : v);
+// LC amounts are held in the order's own currency — render with the right symbol/code.
+const CCY_SYM = { GBP: "£", USD: "$", EUR: "€", CNY: "¥", RMB: "¥", HKD: "HK$", JPY: "¥" };
+const ccyMoney = (n, ccy) => {
+  if (n == null || n === "") return "—";
+  const code = String(ccy || "").toUpperCase();
+  const sym = CCY_SYM[code];
+  const v = Math.round(Number(n)).toLocaleString("en-GB");
+  return sym ? `${sym}${v}` : `${v}${code ? ` ${code}` : ""}`;
+};
 
 export default function TreasuryUI({ data, canManage }) {
   const router = useRouter();
@@ -73,7 +85,7 @@ export default function TreasuryUI({ data, canManage }) {
       </div>
 
       {tab === "overview" && <Overview data={data} />}
-      {tab === "facility" && <Facility facility={data.facility} />}
+      {tab === "facility" && <Facility facility={data.facility} position={data.position} lifecycle={data.lifecycle} />}
       {tab === "loans" && <TermLoans loans={data.loans} canManage={canManage} busy={busy} op={op} />}
       {tab === "hedging" && <Hedging hedging={data.hedging} canManage={canManage} busy={busy} op={op} />}
       {tab === "sales" && <SalesIncome sales={data.sales} canManage={canManage} busy={busy} op={op} />}
@@ -155,7 +167,7 @@ function SplitCard({ title, rows = [] }) {
 }
 
 // ---- Bank trade facility (read-only) ----
-function Facility({ facility }) {
+function Facility({ facility, position, lifecycle }) {
   const rows = facility.rows || [];
   const s = facility.summary || {};
   const [driver, setDriver] = useState("");
@@ -196,6 +208,9 @@ function Facility({ facility }) {
         <SplitCard title="By currency" rows={s.byCurrency} />
       </div>
 
+      <FacilityPosition position={position} />
+      <FacilityLifecycle lifecycle={lifecycle} />
+
       <div style={card}>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
           <span style={{ fontSize: 15, fontWeight: 650 }}>Drawings</span>
@@ -233,6 +248,93 @@ function Facility({ facility }) {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// HSBC facility limit vs total GBP drawings — headroom & utilisation.
+function FacilityPosition({ position }) {
+  const p = position || {};
+  const hasLimit = p.limit != null;
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 15, fontWeight: 650 }}>HSBC facility position</span>
+        {p.over && <Badge tone="red">Over facility limit</Badge>}
+        {!p.over && p.near && <Badge tone="amber">Near limit</Badge>}
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--faint)" }}>Limit vs total GBP drawings</span>
+      </div>
+      <StatRow>
+        <Stat label="Facility limit" value={hasLimit ? money(p.limit, { compact: true }) : "Not set"} sub={hasLimit ? "HSBC ceiling" : "Set it on Suppliers & Credit"} />
+        <Stat label="Drawn" value={money(p.exposure || 0, { compact: true })} sub="GBP-equivalent drawings" />
+        <Stat label="Headroom" value={hasLimit ? money(p.headroom, { compact: true }) : "—"} tone={p.over ? "red" : undefined} sub={p.over ? "over limit" : hasLimit ? "available" : ""} />
+        <Stat label="Utilisation" value={p.utilisation != null ? pct(p.utilisation) : "—"} tone={p.over ? "red" : p.near ? "amber" : undefined} />
+      </StatRow>
+      {!hasLimit && (
+        <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: -14 }}>
+          No HSBC facility limit set yet — set it on <Link href="/operate/suppliers" style={{ color: "var(--accent)" }}>Suppliers &amp; Credit</Link> to see headroom.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// DC → LC → post-shipment loan lifecycle (Miniso imports), read-only.
+function FacilityLifecycle({ lifecycle }) {
+  const lc = lifecycle || {};
+  const lcRows = lc.rows || [];
+  const sum = lc.summary || {};
+  const byStage = sum.byStage || {};
+  const openByCcy = sum.openByCcy || {};
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 2 }}>DC → LC → Loan lifecycle</div>
+      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14 }}>Import LCs from Procurement, by pipeline stage — from DC logged through to settled.</div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+        {LC_STAGES.map((st) => (
+          <Badge key={st.code} tone={st.tone}>{st.label} · {byStage[st.code] || 0}</Badge>
+        ))}
+        <span style={{ width: 1, height: 16, background: "var(--line)", margin: "0 2px" }} />
+        <Badge tone="muted">{sum.openCount || 0} open</Badge>
+        <Badge tone="green">{sum.settledCount || 0} settled</Badge>
+        {Object.entries(openByCcy).map(([ccy, amt]) => (
+          <span key={ccy} style={{ fontSize: 12, color: "var(--muted)" }}>{ccyMoney(amt, ccy)} {ccy} open</span>
+        ))}
+      </div>
+
+      {!lcRows.length ? (
+        <div style={{ fontSize: 13, color: "var(--faint)" }}>No LCs logged yet — log them on Procurement Summary → Manage LC.</div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 1040 }}>
+            <thead><tr>
+              {["Reference", "Supplier", "Bank", "Ccy", "LC amount", "Stage", "Confirmed", "Goods arrived", "Drawn", "Settled"].map((h, i) => (
+                <th key={h} style={{ ...th, textAlign: i === 4 ? "right" : "left" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {lcRows.map((r) => (
+                <tr key={r.lc_id}>
+                  <td style={td}>
+                    <div>{dash(r.lc_reference)}</div>
+                    {r.dc_reference && <div style={{ fontSize: 11, color: "var(--faint)" }}>DC: {r.dc_reference}</div>}
+                  </td>
+                  <td style={{ ...td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{dash(r.supplier)}</td>
+                  <td style={td}>{dash(r.lc_bank)}</td>
+                  <td style={td}>{dash(r.currency)}</td>
+                  <td style={tdR}>{ccyMoney(r.lc_amount, r.currency)}</td>
+                  <td style={td}><Badge tone={LC_TONE[r.stage] || "muted"}>{r.stageLabel}</Badge></td>
+                  <td style={td}>{dash(r.lc_confirmed_date)}</td>
+                  <td style={td}>{dash(r.goods_arrived_date)}</td>
+                  <td style={td}>{dash(r.actual_payment_date)}</td>
+                  <td style={td}>{r.lc_settled_date ? r.lc_settled_date : (r.lc_settled_amount != null ? ccyMoney(r.lc_settled_amount, r.currency) : "—")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
