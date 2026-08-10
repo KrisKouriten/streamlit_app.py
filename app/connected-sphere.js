@@ -138,16 +138,6 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       BAND.push({ u, v, b: (0.30 + rnd() * 0.5) * (0.45 + core * 0.7),
         sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
     }
-    // Broad nebula gas — violet/purple/magenta/blue washes, warm near the centre.
-    const NEB_COOL = ["150,110,205", "168,116,214", "138,102,206", "196,110,180", "120,120,214"];
-    const NEB_WARM = ["236,196,150", "224,150,96"];
-    const NEBULA = [];
-    for (let i = 0; i < 22; i++) {
-      const u = (rnd() * 2 - 1) * 1.0, v = (rnd() * 2 - 1) * 0.72;
-      const warm = Math.abs(u) < 0.32 && Math.abs(v) < 0.35 && rnd() > 0.45;
-      NEBULA.push({ u, v, r: 0.22 + rnd() * 0.32, a: 0.05 + rnd() * 0.085,
-        col: warm ? NEB_WARM[i % NEB_WARM.length] : NEB_COOL[i % NEB_COOL.length] });
-    }
     const GAL_ANGLE = -0.13;
 
     const WIRE = [];
@@ -188,27 +178,11 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       // dense starfield and irregular dark dust; the sphere sits in front.
       const gca = Math.cos(GAL_ANGLE), gsa = Math.sin(GAL_ANGLE);
       const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.9 * W, thick = 0.30 * H;
-      const maxWH = Math.max(W, H);
       const toScreen = (u, v) => {
         const lx = u * halfLen, ly = v * thick;
         return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
       };
       ctx.globalCompositeOperation = ADD;
-      // Broad violet wash across the field — the pervasive haze of the photo.
-      const wash = ctx.createRadialGradient(W * 0.44, H * 0.34, 0, W * 0.44, H * 0.34, maxWH * 0.8);
-      wash.addColorStop(0, "rgba(150,120,205,0.10)");
-      wash.addColorStop(0.5, "rgba(130,110,200,0.05)");
-      wash.addColorStop(1, "rgba(120,110,196,0)");
-      ctx.fillStyle = wash; ctx.beginPath(); ctx.arc(W * 0.44, H * 0.34, maxWH * 0.8, 0, 6.283); ctx.fill();
-      // Broad nebula gas — soft overlapping colour washes.
-      for (const c of NEBULA) {
-        const [px, py] = toScreen(c.u, c.v), cr = c.r * maxWH;
-        const cg = ctx.createRadialGradient(px, py, 0, px, py, cr);
-        cg.addColorStop(0, "rgba(" + c.col + "," + c.a + ")");
-        cg.addColorStop(0.6, "rgba(" + c.col + "," + (c.a * 0.4) + ")");
-        cg.addColorStop(1, "rgba(" + c.col + ",0)");
-        ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(px, py, cr, 0, 6.283); ctx.fill();
-      }
       // Warm galactic-centre glow.
       const [cxg, cyg] = toScreen(0, 0.05);
       const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
