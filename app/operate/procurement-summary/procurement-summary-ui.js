@@ -53,7 +53,15 @@ const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_ra
 // they arrive in Miniso UK's possession.
 const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
 
-export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, facilityCustomerRefs = [] }) {
+export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, facilityRefs = [] }) {
+  // LC/bank reference → customer reference, from the HSBC facility. Used to
+  // auto-fill an LC's customer reference from the LC reference the user keys.
+  const custByRef = useMemo(() => {
+    const m = new Map();
+    for (const f of facilityRefs) { const k = String(f.reference || "").trim().toUpperCase(); if (k) m.set(k, f.customer_reference); }
+    return m;
+  }, [facilityRefs]);
+  const custForRef = (lcRef) => custByRef.get(String(lcRef || "").trim().toUpperCase()) || "";
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
   const [source, setSource] = useState("");
@@ -236,10 +244,6 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
 
   return (
     <div>
-      {/* Customer references from the HSBC facility — suggested on the LC forms
-          so the customer reference matches the extract exactly (still typeable
-          for a drawing HSBC hasn't reflected yet). */}
-      <datalist id="fos-facility-custrefs">{facilityCustomerRefs.map((c) => <option key={c} value={c} />)}</datalist>
       {/* ---- Stats ---- */}
       <StatRow>
         <Stat label="Pending approval" value={stats.pending} />
@@ -506,8 +510,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                             <div style={{ fontSize: 11.5, fontWeight: 650, marginBottom: 8 }}>Edit LC {l.lc_reference}</div>
                                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                               <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)}><option value="">— none —</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
-                                              <Field label="Customer ref (HSBC)"><input list="fos-facility-custrefs" style={{ ...inputSt, width: "100%" }} value={editLc.customer_reference} onChange={(e) => editField("customer_reference", e.target.value)} placeholder="pick or type — matches HSBC" /></Field>
-                                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => editField("lc_reference", e.target.value)} /></Field>
+                                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => { const v = e.target.value; const c = custForRef(v); setEditLc((s) => ({ ...s, lc_reference: v, ...(c ? { customer_reference: c } : {}) })); }} placeholder="key the LAIUK… reference" /></Field>
+                                              <Field label="Customer ref (HSBC)"><input style={{ ...inputSt, width: "100%" }} value={editLc.customer_reference} onChange={(e) => editField("customer_reference", e.target.value)} placeholder="auto-fills from LC ref" /></Field>
                                               <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
                                               <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_bank} onChange={(e) => editField("lc_bank", e.target.value)} /></Field>
                                               <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_confirmed_date} onChange={(e) => editField("lc_confirmed_date", e.target.value)} /></Field>
@@ -546,8 +550,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                 <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Add {lcs.length ? "another" : "an"} LC</div>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                   <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)}><option value="">{(r.dcs || []).length ? "— none —" : "— add a DC above —"}</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
-                                  <Field label="Customer ref (HSBC)"><input list="fos-facility-custrefs" style={{ ...inputSt, width: "100%" }} placeholder="pick or type — matches HSBC" value={lcForm[id]?.customer_reference || ""} onChange={(e) => setLcField(id, "customer_reference", e.target.value)} /></Field>
-                                  <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. HSBC-LC-2026-014" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} /></Field>
+                                  <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="key the LAIUK… reference" value={lcForm[id]?.lc_reference || ""} onChange={(e) => { const v = e.target.value; const c = custForRef(v); setLcForm((s) => ({ ...s, [id]: { ...s[id], lc_reference: v, ...(c ? { customer_reference: c } : {}) } })); }} /></Field>
+                                  <Field label="Customer ref (HSBC)"><input style={{ ...inputSt, width: "100%" }} placeholder="auto-fills from LC ref" value={lcForm[id]?.customer_reference || ""} onChange={(e) => setLcField(id, "customer_reference", e.target.value)} /></Field>
                                   <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
                                   <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} /></Field>
                                   <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_confirmed_date || ""} onChange={(e) => setLcField(id, "lc_confirmed_date", e.target.value)} /></Field>
