@@ -76,7 +76,7 @@ export default function LoginPage() {
   const lbl = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, letterSpacing: ".11em", textTransform: "uppercase", color: "var(--faint)", display: "block", marginBottom: 7 };
 
   return (
-    <div style={{ minHeight: "100vh", position: "relative", overflow: "hidden", color: "var(--ink)",
+    <div className="fos-force-dark" style={{ minHeight: "100vh", position: "relative", overflow: "hidden", color: "var(--ink)",
       background: "radial-gradient(120% 90% at 50% 46%, rgba(164,134,63,0.16), transparent 60%), linear-gradient(180deg, #0d0c0a 0%, #12100b 55%, #0d0c0a 100%)" }}>
 
       {/* the connected sphere — the whole concept, live */}

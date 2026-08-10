@@ -55,6 +55,18 @@ const css = `
   --glass:rgba(255,254,250,.66); --glass-line:rgba(28,27,23,.09);
   --grain-opacity:.02;
 }
+/* Always-dark surfaces (the login marquee / orbital doorway) pin the dark palette
+   locally, so their text stays legible even when the app is set to light theme —
+   set on the element itself, this wins over the inherited [data-theme="light"] tokens. */
+.fos-force-dark{
+  --bg:#0d0c0a; --surface:#151412; --raise:#1c1a16; --overlay:rgba(21,20,18,.72);
+  --line:#282520; --line-strong:#3b372e; --hairline:rgba(255,255,255,.055);
+  --ink:#f4f2eb; --muted:#a8a398; --faint:#716c60;
+  --accent:#d2c775; --accent-deep:#5d5d23; --accent-bg:#27250f; --accent-ink:#16150a;
+  --green:#a7c96e; --green-bg:#1e2a10; --amber:#e2a63b; --amber-bg:#32260a;
+  --red:#e28d80; --red-bg:#392019;
+  --glass:rgba(23,22,19,.6); --glass-line:rgba(255,255,255,.08);
+}
 html{scrollbar-gutter:stable}
 html,body{background:var(--bg);color:var(--ink);font-family:var(--sans);
   -webkit-font-smoothing:antialiased;line-height:1.5;letter-spacing:-0.008em}
