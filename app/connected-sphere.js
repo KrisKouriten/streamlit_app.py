@@ -109,6 +109,21 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       const col = r < 0.6 ? "247,249,255" : r < 0.82 ? "205,218,255" : r < 0.93 ? GOLD_B : "224,168,214";
       STARS.push({ x: rnd(), y: rnd(), r: 0.45 + rnd() * 1.5, a: 0.35 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9, col });
     }
+    // A cheeky shooting star now and then — each recurs on its own long period with
+    // a short bright dash (head + fading tail), staggered so they never cluster.
+    const METEORS = [];
+    for (let i = 0; i < 3; i++) {
+      METEORS.push({
+        period: 10 + rnd() * 10,        // seconds between appearances
+        t0: rnd() * 18,                 // initial stagger
+        dur: 0.8 + rnd() * 0.5,         // seconds visible
+        x: rnd() * 0.55, y: 0.03 + rnd() * 0.32,   // start (upper sky), fractions
+        ang: 0.35 + rnd() * 0.35,       // downward-right angle
+        len: 0.13 + rnd() * 0.1,        // tail length (fraction of max(W,H))
+        reach: 0.55 + rnd() * 0.3,      // travel distance (fraction of max(W,H))
+        col: rnd() > 0.5 ? GOLD_B : "245,247,255",
+      });
+    }
     // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
     // of stars across the sky with a warm central bulge and a dark dust lane, so the
     // sphere floats above the galaxy's horizon. Stars are held in band-local
@@ -212,6 +227,31 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         }
         ctx.beginPath(); ctx.arc(sx, sy, st.r, 0, 6.283);
         ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
+      }
+
+      // Shooting stars — occasional streaks across the sky behind the sphere.
+      if (!reduce) {
+        const mW = Math.max(W, H);
+        ctx.globalCompositeOperation = ADD;
+        ctx.lineCap = "round";
+        for (const m of METEORS) {
+          const lt = (((time - m.t0) % m.period) + m.period) % m.period;
+          if (lt > m.dur) continue;
+          const p = lt / m.dur, fade = Math.sin(p * Math.PI);
+          const dx = Math.cos(m.ang), dy = Math.sin(m.ang), travel = m.reach * mW;
+          const hx = m.x * W + dx * travel * p, hy = m.y * H + dy * travel * p;
+          const tl = m.len * mW, tx = hx - dx * tl, ty = hy - dy * tl;
+          const gr = ctx.createLinearGradient(hx, hy, tx, ty);
+          gr.addColorStop(0, "rgba(" + m.col + "," + (0.9 * fade) + ")");
+          gr.addColorStop(1, "rgba(" + m.col + ",0)");
+          ctx.strokeStyle = gr; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+          const hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, 3.4);
+          hg.addColorStop(0, "rgba(255,255,255," + (0.95 * fade) + ")");
+          hg.addColorStop(1, "rgba(" + m.col + ",0)");
+          ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(hx, hy, 3.4, 0, 6.283); ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
       }
 
       ctx.lineWidth = 1;
