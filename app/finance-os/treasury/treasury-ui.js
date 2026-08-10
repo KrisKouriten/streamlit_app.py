@@ -329,7 +329,7 @@ function DcFacilityRecon({ dcRecon }) {
     <div style={card}>
       <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 2 }}>DC drawdown vs bank trade facility</div>
       <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14 }}>
-        Each DC&rsquo;s value against what&rsquo;s logged in Procurement and what HSBC has actually drawn on the facility (matched on the customer reference). Amounts in {ccy}.
+        Each DC&rsquo;s value against what&rsquo;s logged in Procurement and what HSBC has actually drawn on the facility (matched on the LC reference). Amounts in {ccy}.
       </div>
       <StatRow>
         <Stat label="DC value" value={ccyMoney(t.totalValue || 0, ccy)} sub={`${t.dcCount || 0} DC${t.dcCount === 1 ? "" : "s"}`} />
@@ -337,7 +337,6 @@ function DcFacilityRecon({ dcRecon }) {
         <Stat label="Drawn on facility" value={ccyMoney(t.totalDrawn || 0, ccy)} sub={t.gap ? `${ccyMoney(t.gap, ccy)} not yet drawn` : "fully drawn"} />
         <Stat label="Balance remaining" value={ccyMoney(t.totalRemaining || 0, ccy)} sub="vs DC value" />
         <Stat label="LCs not on facility" value={String(t.notOnFacilityCount || 0)} sub="awaiting HSBC" />
-        <Stat label="Value mismatches" value={String(t.mismatchCount || 0)} tone={t.mismatchCount ? "red" : undefined} sub="LC ≠ facility" />
       </StatRow>
       <div style={{ overflowX: "auto", marginTop: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 900 }}>
@@ -360,7 +359,6 @@ function DcFacilityRecon({ dcRecon }) {
                   {g.notOnFacilityCount
                     ? <Badge tone="amber">{g.notOnFacilityCount}: {g.notOnFacility.join(", ")}</Badge>
                     : <Badge tone="green">all drawn</Badge>}
-                  {g.mismatchCount > 0 && <span style={{ marginLeft: 6 }}><Badge tone="red">{g.mismatchCount} value ≠</Badge></span>}
                 </td>
               </tr>
             ))}
@@ -375,16 +373,17 @@ function DcFacilityRecon({ dcRecon }) {
             {orphans.length} facility drawing{orphans.length === 1 ? "" : "s"} not found in Procurement
           </div>
           <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
-            On the HSBC facility but no LC logged against the customer reference — log the LC in Procurement to reconcile.
+            On the HSBC facility but no LC logged against the reference — add the missing DC/LC in Procurement to reconcile.
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead><tr>{["Bank reference", "Customer reference", "Amount", "Due", "Status"].map((h, i) => (
-                <th key={h} style={{ ...th, textAlign: i === 2 ? "right" : "left" }}>{h}</th>))}</tr></thead>
+              <thead><tr>{["Bank reference", "Beneficiary", "Customer reference", "Amount", "Due", "Status"].map((h, i) => (
+                <th key={h} style={{ ...th, textAlign: i === 3 ? "right" : "left" }}>{h}</th>))}</tr></thead>
               <tbody>
                 {orphans.map((o) => (
                   <tr key={o.reference}>
                     <td style={td}>{dash(o.reference)}</td>
+                    <td style={td}>{dash(o.beneficiary)}</td>
                     <td style={td}>{dash(o.customer_reference)}</td>
                     <td style={tdR}>{o.loan_amount != null ? ccyMoney(o.loan_amount, o.loan_currency || ccy) : "—"}</td>
                     <td style={td}>{dash(o.due_date)}</td>
