@@ -104,7 +104,19 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     }
 
     const STARS = [];
-    for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55 });
+    for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9 });
+    // A stylised spiral galaxy behind the sphere — warm core bulge, two logarithmic
+    // arms, a few cool young stars in the arms. Deterministic geometry (fraction of
+    // the disc radius + angle); drawn tilted and turning very slowly, low alpha so
+    // the sphere sits clearly in front of it.
+    const GALAXY = [];
+    for (let i = 0; i < 640; i++) {
+      const rr = Math.pow(rnd(), 0.62);                       // denser toward the core
+      const th = (i % 2) * Math.PI + rr * 3.3 * (Math.PI * 2) + (rnd() - 0.5) * 0.55 * (1.15 - rr);
+      GALAXY.push({ rr: rr + (rnd() - 0.5) * 0.05, th, b: (1 - rr) * 0.6 + 0.12,
+        sz: 0.5 + rnd() * (rr < 0.2 ? 1.3 : 0.9), cool: rnd() > 0.82 && rr > 0.35 });
+    }
+    const GAL_INCL = -0.5, GAL_SQUASH = 0.42, GAL_CX = 0.66, GAL_CY = 0.36;
 
     const WIRE = [];
     for (let li = 1; li < 6; li++) {
@@ -140,9 +152,50 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       ctx.clearRect(0, 0, W, H);
 
+      // Spiral galaxy backdrop — the sphere sits in front of it.
+      const maxWH = Math.max(W, H);
+      const gx = GAL_CX * W, gy = GAL_CY * H, Rg = 0.62 * maxWH;
+      const rot = reduce ? 0 : time * 0.018;
+      const ci = Math.cos(GAL_INCL), si = Math.sin(GAL_INCL);
+      ctx.globalCompositeOperation = ADD;
+      // Disc haze — a soft tilted ellipse.
+      ctx.save(); ctx.translate(gx, gy); ctx.rotate(GAL_INCL); ctx.scale(1, GAL_SQUASH);
+      const hz = ctx.createRadialGradient(0, 0, 0, 0, 0, Rg);
+      hz.addColorStop(0, "rgba(" + GOLD_B + ",0.13)");
+      hz.addColorStop(0.4, "rgba(" + AMBER + ",0.05)");
+      hz.addColorStop(1, "rgba(" + AMBER + ",0)");
+      ctx.fillStyle = hz; ctx.beginPath(); ctx.arc(0, 0, Rg, 0, 6.283); ctx.fill();
+      ctx.restore();
+      // Arm stars.
+      for (const p of GALAXY) {
+        const th = p.th + rot;
+        const dx = Math.cos(th) * p.rr * Rg, dy = Math.sin(th) * p.rr * Rg * GAL_SQUASH;
+        const px = gx + dx * ci - dy * si, py = gy + dx * si + dy * ci;
+        ctx.fillStyle = "rgba(" + (p.cool ? "176,204,255" : GOLD_B) + "," + (p.b * 0.7) + ")";
+        ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
+      }
+      // Core bulge.
+      const core = ctx.createRadialGradient(gx, gy, 0, gx, gy, Rg * 0.17);
+      core.addColorStop(0, "rgba(255,250,236,0.9)");
+      core.addColorStop(0.4, "rgba(" + GOLD_B + ",0.5)");
+      core.addColorStop(1, "rgba(" + GOLD + ",0)");
+      ctx.fillStyle = core; ctx.beginPath(); ctx.arc(gx, gy, Rg * 0.17, 0, 6.283); ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+
+      // Stars — a gentle twinkle; a few "newborn" ones carry a soft halo.
       for (const st of STARS) {
-        ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, 6.283);
-        ctx.fillStyle = "rgba(" + GOLD_B + "," + st.a + ")"; ctx.fill();
+        const tw = reduce ? 1 : (0.7 + 0.3 * Math.sin(time * 0.8 + st.tw));
+        const a = st.a * tw, sx = st.x * W, sy = st.y * H;
+        if (st.glow) {
+          ctx.globalCompositeOperation = ADD;
+          const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, st.r * 7);
+          g.addColorStop(0, "rgba(" + GOLD_B + "," + (a * 0.5) + ")");
+          g.addColorStop(1, "rgba(" + GOLD_B + ",0)");
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, st.r * 7, 0, 6.283); ctx.fill();
+          ctx.globalCompositeOperation = "source-over";
+        }
+        ctx.beginPath(); ctx.arc(sx, sy, st.r, 0, 6.283);
+        ctx.fillStyle = "rgba(" + GOLD_B + "," + a + ")"; ctx.fill();
       }
 
       ctx.lineWidth = 1;
