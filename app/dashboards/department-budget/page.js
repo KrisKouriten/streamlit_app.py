@@ -315,9 +315,11 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                   <Panel title="Documentary Credit drawdown" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ · ${dc.currency}`}>
                     <StatRow>
                       <Stat label="DC value" value={cur(dc.totalValue)} sub="total credit" />
-                      <Stat label="Amount used" value={cur(dc.totalUsed)} sub="logged LCs" />
+                      <Stat label="Used (LCs logged)" value={cur(dc.totalUsed)} sub="in Procurement" />
+                      <Stat label="Drawn on facility" value={cur(dc.totalDrawn || 0)} sub="on HSBC facility" />
                       <Stat label="Balance remaining" value={cur(dc.totalRemaining)} tone={dc.totalRemaining < 0 ? "red" : dc.totalRemaining <= 0.0001 ? "amber" : "green"}
-                        sub={dc.overCount ? `${dc.overCount} over value` : "against DC value"} />
+                        sub={dc.overCount ? `${dc.overCount} over value` : "value − used"} />
+                      <Stat label="LCs not on facility" value={String(dc.notOnFacilityCount || 0)} tone={dc.notOnFacilityCount ? "amber" : undefined} sub="awaiting HSBC" />
                     </StatRow>
                     <Table
                       columns={[
@@ -326,12 +328,16 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
                         { label: "DC value", align: "right", render: (r) => (r.dc_value != null ? cur(r.dc_value) : "—") },
                         { label: "Used", align: "right", render: (r) => cur(r.used) },
+                        { label: "Drawn", align: "right", render: (r) => cur(r.drawn || 0) },
                         { label: "Remaining", align: "right", render: (r) => (r.dc_value != null ? cur(r.remaining) : "—") },
-                        { label: "", render: (r) => (r.over ? <Badge tone="red">Over value</Badge> : r.dc_value == null ? <Badge tone="muted">No value set</Badge> : "") },
+                        { label: "", render: (r) => (r.over ? <Badge tone="red">Over value</Badge> : r.dc_value == null ? <Badge tone="muted">No value set</Badge> : r.notOnFacility ? <Badge tone="amber">{r.notOnFacility} not on facility</Badge> : "") },
                       ]}
                       rows={dc.rows}
                       empty="—"
                     />
+                    <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>
+                      Balance remaining is the DC value less the LCs logged. Enter each DC&rsquo;s value on <strong>Procurement → Manage LC</strong> for a balance to show; &ldquo;drawn on facility&rdquo; comes from the HSBC extract uploaded in Treasury.
+                    </div>
                   </Panel>
                 );
               })()}
