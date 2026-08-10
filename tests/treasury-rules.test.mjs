@@ -4,8 +4,43 @@ import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
   reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
-  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS,
+  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, lcValueMismatch, unmatchedFacility,
 } from "../lib/treasury-rules.js";
+
+test("lcOnFacility matches on customer_reference first, then LC reference", () => {
+  const idx = facilityRefIndex([{ reference: "LAIUK1", customer_reference: "LC92A", loan_amount: 100 }]);
+  assert.ok(lcOnFacility({ customer_reference: "lc92a", lc_reference: "TBC" }, idx));   // customer ref (case-insensitive)
+  assert.ok(lcOnFacility({ customer_reference: "", lc_reference: "LAIUK1" }, idx));      // falls back to LC ref
+  assert.equal(lcOnFacility({ customer_reference: "NOPE", lc_reference: "TBC" }, idx), null);
+});
+
+test("lcValueMismatch flags LC value ≠ facility drawing beyond tolerance", () => {
+  assert.equal(lcValueMismatch({ lc_amount: 154000 }, { loan_amount: 154000 }), false);
+  assert.equal(lcValueMismatch({ lc_amount: 154000 }, { loan_amount: 150000 }), true);
+  assert.equal(lcValueMismatch({ lc_amount: 154000 }, null), false);       // not matched
+  assert.equal(lcValueMismatch({ lc_amount: null }, { loan_amount: 100 }), false); // unknown → no flag
+});
+
+test("unmatchedFacility lists facility drawings with no LC in Procurement", () => {
+  const lcs = [{ customer_reference: "LC92A", lc_reference: "LAIUK1" }, { customer_reference: "", lc_reference: "TBC" }];
+  const facility = [
+    { reference: "LAIUK1", customer_reference: "LC92A", loan_amount: 100 },  // matched (customer ref)
+    { reference: "LAIUK9", customer_reference: "LC99Z", loan_amount: 200 },  // orphan
+  ];
+  const orphans = unmatchedFacility(lcs, facility);
+  assert.equal(orphans.length, 1);
+  assert.equal(orphans[0].customer_reference, "LC99Z");
+});
+
+test("reconcileDcFacility surfaces value mismatches per DC + in total", () => {
+  const dcs = [{ dc_id: 1, purchase_id: 10, dc_reference: "DC1", dc_value: 200000, currency: "USD", purchase_ref: "LC91" }];
+  const lcs = [{ purchase_id: 10, dc_reference: "DC1", customer_reference: "LC91A", lc_reference: "LAIUK1", lc_amount: 154000 }];
+  const facility = [{ reference: "LAIUK1", customer_reference: "LC91A", loan_amount: 150000 }]; // 4000 short
+  const { rows, totals } = reconcileDcFacility(dcs, lcs, facility);
+  assert.equal(rows[0].mismatchCount, 1);
+  assert.equal(totals.mismatchCount, 1);
+  assert.equal(rows[0].lcs[0].valueMismatch, true);
+});
 
 test("parseFacilityCsv maps headers, coerces types, parses UK + ISO dates", () => {
   const csv = [
