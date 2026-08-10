@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier } from "../../../lib/procurement";
 import { setFxRate } from "../../../lib/fx";
 
 // Role gates per action. Raising / editing needs procurement management; the
@@ -53,6 +53,10 @@ export async function POST(request) {
       case "cancel": {
         const d = deny(MANAGE, "Cancelling requires ADMIN, FINANCE or OPS"); if (d) return d;
         return NextResponse.json(await cancelProcurement(body.id, body.reason, actor));
+      }
+      case "edit-supplier": {
+        const d = deny(MANAGE, "Editing an order requires ADMIN, FINANCE or OPS"); if (d) return d;
+        return NextResponse.json(await amendProcurementSupplier(body.id, { supplier: body.supplier, reference: body.reference }, actor));
       }
       case "delete": {
         const d = deny(FIN, "Only Finance can delete a procurement order"); if (d) return d;
