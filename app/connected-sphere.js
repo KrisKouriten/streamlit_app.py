@@ -139,20 +139,14 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
     }
     // Broad nebula gas — violet/purple/magenta/blue washes, warm near the centre.
-    const NEB_COOL = ["150,110,205", "176,120,214", "196,110,180", "110,130,210", "120,110,196"];
+    const NEB_COOL = ["150,110,205", "168,116,214", "138,102,206", "196,110,180", "120,120,214"];
     const NEB_WARM = ["236,196,150", "224,150,96"];
     const NEBULA = [];
-    for (let i = 0; i < 17; i++) {
-      const u = (rnd() * 2 - 1) * 0.95, v = (rnd() * 2 - 1) * 0.62;
-      const warm = Math.abs(u) < 0.32 && Math.abs(v) < 0.35 && rnd() > 0.4;
-      NEBULA.push({ u, v, r: 0.18 + rnd() * 0.26, a: 0.03 + rnd() * 0.045,
+    for (let i = 0; i < 22; i++) {
+      const u = (rnd() * 2 - 1) * 1.0, v = (rnd() * 2 - 1) * 0.72;
+      const warm = Math.abs(u) < 0.32 && Math.abs(v) < 0.35 && rnd() > 0.45;
+      NEBULA.push({ u, v, r: 0.22 + rnd() * 0.32, a: 0.05 + rnd() * 0.085,
         col: warm ? NEB_WARM[i % NEB_WARM.length] : NEB_COOL[i % NEB_COOL.length] });
-    }
-    // Irregular dark dust that mottles the band into lanes.
-    const DUST = [];
-    for (let i = 0; i < 11; i++) {
-      DUST.push({ u: (rnd() * 2 - 1) * 0.9, v: (rnd() * 2 - 1) * 0.28,
-        r: 0.08 + rnd() * 0.14, a: 0.12 + rnd() * 0.16 });
     }
     const GAL_ANGLE = -0.13;
 
@@ -200,6 +194,12 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
       };
       ctx.globalCompositeOperation = ADD;
+      // Broad violet wash across the field — the pervasive haze of the photo.
+      const wash = ctx.createRadialGradient(W * 0.44, H * 0.34, 0, W * 0.44, H * 0.34, maxWH * 0.8);
+      wash.addColorStop(0, "rgba(150,120,205,0.10)");
+      wash.addColorStop(0.5, "rgba(130,110,200,0.05)");
+      wash.addColorStop(1, "rgba(120,110,196,0)");
+      ctx.fillStyle = wash; ctx.beginPath(); ctx.arc(W * 0.44, H * 0.34, maxWH * 0.8, 0, 6.283); ctx.fill();
       // Broad nebula gas — soft overlapping colour washes.
       for (const c of NEBULA) {
         const [px, py] = toScreen(c.u, c.v), cr = c.r * maxWH;
@@ -212,8 +212,8 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       // Warm galactic-centre glow.
       const [cxg, cyg] = toScreen(0, 0.05);
       const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
-      coreGas.addColorStop(0, "rgba(255,246,226,0.32)");
-      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.14)");
+      coreGas.addColorStop(0, "rgba(255,246,226,0.42)");
+      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.20)");
       coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
       ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
       // Dense starfield strung along the plane.
@@ -223,14 +223,6 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
-      // Irregular dark dust mottling the plane into lanes.
-      for (const d of DUST) {
-        const [px, py] = toScreen(d.u, d.v), dr = d.r * maxWH;
-        const dg = ctx.createRadialGradient(px, py, 0, px, py, dr);
-        dg.addColorStop(0, "rgba(5,5,14," + d.a + ")");
-        dg.addColorStop(1, "rgba(5,5,14,0)");
-        ctx.fillStyle = dg; ctx.beginPath(); ctx.arc(px, py, dr, 0, 6.283); ctx.fill();
-      }
 
       // Stars — a gentle twinkle; a few "newborn" ones carry a soft halo.
       for (const st of STARS) {
