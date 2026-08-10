@@ -4,7 +4,7 @@ import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
 import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
-import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment } from "../../../lib/procurement-close-rules";
+import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment, isForeignRow as procForeign, reportBasis as procReportBasis } from "../../../lib/procurement-close-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money, pct } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
@@ -24,12 +24,32 @@ const PO_TONE = { DRAFT: "muted", PENDING_SIGNOFF: "amber", APPROVED: "green", R
 // requests). Columns are shared; the Miniso table additionally shows whether a
 // Letter of Credit has been issued yet against each order.
 const hasLc = (r) => !!(r.lc_reference && String(r.lc_reference).trim());
+// The submitted net value in the order's own currency, e.g. "$12,700 USD".
+const PROC_CCY_SYMBOL = { USD: "$", GBP: "£", EUR: "€", CNY: "¥" };
+const procCcyAmt = (v, ccy) => `${PROC_CCY_SYMBOL[ccy] || ""}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy || ""}`.trim();
+// The GBP reported for a row — at its SPOT/HEDGED basis (report_gbp, attached by
+// the DB layer), falling back to the booked line value.
+const procReportedGbp = (r) => (r.report_gbp != null ? Number(r.report_gbp) : procLineValue(r));
 function procRegisterColumns({ lc = false } = {}) {
   const cols = [
     { label: "Reference", render: (r) => procRef(r) },
     { label: "Supplier", render: (r) => r.supplier || "—" },
     { label: "Channel / SKU", render: (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? ` · ${r.sku_or_range}` : ""}` : (r.category || "—")) },
-    { label: "Net value", align: "right", render: (r) => money(procLineValue(r)) },
+    {
+      label: "Net value", align: "right", render: (r) => {
+        // Foreign orders show the submitted order-currency amount, then the GBP at
+        // the chosen reporting basis (spot / hedged). GBP orders show GBP only.
+        if (procForeign(r) && r.amount_ccy != null) {
+          return (
+            <div>
+              <div>{procCcyAmt(r.amount_ccy, r.currency)}</div>
+              <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3 }}>{money(procReportedGbp(r))} at {procReportBasis(r) === "HEDGED" ? "hedged" : "spot"}</div>
+            </div>
+          );
+        }
+        return money(procReportedGbp(r));
+      },
+    },
     { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
     { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(procCommitted(r)) : "—") },
     { label: "Payment", render: (r) => { const ps = procPayment(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
