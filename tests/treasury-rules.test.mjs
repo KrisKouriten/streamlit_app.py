@@ -4,42 +4,27 @@ import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
   reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
-  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, lcValueMismatch, unmatchedFacility,
+  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, unmatchedFacility,
 } from "../lib/treasury-rules.js";
 
-test("lcOnFacility matches on customer_reference first, then LC reference", () => {
+test("lcOnFacility matches on the LC reference", () => {
   const idx = facilityRefIndex([{ reference: "LAIUK1", customer_reference: "LC92A", loan_amount: 100 }]);
-  assert.ok(lcOnFacility({ customer_reference: "lc92a", lc_reference: "TBC" }, idx));   // customer ref (case-insensitive)
-  assert.ok(lcOnFacility({ customer_reference: "", lc_reference: "LAIUK1" }, idx));      // falls back to LC ref
-  assert.equal(lcOnFacility({ customer_reference: "NOPE", lc_reference: "TBC" }, idx), null);
+  assert.ok(lcOnFacility({ lc_reference: "laiuk1" }, idx));                 // case-insensitive on the bank reference
+  assert.equal(lcOnFacility({ lc_reference: "LC92A" }, idx), null);         // customer reference is no longer a match key
+  assert.equal(lcOnFacility({ lc_reference: "TBC" }, idx), null);           // placeholder
 });
 
-test("lcValueMismatch flags LC value ≠ facility drawing beyond tolerance", () => {
-  assert.equal(lcValueMismatch({ lc_amount: 154000 }, { loan_amount: 154000 }), false);
-  assert.equal(lcValueMismatch({ lc_amount: 154000 }, { loan_amount: 150000 }), true);
-  assert.equal(lcValueMismatch({ lc_amount: 154000 }, null), false);       // not matched
-  assert.equal(lcValueMismatch({ lc_amount: null }, { loan_amount: 100 }), false); // unknown → no flag
-});
-
-test("unmatchedFacility lists facility drawings with no LC in Procurement", () => {
-  const lcs = [{ customer_reference: "LC92A", lc_reference: "LAIUK1" }, { customer_reference: "", lc_reference: "TBC" }];
+test("unmatchedFacility lists facility drawings with no LC in Procurement, with beneficiary", () => {
+  const lcs = [{ lc_reference: "LAIUK1" }, { lc_reference: "TBC" }];
   const facility = [
-    { reference: "LAIUK1", customer_reference: "LC92A", loan_amount: 100 },  // matched (customer ref)
-    { reference: "LAIUK9", customer_reference: "LC99Z", loan_amount: 200 },  // orphan
+    { reference: "LAIUK1", beneficiary: "Miniso HQ", customer_reference: "LC92A", loan_amount: 100 },  // matched (LC ref)
+    { reference: "LAIUK9", beneficiary: "Impress Ltd", customer_reference: "LC99Z", loan_amount: 200 },  // orphan
   ];
   const orphans = unmatchedFacility(lcs, facility);
   assert.equal(orphans.length, 1);
+  assert.equal(orphans[0].reference, "LAIUK9");
+  assert.equal(orphans[0].beneficiary, "Impress Ltd");
   assert.equal(orphans[0].customer_reference, "LC99Z");
-});
-
-test("reconcileDcFacility surfaces value mismatches per DC + in total", () => {
-  const dcs = [{ dc_id: 1, purchase_id: 10, dc_reference: "DC1", dc_value: 200000, currency: "USD", purchase_ref: "LC91" }];
-  const lcs = [{ purchase_id: 10, dc_reference: "DC1", customer_reference: "LC91A", lc_reference: "LAIUK1", lc_amount: 154000 }];
-  const facility = [{ reference: "LAIUK1", customer_reference: "LC91A", loan_amount: 150000 }]; // 4000 short
-  const { rows, totals } = reconcileDcFacility(dcs, lcs, facility);
-  assert.equal(rows[0].mismatchCount, 1);
-  assert.equal(totals.mismatchCount, 1);
-  assert.equal(rows[0].lcs[0].valueMismatch, true);
 });
 
 test("parseFacilityCsv maps headers, coerces types, parses UK + ISO dates", () => {
@@ -100,10 +85,10 @@ test("reconcileDcFacility matches LC refs to facility drawings, per DC", () => {
   assert.equal(totals.notOnFacilityCount, 2);
 });
 
-test("lcOnFacility / isRealLcRef handle placeholders and either match key", () => {
+test("lcOnFacility / isRealLcRef handle placeholders and the bank reference", () => {
   const idx = facilityRefIndex([{ reference: "LAIUK1", customer_reference: "CUST-9", loan_amount: 100 }]);
   assert.ok(lcOnFacility({ lc_reference: "laiuk1" }, idx));      // case-insensitive on reference
-  assert.ok(lcOnFacility({ lc_reference: "cust-9" }, idx));      // matches customer_reference too
+  assert.equal(lcOnFacility({ lc_reference: "cust-9" }, idx), null); // customer reference is not a match key
   assert.equal(lcOnFacility({ lc_reference: "NOPE" }, idx), null);
   assert.equal(lcOnFacility({ lc_reference: "TBC" }, idx), null); // placeholder → null
   assert.equal(isRealLcRef("TBC"), false);

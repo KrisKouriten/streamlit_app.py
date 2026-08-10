@@ -53,15 +53,7 @@ const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_ra
 // they arrive in Miniso UK's possession.
 const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
 
-export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, facilityRefs = [] }) {
-  // LC/bank reference → customer reference, from the HSBC facility. Used to
-  // auto-fill an LC's customer reference from the LC reference the user keys.
-  const custByRef = useMemo(() => {
-    const m = new Map();
-    for (const f of facilityRefs) { const k = String(f.reference || "").trim().toUpperCase(); if (k) m.set(k, f.customer_reference); }
-    return m;
-  }, [facilityRefs]);
-  const custForRef = (lcRef) => custByRef.get(String(lcRef || "").trim().toUpperCase()) || "";
+export default function ProcurementSummaryUI({ initialRows = [], costingRate = null }) {
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
   const [source, setSource] = useState("");
@@ -80,7 +72,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     const m = {};
     // The "Add LC" form starts blank; the bank defaults to the request's bank.
     for (const r of initialRows) m[r.purchase_id] = {
-      dc_reference: "", customer_reference: "", lc_reference: "", lc_amount: "", lc_bank: r.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: "", lc_payment_date: "",
+      dc_reference: "", lc_reference: "", lc_amount: "", lc_bank: r.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: "", lc_payment_date: "",
     };
     return m;
   });
@@ -160,11 +152,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   async function addLcRow(r) {
     const f = lcForm[r.purchase_id] || {};
     await op(r.purchase_id, {
-      op: "add-lc", dc_reference: f.dc_reference || null, customer_reference: f.customer_reference || null, lc_reference: f.lc_reference || null, lc_amount: f.lc_amount || null,
+      op: "add-lc", dc_reference: f.dc_reference || null, lc_reference: f.lc_reference || null, lc_amount: f.lc_amount || null,
       lc_bank: f.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: f.lc_confirmed_date || null, lc_payment_date: f.lc_payment_date || null,
     }, "LC logged.");
     // clear the add form for the next one
-    setLcForm((s) => ({ ...s, [r.purchase_id]: { ...s[r.purchase_id], dc_reference: "", customer_reference: "", lc_reference: "", lc_amount: "", lc_confirmed_date: "", lc_payment_date: "" } }));
+    setLcForm((s) => ({ ...s, [r.purchase_id]: { ...s[r.purchase_id], dc_reference: "", lc_reference: "", lc_amount: "", lc_confirmed_date: "", lc_payment_date: "" } }));
   }
   async function reconcileEntry(r) {
     if (!reconLc) return;
@@ -178,7 +170,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   function openEditLc(lc) {
     setReconLc(null);
     setEditLc(editLc?.lc_id === lc.lc_id ? null : {
-      lc_id: lc.lc_id, dc_reference: lc.dc_reference || "", customer_reference: lc.customer_reference || "", lc_reference: lc.lc_reference || "", lc_amount: lc.lc_amount != null ? String(lc.lc_amount) : "",
+      lc_id: lc.lc_id, dc_reference: lc.dc_reference || "", lc_reference: lc.lc_reference || "", lc_amount: lc.lc_amount != null ? String(lc.lc_amount) : "",
       lc_bank: lc.lc_bank || LC_BANK_DEFAULT, lc_confirmed_date: lc.lc_confirmed_date || "", lc_payment_date: lc.lc_payment_date || "",
       actual_payment_date: lc.actual_payment_date || "", loan_type: lc.loan_type || "IMPORT", goods_arrived_date: lc.goods_arrived_date || "",
     });
@@ -187,7 +179,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   async function saveEditLc(r) {
     const f = editLc;
     await op(r.purchase_id, {
-      op: "update-lc", lc_id: f.lc_id, dc_reference: f.dc_reference, customer_reference: f.customer_reference, lc_reference: f.lc_reference, lc_amount: f.lc_amount || null,
+      op: "update-lc", lc_id: f.lc_id, dc_reference: f.dc_reference, lc_reference: f.lc_reference, lc_amount: f.lc_amount || null,
       lc_bank: f.lc_bank, lc_confirmed_date: f.lc_confirmed_date || null, lc_payment_date: f.lc_payment_date || null,
       actual_payment_date: f.actual_payment_date || null, loan_type: f.loan_type, goods_arrived_date: f.goods_arrived_date || null,
     }, "LC updated.");
@@ -475,8 +467,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             {lcs.length > 0 && (
                               <div className="fos-tbl" style={{ overflowX: "auto", marginBottom: 14 }}>
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
-                                  <thead><tr>{["DC reference", "Customer ref", "LC reference", "Amount", "Bank", "Loan", "Expected", "Actual paid", "Status", ""].map((h, i) => (
-                                    <th key={i} style={{ textAlign: i === 3 ? "right" : "left", padding: "6px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>))}</tr></thead>
+                                  <thead><tr>{["DC reference", "LC reference", "Amount", "Bank", "Loan", "Expected", "Actual paid", "Status", ""].map((h, i) => (
+                                    <th key={i} style={{ textAlign: i === 2 ? "right" : "left", padding: "6px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>))}</tr></thead>
                                   <tbody>
                                     {lcs.map((l) => {
                                       const loan = LOAN_META[l.loan_type] || LOAN_META.IMPORT;
@@ -484,11 +476,9 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                       <Fragment key={l.lc_id}>
                                         <tr>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.dc_reference || "—"}</td>
-                                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.customer_reference || "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", fontWeight: 550 }}>{l.lc_reference}</td>
                                           <td className="fos-num" style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", whiteSpace: "nowrap" }}>
                                             {l.lc_amount != null ? curMoney(l.lc_amount, r) : "—"}
-                                            {l.facility_value_mismatch && <span title="This LC's USD value differs from the amount drawn on the HSBC facility." style={{ marginLeft: 6, color: "var(--red)", fontWeight: 700 }}>≠</span>}
                                           </td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)" }}>{l.lc_bank || "—"}</td>
                                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}><Badge tone={loan.tone}>{loan.label}</Badge></td>
@@ -506,12 +496,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                           </td>
                                         </tr>
                                         {editLc?.lc_id === l.lc_id && (
-                                          <tr><td colSpan={10} style={{ padding: "10px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
+                                          <tr><td colSpan={9} style={{ padding: "10px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
                                             <div style={{ fontSize: 11.5, fontWeight: 650, marginBottom: 8 }}>Edit LC {l.lc_reference}</div>
                                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                               <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)}><option value="">— none —</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
-                                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => { const v = e.target.value; const c = custForRef(v); setEditLc((s) => ({ ...s, lc_reference: v, ...(c ? { customer_reference: c } : {}) })); }} placeholder="key the LAIUK… reference" /></Field>
-                                              <Field label="Customer ref (HSBC)"><input style={{ ...inputSt, width: "100%" }} value={editLc.customer_reference} onChange={(e) => editField("customer_reference", e.target.value)} placeholder="auto-fills from LC ref" /></Field>
+                                              <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => editField("lc_reference", e.target.value)} placeholder="the reference HSBC draws under" /></Field>
                                               <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
                                               <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_bank} onChange={(e) => editField("lc_bank", e.target.value)} /></Field>
                                               <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={editLc.lc_confirmed_date} onChange={(e) => editField("lc_confirmed_date", e.target.value)} /></Field>
@@ -550,8 +539,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                 <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Add {lcs.length ? "another" : "an"} LC</div>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
                                   <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)}><option value="">{(r.dcs || []).length ? "— none —" : "— add a DC above —"}</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
-                                  <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="key the LAIUK… reference" value={lcForm[id]?.lc_reference || ""} onChange={(e) => { const v = e.target.value; const c = custForRef(v); setLcForm((s) => ({ ...s, [id]: { ...s[id], lc_reference: v, ...(c ? { customer_reference: c } : {}) } })); }} /></Field>
-                                  <Field label="Customer ref (HSBC)"><input style={{ ...inputSt, width: "100%" }} placeholder="auto-fills from LC ref" value={lcForm[id]?.customer_reference || ""} onChange={(e) => setLcField(id, "customer_reference", e.target.value)} /></Field>
+                                  <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="the reference HSBC draws under" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} /></Field>
                                   <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
                                   <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} /></Field>
                                   <Field label="LC confirmed"><input type="date" style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_confirmed_date || ""} onChange={(e) => setLcField(id, "lc_confirmed_date", e.target.value)} /></Field>
