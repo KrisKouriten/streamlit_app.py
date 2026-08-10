@@ -110,13 +110,35 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     // sphere floats above the galaxy's horizon. Stars are held in band-local
     // coordinates (u along the plane, v across it) and concentrated toward the
     // centre; a few are cool and blue. Static — a horizon, not a spinning disc.
+    // Star colours along the plane — warm gold and white dominate for elegance,
+    // with reds, oranges and purples scattered as accents (and a few cool blues).
+    const WHITE = "245,247,255", ORANGE = "240,150,80", RED = "216,84,74",
+          PURPLE = "176,120,214", BLUE = "170,198,255";
+    function bandColor(core) {
+      const r = rnd();
+      if (core > 0.62 && r < 0.5) return "255,252,244";        // white-hot in the bulge
+      if (r < 0.40) return GOLD_B;                             // warm gold — dominant
+      if (r < 0.58) return WHITE;
+      if (r < 0.70) return ORANGE;
+      if (r < 0.80) return RED;
+      if (r < 0.90) return PURPLE;
+      return BLUE;
+    }
     const BAND = [];
     for (let i = 0; i < 520; i++) {
       const u = rnd() * 2 - 1;                                 // along the plane, -1..1
       const v = (rnd() + rnd() + rnd() - 1.5) * 0.36;          // gaussian across the plane
       const core = Math.exp(-(u * u) * 1.6);                   // brighter toward the bulge
       BAND.push({ u, v, b: (0.35 + rnd() * 0.55) * (0.5 + core * 0.7),
-        sz: 0.4 + rnd() * (Math.abs(v) < 0.25 ? 1.3 : 0.8), cool: rnd() > 0.72 });
+        sz: 0.4 + rnd() * (Math.abs(v) < 0.25 ? 1.3 : 0.8), col: bandColor(core) });
+    }
+    // Emission-nebula clouds strung along the plane — soft coloured haze that gives
+    // the band broad washes of red, orange and purple behind the stars.
+    const CLOUD_COLS = [RED, ORANGE, PURPLE, "233,120,60", "150,110,205", ORANGE, RED];
+    const CLOUDS = [];
+    for (let i = 0; i < 7; i++) {
+      CLOUDS.push({ u: (rnd() * 2 - 1) * 0.86, v: (rnd() * 2 - 1) * 0.3,
+        r: 0.12 + rnd() * 0.16, a: 0.05 + rnd() * 0.05, col: CLOUD_COLS[i] });
     }
     const GAL_ANGLE = -0.13;
 
@@ -167,6 +189,16 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       bg.addColorStop(1, "rgba(" + GOLD + ",0)");
       ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, 0, W * 0.34, 0, 6.283); ctx.fill();
       ctx.restore();
+      // Coloured nebula clouds behind the stars.
+      for (const c of CLOUDS) {
+        const lx = c.u * halfLen, ly = c.v * thick;
+        const px = bx + lx * gca - ly * gsa, py = by + lx * gsa + ly * gca;
+        const cr = c.r * H * 1.1;
+        const cg = ctx.createRadialGradient(px, py, 0, px, py, cr);
+        cg.addColorStop(0, "rgba(" + c.col + "," + c.a + ")");
+        cg.addColorStop(1, "rgba(" + c.col + ",0)");
+        ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(px, py, cr, 0, 6.283); ctx.fill();
+      }
       // Band haze — two lobes either side of the plane, dimmest along the lane.
       ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE);
       const hb = ctx.createLinearGradient(0, -thick, 0, thick);
@@ -181,7 +213,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       for (const p of BAND) {
         const lx = p.u * halfLen, ly = p.v * thick;
         const px = bx + lx * gca - ly * gsa, py = by + lx * gsa + ly * gca;
-        ctx.fillStyle = "rgba(" + (p.cool ? "170,198,255" : GOLD_B) + "," + (p.b * 0.7) + ")";
+        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
