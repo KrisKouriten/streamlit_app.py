@@ -105,18 +105,20 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
     const STARS = [];
     for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9 });
-    // A stylised spiral galaxy behind the sphere — warm core bulge, two logarithmic
-    // arms, a few cool young stars in the arms. Deterministic geometry (fraction of
-    // the disc radius + angle); drawn tilted and turning very slowly, low alpha so
-    // the sphere sits clearly in front of it.
-    const GALAXY = [];
-    for (let i = 0; i < 640; i++) {
-      const rr = Math.pow(rnd(), 0.62);                       // denser toward the core
-      const th = (i % 2) * Math.PI + rr * 3.3 * (Math.PI * 2) + (rnd() - 0.5) * 0.55 * (1.15 - rr);
-      GALAXY.push({ rr: rr + (rnd() - 0.5) * 0.05, th, b: (1 - rr) * 0.6 + 0.12,
-        sz: 0.5 + rnd() * (rr < 0.2 ? 1.3 : 0.9), cool: rnd() > 0.82 && rr > 0.35 });
+    // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
+    // of stars across the sky with a warm central bulge and a dark dust lane, so the
+    // sphere floats above the galaxy's horizon. Stars are held in band-local
+    // coordinates (u along the plane, v across it) and concentrated toward the
+    // centre; a few are cool and blue. Static — a horizon, not a spinning disc.
+    const BAND = [];
+    for (let i = 0; i < 520; i++) {
+      const u = rnd() * 2 - 1;                                 // along the plane, -1..1
+      const v = (rnd() + rnd() + rnd() - 1.5) * 0.36;          // gaussian across the plane
+      const core = Math.exp(-(u * u) * 1.6);                   // brighter toward the bulge
+      BAND.push({ u, v, b: (0.35 + rnd() * 0.55) * (0.5 + core * 0.7),
+        sz: 0.4 + rnd() * (Math.abs(v) < 0.25 ? 1.3 : 0.8), cool: rnd() > 0.72 });
     }
-    const GAL_INCL = -0.5, GAL_SQUASH = 0.42, GAL_CX = 0.66, GAL_CY = 0.36;
+    const GAL_ANGLE = -0.13;
 
     const WIRE = [];
     for (let li = 1; li < 6; li++) {
@@ -152,35 +154,45 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       ctx.clearRect(0, 0, W, H);
 
-      // Spiral galaxy backdrop — the sphere sits in front of it.
-      const maxWH = Math.max(W, H);
-      const gx = GAL_CX * W, gy = GAL_CY * H, Rg = 0.62 * maxWH;
-      const rot = reduce ? 0 : time * 0.018;
-      const ci = Math.cos(GAL_INCL), si = Math.sin(GAL_INCL);
+      // Edge-on galaxy backdrop — a luminous band with a warm central bulge and a
+      // dark dust lane; the sphere floats in front of it.
+      const gca = Math.cos(GAL_ANGLE), gsa = Math.sin(GAL_ANGLE);
+      const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.85 * W, thick = 0.18 * H;
       ctx.globalCompositeOperation = ADD;
-      // Disc haze — a soft tilted ellipse.
-      ctx.save(); ctx.translate(gx, gy); ctx.rotate(GAL_INCL); ctx.scale(1, GAL_SQUASH);
-      const hz = ctx.createRadialGradient(0, 0, 0, 0, 0, Rg);
-      hz.addColorStop(0, "rgba(" + GOLD_B + ",0.13)");
-      hz.addColorStop(0.4, "rgba(" + AMBER + ",0.05)");
-      hz.addColorStop(1, "rgba(" + AMBER + ",0)");
-      ctx.fillStyle = hz; ctx.beginPath(); ctx.arc(0, 0, Rg, 0, 6.283); ctx.fill();
+      // Central bulge — an elongated warm glow along the plane.
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE); ctx.scale(1, 0.32);
+      const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.34);
+      bg.addColorStop(0, "rgba(255,250,236,0.5)");
+      bg.addColorStop(0.3, "rgba(" + GOLD_B + ",0.22)");
+      bg.addColorStop(1, "rgba(" + GOLD + ",0)");
+      ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, 0, W * 0.34, 0, 6.283); ctx.fill();
       ctx.restore();
-      // Arm stars.
-      for (const p of GALAXY) {
-        const th = p.th + rot;
-        const dx = Math.cos(th) * p.rr * Rg, dy = Math.sin(th) * p.rr * Rg * GAL_SQUASH;
-        const px = gx + dx * ci - dy * si, py = gy + dx * si + dy * ci;
-        ctx.fillStyle = "rgba(" + (p.cool ? "176,204,255" : GOLD_B) + "," + (p.b * 0.7) + ")";
+      // Band haze — two lobes either side of the plane, dimmest along the lane.
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE);
+      const hb = ctx.createLinearGradient(0, -thick, 0, thick);
+      hb.addColorStop(0.0, "rgba(" + AMBER + ",0)");
+      hb.addColorStop(0.34, "rgba(" + GOLD_B + ",0.10)");
+      hb.addColorStop(0.5, "rgba(" + GOLD_B + ",0.035)");
+      hb.addColorStop(0.66, "rgba(" + GOLD_B + ",0.10)");
+      hb.addColorStop(1.0, "rgba(" + AMBER + ",0)");
+      ctx.fillStyle = hb; ctx.fillRect(-halfLen, -thick, halfLen * 2, thick * 2);
+      ctx.restore();
+      // Stars strung along the plane.
+      for (const p of BAND) {
+        const lx = p.u * halfLen, ly = p.v * thick;
+        const px = bx + lx * gca - ly * gsa, py = by + lx * gsa + ly * gca;
+        ctx.fillStyle = "rgba(" + (p.cool ? "170,198,255" : GOLD_B) + "," + (p.b * 0.7) + ")";
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
-      // Core bulge.
-      const core = ctx.createRadialGradient(gx, gy, 0, gx, gy, Rg * 0.17);
-      core.addColorStop(0, "rgba(255,250,236,0.9)");
-      core.addColorStop(0.4, "rgba(" + GOLD_B + ",0.5)");
-      core.addColorStop(1, "rgba(" + GOLD + ",0)");
-      ctx.fillStyle = core; ctx.beginPath(); ctx.arc(gx, gy, Rg * 0.17, 0, 6.283); ctx.fill();
       ctx.globalCompositeOperation = "source-over";
+      // Dark dust lane cutting along the plane, across the bulge.
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(GAL_ANGLE);
+      const lane = ctx.createLinearGradient(0, -thick * 0.17, 0, thick * 0.17);
+      lane.addColorStop(0, "rgba(4,4,11,0)");
+      lane.addColorStop(0.5, "rgba(4,4,11,0.5)");
+      lane.addColorStop(1, "rgba(4,4,11,0)");
+      ctx.fillStyle = lane; ctx.fillRect(-halfLen, -thick * 0.17, halfLen * 2, thick * 0.34);
+      ctx.restore();
 
       // Stars — a gentle twinkle; a few "newborn" ones carry a soft halo.
       for (const st of STARS) {
