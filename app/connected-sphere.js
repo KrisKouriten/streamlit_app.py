@@ -104,7 +104,41 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     }
 
     const STARS = [];
-    for (let i = 0; i < 150; i++) STARS.push({ x: rnd(), y: rnd(), r: 0.55 + rnd() * 1.6, a: 0.4 + rnd() * 0.55 });
+    for (let i = 0; i < 240; i++) {
+      const r = rnd();
+      const col = r < 0.6 ? "247,249,255" : r < 0.82 ? "205,218,255" : r < 0.93 ? GOLD_B : "224,168,214";
+      STARS.push({ x: rnd(), y: rnd(), r: 0.45 + rnd() * 1.5, a: 0.35 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9, col });
+    }
+    // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
+    // of stars across the sky with a warm central bulge and a dark dust lane, so the
+    // sphere floats above the galaxy's horizon. Stars are held in band-local
+    // coordinates (u along the plane, v across it) and concentrated toward the
+    // centre; a few are cool and blue. Static — a horizon, not a spinning disc.
+    // A Milky-Way region in the style of a long exposure, dialled well back so the
+    // sphere stays the hero: a dense fine starfield (mostly white and pale blue,
+    // warm near the centre), broad mottled clouds of violet/purple/magenta gas with
+    // a warm galactic-centre glow, and irregular dark dust. Stars are held in
+    // band-local coordinates (u along the plane, v across it).
+    const WHITE = "245,247,255", PALEBLUE = "200,214,255",
+          WARM_S = "255,244,224", MAGENTA_S = "224,168,214";
+    function bandColor(core) {
+      const r = rnd();
+      if (core > 0.6 && r < 0.42) return WARM_S;               // warm stars near the centre
+      if (r < 0.50) return WHITE;
+      if (r < 0.74) return PALEBLUE;
+      if (r < 0.86) return GOLD_B;
+      if (r < 0.94) return "236,168,96";
+      return MAGENTA_S;
+    }
+    const BAND = [];
+    for (let i = 0; i < 760; i++) {
+      const u = rnd() * 2 - 1;                                 // along the plane, -1..1
+      const v = (rnd() + rnd() + rnd() - 1.5) * 0.42;          // gaussian across the plane
+      const core = Math.exp(-(u * u) * 1.4);                   // brighter toward the centre
+      BAND.push({ u, v, b: (0.30 + rnd() * 0.5) * (0.45 + core * 0.7),
+        sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
+    }
+    const GAL_ANGLE = -0.13;
 
     const WIRE = [];
     for (let li = 1; li < 6; li++) {
@@ -140,9 +174,44 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       ctx.clearRect(0, 0, W, H);
 
+      // Milky-Way backdrop — mottled nebula gas, a warm galactic-centre glow, a
+      // dense starfield and irregular dark dust; the sphere sits in front.
+      const gca = Math.cos(GAL_ANGLE), gsa = Math.sin(GAL_ANGLE);
+      const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.9 * W, thick = 0.30 * H;
+      const toScreen = (u, v) => {
+        const lx = u * halfLen, ly = v * thick;
+        return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
+      };
+      ctx.globalCompositeOperation = ADD;
+      // Warm galactic-centre glow.
+      const [cxg, cyg] = toScreen(0, 0.05);
+      const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
+      coreGas.addColorStop(0, "rgba(255,246,226,0.42)");
+      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.20)");
+      coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
+      ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
+      // Dense starfield strung along the plane.
+      for (const p of BAND) {
+        const [px, py] = toScreen(p.u, p.v);
+        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
+        ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
+      }
+      ctx.globalCompositeOperation = "source-over";
+
+      // Stars — a gentle twinkle; a few "newborn" ones carry a soft halo.
       for (const st of STARS) {
-        ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, 6.283);
-        ctx.fillStyle = "rgba(" + GOLD_B + "," + st.a + ")"; ctx.fill();
+        const tw = reduce ? 1 : (0.7 + 0.3 * Math.sin(time * 0.8 + st.tw));
+        const a = st.a * tw, sx = st.x * W, sy = st.y * H;
+        if (st.glow) {
+          ctx.globalCompositeOperation = ADD;
+          const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, st.r * 7);
+          g.addColorStop(0, "rgba(" + st.col + "," + (a * 0.5) + ")");
+          g.addColorStop(1, "rgba(" + st.col + ",0)");
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, st.r * 7, 0, 6.283); ctx.fill();
+          ctx.globalCompositeOperation = "source-over";
+        }
+        ctx.beginPath(); ctx.arc(sx, sy, st.r, 0, 6.283);
+        ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
       }
 
       ctx.lineWidth = 1;
