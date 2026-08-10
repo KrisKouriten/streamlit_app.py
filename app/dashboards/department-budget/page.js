@@ -5,7 +5,7 @@ import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
 import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
 import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment } from "../../../lib/procurement-close-rules";
-import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money } from "../../finance-os/ui";
+import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money, pct } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
 
@@ -183,6 +183,50 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               empty={`No signed-off purchase orders for ${department} yet.`}
             />
           </Panel>
+
+          {/* Supplier credit & HSBC facility (Merchandising) — supplier exposure
+              vs credit limits + the HSBC facility headroom, from the governed
+              suppliers/credit layer. Shown only when the data loads. */}
+          {d.supplierCredit && (() => {
+            const sc = d.supplierCredit;
+            const fac = sc.facility;
+            const exp = sc.exposure && sc.exposure.ready ? sc.exposure : null;
+            const totals = exp?.totals;
+            const facHasLimit = fac && fac.limit != null;
+            const rowTone = (r) => (r.over ? "red" : r.near ? "amber" : undefined);
+            const limited = (exp?.rows || []).filter((r) => r.limit != null).slice(0, 8);
+            return (
+              <Panel title="Supplier credit & HSBC facility" note="orders & drawings vs credit limits">
+                <StatRow>
+                  <Stat label="HSBC facility limit" value={facHasLimit ? money(fac.limit, { compact: true }) : "—"}
+                    sub={facHasLimit ? "HSBC ceiling" : "limit not set"} />
+                  <Stat label="Facility drawn" value={money(fac?.exposure || 0, { compact: true })} sub="GBP-equivalent drawings" />
+                  <Stat label="Facility headroom" value={facHasLimit ? money(fac.headroom, { compact: true }) : "—"}
+                    tone={fac?.over ? "red" : undefined}
+                    sub={fac?.over ? "over facility limit" : facHasLimit ? `${pct(fac.utilisation)} utilised` : "set a limit"} />
+                  <Stat label="Suppliers over limit" value={String(totals?.overLimit || 0)}
+                    tone={totals?.overLimit ? "red" : undefined}
+                    sub={`${totals?.nearLimit || 0} near limit`} />
+                </StatRow>
+                {limited.length ? (
+                  <Table
+                    columns={[
+                      { label: "Supplier", tone: rowTone, render: (r) => r.name },
+                      { label: "Exposure", align: "right", tone: rowTone, render: (r) => money(r.exposure) },
+                      { label: "Limit", align: "right", tone: rowTone, render: (r) => money(r.limit) },
+                      { label: "Headroom", align: "right", tone: rowTone, render: (r) => money(r.headroom) },
+                      { label: "Utilisation", align: "right", tone: rowTone, render: (r) => (r.utilisation != null ? pct(r.utilisation) : "—") },
+                    ]}
+                    rows={limited}
+                  />
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--faint)" }}>
+                    No supplier credit limits set yet — set them on <a href="/operate/suppliers" style={{ color: "var(--accent)" }}>Suppliers &amp; Credit</a>.
+                  </div>
+                )}
+              </Panel>
+            );
+          })()}
 
           {/* Procurement (Merchandising) — the Summary + Close lifecycle rolled up
               here, same visibility Marketing has for its POs. */}
