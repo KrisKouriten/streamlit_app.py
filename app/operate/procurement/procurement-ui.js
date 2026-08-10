@@ -125,7 +125,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
-      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} fxRates={fxRates} onErr={setErr} onDone={() => router.refresh()} />
+      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
@@ -237,9 +237,10 @@ function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
 // sign-off → Finance → approved; cancel is the soft action, delete (Finance
 // only, once head-approved) the hard one.
 const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
-function OrdersPanel({ orders, roles, canManage, fxRates = [], onErr, onDone }) {
+function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
+  const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
   const { isHod, isFinance } = roles || {};
   if (!orders.length) return null;
 
@@ -249,6 +250,18 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], onErr, onDone }) 
     catch (x) { onErr(x.message); }
     finally { setBusy(null); }
   }
+  function openEdit(o) {
+    setFxApprove(null);
+    setEdit(edit?.purchase_id === o.purchase_id ? null : { purchase_id: o.purchase_id, supplier: o.supplier || "", reference: o.reference || "" });
+  }
+  async function saveEdit() {
+    if (!edit || !edit.supplier.trim()) return;
+    await act(edit.purchase_id, "edit-supplier", { supplier: edit.supplier.trim(), reference: edit.reference });
+    setEdit(null);
+  }
+  // Suppliers to offer for this order's tab (Miniso vs everything else), falling
+  // back to the full list; always keep the order's current name selectable.
+  const editInp = { height: 30, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
   const cancel = (o) => { const reason = window.prompt("Cancel this order — reason (optional):", ""); if (reason === null) return; act(o.purchase_id, "cancel", { reason }); };
   const del = (o) => { if (window.confirm(`Delete this order (${o.supplier}) permanently? This cannot be undone.`)) act(o.purchase_id, "delete"); };
   // GBP orders approve in one click; a foreign order opens the rate pickers first.
@@ -290,6 +303,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], onErr, onDone }) 
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
                         {isHod && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
+                        {canManage && <button disabled={busy} style={btn} onClick={() => openEdit(o)}>Edit</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
                         {isFinance && hodApprovedStatus(o.approval_status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)" }} onClick={() => del(o)}>Delete</button>}
                       </span>
@@ -300,6 +314,26 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], onErr, onDone }) 
                   <tr>
                     <td colSpan={8} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <FxApprove order={o} rates={fxRates} busy={busy} onCancel={() => setFxApprove(null)} onConfirm={(picks) => act(o.purchase_id, "finance-approve", picks)} />
+                    </td>
+                  </tr>
+                )}
+                {edit?.purchase_id === o.purchase_id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Supplier</span>
+                          <select style={{ ...editInp, width: 240 }} value={edit.supplier} onChange={(e) => setEdit((s) => ({ ...s, supplier: e.target.value }))}>
+                            {!suppliers.some((sp) => sp.name === edit.supplier) && edit.supplier && <option value={edit.supplier}>{edit.supplier} (current)</option>}
+                            {suppliers.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Reference</span>
+                          <input style={{ ...editInp, width: 160 }} value={edit.reference} onChange={(e) => setEdit((s) => ({ ...s, reference: e.target.value }))} placeholder="optional" />
+                        </label>
+                        <button disabled={busy || !edit.supplier.trim()} onClick={saveEdit} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save</button>
+                        <button disabled={busy} onClick={() => setEdit(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Cancel</button>
+                        <span style={{ fontSize: 11, color: "var(--faint)", flex: "1 1 200px" }}>Corrects the supplier name / reference on this raised order. Amounts, dates and approvals are unchanged.</span>
+                      </div>
                     </td>
                   </tr>
                 )}
