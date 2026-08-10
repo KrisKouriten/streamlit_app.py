@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../../lib/auth";
-import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance, setLc, reconcileLc, addLc, updateLc, reconcileLcEntry, deleteLcEntry, updateReportBasis } from "../../../../lib/procurement-close";
+import { getProcurementLine, approveProcurement, setInvoice, setPaymentStatus, challengeProcurement, closeProcurement, reopenFinance, setLc, reconcileLc, addLc, updateLc, reconcileLcEntry, deleteLcEntry, updateReportBasis, addDc, updateDc, deleteDc } from "../../../../lib/procurement-close";
 
 export const dynamic = "force-dynamic";
 const isFinance = (s) => hasRole(s, "ADMIN", "FINANCE");
@@ -33,6 +33,9 @@ export async function POST(request, { params }) {
       case "update-lc": return NextResponse.json(await updateLc(body.lc_id, body, session));
       case "reconcile-lc-entry": return NextResponse.json(await reconcileLcEntry(body.lc_id, body, session));
       case "delete-lc": return NextResponse.json(await deleteLcEntry(body.lc_id, session));
+      case "add-dc": return NextResponse.json(await addDc(id, body, session));
+      case "update-dc": return NextResponse.json(await updateDc(body.dc_id, body, session));
+      case "delete-dc": return NextResponse.json(await deleteDc(body.dc_id, session));
       case "reopen-finance": return NextResponse.json(await reopenFinance(id, session));
       case "set-report-basis": return NextResponse.json(await updateReportBasis(id, body.basis, session));
       default: return NextResponse.json({ error: "Unknown action" }, { status: 400 });
