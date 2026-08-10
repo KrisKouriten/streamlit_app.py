@@ -307,6 +307,34 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                   </div>
                 )}
               </Panel>
+
+              {d.proc.dc && d.proc.dc.count > 0 && (() => {
+                const dc = d.proc.dc;
+                const cur = (v) => procCcyAmt(v, dc.currency);
+                return (
+                  <Panel title="Documentary Credit drawdown" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ · ${dc.currency}`}>
+                    <StatRow>
+                      <Stat label="DC value" value={cur(dc.totalValue)} sub="total credit" />
+                      <Stat label="Amount used" value={cur(dc.totalUsed)} sub="logged LCs" />
+                      <Stat label="Balance remaining" value={cur(dc.totalRemaining)} tone={dc.totalRemaining < 0 ? "red" : dc.totalRemaining <= 0.0001 ? "amber" : "green"}
+                        sub={dc.overCount ? `${dc.overCount} over value` : "against DC value"} />
+                    </StatRow>
+                    <Table
+                      columns={[
+                        { label: "DC reference", render: (r) => r.dc_reference },
+                        { label: "Request", render: (r) => r.purchaseRef },
+                        { label: "LCs", align: "right", render: (r) => String(r.count) },
+                        { label: "DC value", align: "right", render: (r) => (r.dc_value != null ? cur(r.dc_value) : "—") },
+                        { label: "Used", align: "right", render: (r) => cur(r.used) },
+                        { label: "Remaining", align: "right", render: (r) => (r.dc_value != null ? cur(r.remaining) : "—") },
+                        { label: "", render: (r) => (r.over ? <Badge tone="red">Over value</Badge> : r.dc_value == null ? <Badge tone="muted">No value set</Badge> : "") },
+                      ]}
+                      rows={dc.rows}
+                      empty="—"
+                    />
+                  </Panel>
+                );
+              })()}
             </>
           )}
         </>

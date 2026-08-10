@@ -4,9 +4,56 @@ import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reporte
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
-  settlesByLc, lcActionError, lcStatus,
+  settlesByLc, lcActionError, lcStatus, dcDrawdown, validateDc, normDcRef,
 } from "../lib/procurement-close-rules.js";
 const ruleLc = { settlesByLc, lcActionError, lcStatus };
+
+test("dcDrawdown — used = logged LCs, remaining = value − used, grouped by DC ref", () => {
+  const dcs = [
+    { dc_id: 1, dc_reference: "DC UK1233788", dc_value: 200000 },
+    { dc_id: 2, dc_reference: "DC UK1233789", dc_value: 154000 },
+  ];
+  const lcs = [
+    { lc_id: 10, dc_reference: "DC UK1233788", lc_amount: 174900, lc_settled: false },
+    { lc_id: 11, dc_reference: "dc uk1233788", lc_amount: 20000, lc_settled: true, lc_settled_amount: 19500 }, // case-insensitive match
+    { lc_id: 12, dc_reference: "DC UK1233789", lc_amount: 154000, lc_settled: false },
+    { lc_id: 13, dc_reference: "DC UK9999999", lc_amount: 5000, lc_settled: false }, // no DC record → ungrouped
+    { lc_id: 14, dc_reference: "", lc_amount: 1000, lc_settled: false },             // blank → ungrouped
+  ];
+  const out = dcDrawdown(dcs, lcs);
+  const a = out.find((g) => g.dc_id === 1);
+  assert.equal(a.count, 2);
+  assert.equal(a.used, 194900);            // 174900 + 20000 (both logged)
+  assert.equal(a.settled, 19500);          // settled amount preferred
+  assert.equal(a.remaining, 5100);         // 200000 − 194900
+  assert.equal(Math.round(a.utilisation * 1000) / 1000, 0.975);
+  assert.equal(a.over, false);
+  const b = out.find((g) => g.dc_id === 2);
+  assert.equal(b.used, 154000);
+  assert.equal(b.remaining, 0);
+  const ung = out.find((g) => g.ungrouped);
+  assert.equal(ung.count, 2);              // DC9999999 + blank
+  assert.equal(ung.used, 6000);
+  assert.equal(ung.dc_value, null);
+  assert.equal(ung.remaining, null);
+});
+
+test("dcDrawdown — over-draw flagged when logged LCs exceed the DC value", () => {
+  const out = dcDrawdown([{ dc_id: 1, dc_reference: "DC1", dc_value: 100000 }],
+    [{ lc_id: 1, dc_reference: "DC1", lc_amount: 120000 }]);
+  assert.equal(out[0].used, 120000);
+  assert.equal(out[0].remaining, -20000);
+  assert.equal(out[0].over, true);
+});
+
+test("validateDc — reference required, value optional and non-negative", () => {
+  assert.deepEqual(validateDc({ dc_reference: "  DC  UK1233788 ", dc_value: "200000" }).clean,
+    { dc_reference: "DC UK1233788", dc_value: 200000, notes: null });
+  assert.ok(validateDc({ dc_reference: "" }).errors.includes("DC reference is required"));
+  assert.ok(validateDc({ dc_reference: "DC1", dc_value: "-5" }).errors.length === 1);
+  assert.equal(validateDc({ dc_reference: "DC1" }).clean.dc_value, null); // blank value ok
+  assert.equal(normDcRef(" DC  UK1233788 "), "dc uk1233788");
+});
 
 test("finance lifecycle gate — approve", () => {
   assert.equal(financeActionError("approve", { finance_status: "PENDING" }), null);

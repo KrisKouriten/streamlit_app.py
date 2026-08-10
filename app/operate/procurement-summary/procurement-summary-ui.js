@@ -5,7 +5,7 @@ import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
 } from "../../../lib/procurement-close-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
@@ -76,6 +76,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     };
     return m;
   });
+  const [dcForm, setDcForm] = useState({});   // per-purchase "add DC" form { dc_reference, dc_value }
+  const [editDc, setEditDc] = useState(null); // { dc_id, dc_reference, dc_value }
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -182,6 +184,28 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
       actual_payment_date: f.actual_payment_date || null, loan_type: f.loan_type, goods_arrived_date: f.goods_arrived_date || null,
     }, "LC updated.");
     setEditLc(null);
+  }
+
+  // ---- Documentary Credits (the DC value each request's LCs draw against) ----
+  const setDcField = (id, k, v) => setDcForm((s) => ({ ...s, [id]: { ...s[id], [k]: v } }));
+  async function addDcRow(r) {
+    const f = dcForm[r.purchase_id] || {};
+    if (!(f.dc_reference || "").trim()) return;
+    await op(r.purchase_id, { op: "add-dc", dc_reference: f.dc_reference, dc_value: f.dc_value || null }, "DC added.");
+    setDcForm((s) => ({ ...s, [r.purchase_id]: { dc_reference: "", dc_value: "" } }));
+  }
+  function openEditDc(dc) {
+    setEditDc(editDc?.dc_id === dc.dc_id ? null : { dc_id: dc.dc_id, dc_reference: dc.dc_reference || "", dc_value: dc.dc_value != null ? String(dc.dc_value) : "" });
+  }
+  const editDcField = (k, v) => setEditDc((s) => ({ ...s, [k]: v }));
+  async function saveEditDc(r) {
+    const f = editDc;
+    await op(r.purchase_id, { op: "update-dc", dc_id: f.dc_id, dc_reference: f.dc_reference, dc_value: f.dc_value || null }, "DC updated.");
+    setEditDc(null);
+  }
+  async function deleteDcRow(r, dc) {
+    if (!window.confirm(`Delete DC ${dc.dc_reference}? Its LCs stay logged but become ungrouped until re-assigned.`)) return;
+    await op(r.purchase_id, { op: "delete-dc", dc_id: dc.dc_id }, "DC removed.");
   }
 
   function download() {
@@ -380,6 +404,65 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                               );
                             })()}
 
+                            {/* Documentary Credits — value drawn vs balance remaining */}
+                            {(() => {
+                              const groups = dcDrawdown(r.dcs || [], lcs);
+                              const dcRow = { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", marginBottom: 6 };
+                              return (
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Documentary Credits <span style={{ color: "var(--faint)", fontWeight: 500 }}>· amount used vs balance remaining</span></div>
+                                  {!(r.dcs || []).length && <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 8, lineHeight: 1.5 }}>No DC recorded yet. Add a DC (its reference + value) below, then group each LC under it — the LCs draw against the DC value.</div>}
+                                  {groups.map((g) => {
+                                    if (g.ungrouped) return (
+                                      <div key="ungrouped" style={{ ...dcRow, borderStyle: "dashed" }}>
+                                        <span style={{ fontWeight: 600, fontSize: 12.5 }}>Ungrouped LCs</span>
+                                        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.count} LC{g.count === 1 ? "" : "s"} · {curMoney(g.used, r)} not assigned to a DC</span>
+                                      </div>
+                                    );
+                                    const util = g.dc_value ? Math.max(0, Math.min(1, g.used / g.dc_value)) : 0;
+                                    const barColor = g.over ? "var(--red)" : util > 0.9 ? "var(--amber)" : "var(--accent)";
+                                    const editing = editDc?.dc_id === g.dc_id;
+                                    return (
+                                      <div key={g.dc_id} style={{ marginBottom: 6 }}>
+                                        <div style={dcRow}>
+                                          <span style={{ fontWeight: 650, fontSize: 12.5, minWidth: 130 }}>{g.dc_reference}</span>
+                                          <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.count} LC{g.count === 1 ? "" : "s"}</span>
+                                          <span style={{ fontSize: 12 }}><span style={labelSt}>Value </span>{g.dc_value != null ? curMoney(g.dc_value, r) : "—"}</span>
+                                          <span style={{ fontSize: 12 }}><span style={labelSt}>Used </span><span className="fos-num">{curMoney(g.used, r)}</span></span>
+                                          <span style={{ fontSize: 12, fontWeight: 600, color: g.over ? "var(--red)" : "var(--ink)" }}>
+                                            <span style={labelSt}>Remaining </span>{g.dc_value != null ? curMoney(g.remaining, r) : "—"}{g.over ? " · over" : ""}
+                                          </span>
+                                          <span style={{ flex: 1 }} />
+                                          {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => openEditDc(g)}>Edit</button>}
+                                          {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => deleteDcRow(r, g)}>Delete</button>}
+                                        </div>
+                                        {g.dc_value != null && (
+                                          <div style={{ height: 5, borderRadius: 3, background: "var(--raise)", overflow: "hidden", margin: "0 2px 8px" }}>
+                                            <div style={{ height: "100%", width: `${util * 100}%`, background: barColor }} />
+                                          </div>
+                                        )}
+                                        {editing && (
+                                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", padding: "8px 12px", background: "var(--raise)", borderRadius: 8, marginBottom: 8 }}>
+                                            <Field label="DC reference"><input style={{ ...inputSt, width: 180 }} value={editDc.dc_reference} onChange={(e) => editDcField("dc_reference", e.target.value)} /></Field>
+                                            <Field label={`DC value (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: 140, textAlign: "right" }} value={editDc.dc_value} onChange={(e) => editDcField("dc_value", e.target.value)} /></Field>
+                                            <button style={btn("var(--accent)")} disabled={isBusy || !(editDc.dc_reference || "").trim()} onClick={() => saveEditDc(r)}>Save</button>
+                                            <button style={ghost} onClick={() => setEditDc(null)}>Cancel</button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {r.finance_status !== "CLOSED" && (
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+                                      <Field label="Add DC reference"><input style={{ ...inputSt, width: 180 }} placeholder="e.g. DC UK1233788" value={dcForm[id]?.dc_reference || ""} onChange={(e) => setDcField(id, "dc_reference", e.target.value)} /></Field>
+                                      <Field label={`DC value (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: 140, textAlign: "right" }} placeholder="0.00" value={dcForm[id]?.dc_value || ""} onChange={(e) => setDcField(id, "dc_value", e.target.value)} /></Field>
+                                      <button style={btn("var(--accent)")} disabled={isBusy || !(dcForm[id]?.dc_reference || "").trim()} onClick={() => addDcRow(r)}>Add DC</button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
                             {/* Logged LCs */}
                             {lcs.length > 0 && (
                               <div className="fos-tbl" style={{ overflowX: "auto", marginBottom: 14 }}>
@@ -410,7 +493,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                           <tr><td colSpan={9} style={{ padding: "10px 10px", borderBottom: "1px solid var(--hairline)", background: "var(--surface)" }}>
                                             <div style={{ fontSize: 11.5, fontWeight: 650, marginBottom: 8 }}>Edit LC {l.lc_reference}</div>
                                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
-                                              <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)} /></Field>
+                                              <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={editLc.dc_reference} onChange={(e) => editField("dc_reference", e.target.value)}><option value="">— none —</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
                                               <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_reference} onChange={(e) => editField("lc_reference", e.target.value)} /></Field>
                                               <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} value={editLc.lc_amount} onChange={(e) => editField("lc_amount", e.target.value)} /></Field>
                                               <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={editLc.lc_bank} onChange={(e) => editField("lc_bank", e.target.value)} /></Field>
@@ -449,7 +532,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                               <div style={{ borderTop: lcs.length ? "1px solid var(--line)" : "none", paddingTop: lcs.length ? 12 : 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Add {lcs.length ? "another" : "an"} LC</div>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 10, maxWidth: 900 }}>
-                                  <Field label="DC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. DC-2026-014" value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)} /></Field>
+                                  <Field label="DC reference"><select style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.dc_reference || ""} onChange={(e) => setLcField(id, "dc_reference", e.target.value)}><option value="">{(r.dcs || []).length ? "— none —" : "— add a DC above —"}</option>{(r.dcs || []).map((d) => <option key={d.dc_id} value={d.dc_reference}>{d.dc_reference}</option>)}</select></Field>
                                   <Field label="LC reference"><input style={{ ...inputSt, width: "100%" }} placeholder="e.g. HSBC-LC-2026-014" value={lcForm[id]?.lc_reference || ""} onChange={(e) => setLcField(id, "lc_reference", e.target.value)} /></Field>
                                   <Field label={`LC amount (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: "100%", textAlign: "right" }} placeholder="0.00" value={lcForm[id]?.lc_amount || ""} onChange={(e) => setLcField(id, "lc_amount", e.target.value)} /></Field>
                                   <Field label="Issuing bank"><input style={{ ...inputSt, width: "100%" }} value={lcForm[id]?.lc_bank || ""} onChange={(e) => setLcField(id, "lc_bank", e.target.value)} /></Field>
