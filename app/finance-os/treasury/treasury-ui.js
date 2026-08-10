@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { money, pct, StatRow, Stat, Badge } from "../ui";
-import { SALES_STREAMS, LC_STAGES, cashReconVariance, cashReconStatus } from "../../../lib/treasury-rules";
+import { SALES_STREAMS, LC_STAGES, cashReconVariance, cashReconStatus, FACILITY_UPLOAD_COLUMNS } from "../../../lib/treasury-rules";
 
 /*
  * Treasury desk. Six tabs: an overview, the seeded HSBC bank trade facility, the
@@ -85,7 +85,7 @@ export default function TreasuryUI({ data, canManage }) {
       </div>
 
       {tab === "overview" && <Overview data={data} />}
-      {tab === "facility" && <Facility facility={data.facility} position={data.position} lifecycle={data.lifecycle} dcRecon={data.dcRecon} />}
+      {tab === "facility" && <Facility facility={data.facility} position={data.position} lifecycle={data.lifecycle} dcRecon={data.dcRecon} canManage={canManage} busy={busy} op={op} />}
       {tab === "loans" && <TermLoans loans={data.loans} canManage={canManage} busy={busy} op={op} />}
       {tab === "hedging" && <Hedging hedging={data.hedging} canManage={canManage} busy={busy} op={op} />}
       {tab === "sales" && <SalesIncome sales={data.sales} canManage={canManage} busy={busy} op={op} />}
@@ -172,11 +172,28 @@ function SplitCard({ title, rows = [] }) {
 }
 
 // ---- Bank trade facility (read-only) ----
-function Facility({ facility, position, lifecycle, dcRecon }) {
+function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op }) {
   const rows = facility.rows || [];
   const s = facility.summary || {};
   const [driver, setDriver] = useState("");
   const [product, setProduct] = useState("");
+
+  // Upload a fresh HSBC extract (replace-mode). Reads the chosen CSV and posts it.
+  async function onUpload(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";                         // allow re-selecting the same file
+    if (!file) return;
+    if (rows.length && !window.confirm(`Replace the whole facility register (${rows.length} drawing${rows.length === 1 ? "" : "s"}) with the contents of “${file.name}”? This cannot be undone.`)) return;
+    const csv = await file.text();
+    await op({ op: "upload-facility", csv }, "Bank trade facility updated.");
+  }
+  function downloadTemplate() {
+    const csv = FACILITY_UPLOAD_COLUMNS.join(",") + "\n";
+    const a = document.createElement("a");
+    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+    a.download = "bank-trade-facility-template.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
   const filtered = useMemo(() => rows.filter((r) => (!driver || r.cost_driver === driver) && (!product || r.product_type === product)), [rows, driver, product]);
   const drivers = [...new Set(rows.map((r) => r.cost_driver).filter(Boolean))];
   const products = [...new Set(rows.map((r) => r.product_type).filter(Boolean))];
@@ -225,8 +242,20 @@ function Facility({ facility, position, lifecycle, dcRecon }) {
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{filtered.length} row{filtered.length === 1 ? "" : "s"}</span>
             <button style={ghost} disabled={!filtered.length} onClick={download}>Download (CSV)</button>
+            {canManage && <button style={ghost} onClick={downloadTemplate}>Template</button>}
+            {canManage && (
+              <label style={{ ...ghost, cursor: busy ? "default" : "pointer", opacity: busy ? 0.5 : 1 }}>
+                {busy ? "Uploading…" : "Upload HSBC extract"}
+                <input type="file" accept=".csv,text/csv" disabled={busy} onChange={onUpload} style={{ display: "none" }} />
+              </label>
+            )}
           </div>
         </div>
+        {canManage && !rows.length && (
+          <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>
+            No facility drawings loaded. Download the <strong>Template</strong>, paste your HSBC extract into it (one drawing per row — <span style={{ fontFamily: "var(--mono)" }}>reference</span> is the bank drawing ref, e.g. LAIUK…), then <strong>Upload HSBC extract</strong>. Uploading replaces the whole register.
+          </div>
+        )}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 980 }}>
             <thead><tr>
