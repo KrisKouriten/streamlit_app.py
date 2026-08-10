@@ -62,7 +62,7 @@ function procRegisterColumns({ lc = false } = {}) {
 const PROC_REGISTER_GROUPS = [
   ["MINISO", "Miniso HQ purchases", true],
   ["LOCAL", "Local purchases", false],
-  ["OTHER", "Other merch requests", false],
+  ["OTHER", "Other", false],
 ];
 
 export default async function DepartmentBudgetDashboard({ searchParams }) {
@@ -285,8 +285,11 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · split by source`}>
                 {(() => {
                   const reg = d.proc.register || [];
+                  // Group by the supplier's master classification (report_source:
+                  // MINISO / LOCAL / OTHER), falling back to the row source.
+                  const grp = (r) => r.report_source || (r.source === "MINISO" ? "MINISO" : r.source === "LOCAL" ? "LOCAL" : "OTHER");
                   const groups = PROC_REGISTER_GROUPS
-                    .map(([key, label, lc]) => [key, label, lc, reg.filter((r) => (key === "OTHER" ? (r.source !== "MINISO" && r.source !== "LOCAL") : r.source === key))])
+                    .map(([key, label, lc]) => [key, label, lc, reg.filter((r) => grp(r) === key)])
                     .filter(([, , , rows]) => rows.length);
                   if (!groups.length) return <div style={{ fontSize: 13, color: "var(--faint)" }}>No procurement purchases yet.</div>;
                   return groups.map(([key, label, lc, rows]) => (
@@ -298,6 +301,11 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                     </div>
                   ));
                 })()}
+                {d.proc.excludedMerch > 0 && (
+                  <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>
+                    {d.proc.excludedMerch} purchase{d.proc.excludedMerch === 1 ? "" : "s"} from suppliers marked not Active&nbsp;to&nbsp;Merch are excluded.
+                  </div>
+                )}
               </Panel>
             </>
           )}

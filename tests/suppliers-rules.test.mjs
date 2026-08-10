@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normName, validateSupplier, headroom, summariseExposure, facilityHeadroom } from "../lib/suppliers-rules.js";
+import { normName, validateSupplier, headroom, summariseExposure, facilityHeadroom, normSourceType, SUPPLIER_SOURCE_TYPES } from "../lib/suppliers-rules.js";
 
 test("normName lowercases, trims and collapses whitespace", () => {
   assert.equal(normName("  Miniso  HQ "), "miniso hq");
@@ -18,6 +18,30 @@ test("validateSupplier cleans + validates", () => {
   assert.deepEqual(validateSupplier({ name: "" }).errors, ["Supplier name is required"]);
   assert.ok(validateSupplier({ name: "X", credit_limit: "-5" }).errors.length === 1);
   assert.equal(validateSupplier({ name: "X" }).clean.credit_limit, null); // blank → no limit
+});
+
+test("normSourceType canonicalises to MINISO / LOCAL / OTHER (or null)", () => {
+  assert.equal(normSourceType("miniso"), "MINISO");
+  assert.equal(normSourceType(" Local "), "LOCAL");
+  assert.equal(normSourceType("OTHER"), "OTHER");
+  assert.equal(normSourceType("services"), null); // not a known code
+  assert.equal(normSourceType(""), null);
+  assert.deepEqual(SUPPLIER_SOURCE_TYPES.map((s) => s.code), ["MINISO", "LOCAL", "OTHER"]);
+});
+
+test("validateSupplier handles payment_days, active_merch and source_type", () => {
+  const s = validateSupplier({ name: "ACME", source_type: "local", payment_days: "30", active_merch: false });
+  assert.equal(s.errors.length, 0);
+  assert.equal(s.clean.source_type, "LOCAL");
+  assert.equal(s.clean.payment_days, 30);
+  assert.equal(s.clean.active_merch, false);
+  // defaults: no source, no terms, in the merch budget
+  const d = validateSupplier({ name: "ACME" }).clean;
+  assert.equal(d.source_type, null);
+  assert.equal(d.payment_days, null);
+  assert.equal(d.active_merch, true);
+  // negative days rejected
+  assert.ok(validateSupplier({ name: "X", payment_days: "-5" }).errors.length === 1);
 });
 
 test("headroom: limit vs exposure", () => {

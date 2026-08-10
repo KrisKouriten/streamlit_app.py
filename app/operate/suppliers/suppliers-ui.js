@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Panel, StatRow, Stat, Badge, money } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
+import { SUPPLIER_SOURCE_TYPES } from "../../../lib/suppliers-rules";
 
 /* Suppliers & Credit — client. Reads the exposure report, facility limits and
    the HSBC facility position from the server page and drives /api/suppliers
@@ -27,7 +28,7 @@ const td = { padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whi
 // The row/utilisation tone: over the limit is red, near (≥90%, still within) amber.
 const rowTone = (r) => (r.over ? "red" : r.near ? "amber" : null);
 
-const EMPTY_NEW = { name: "", source_type: "", credit_limit: "", active: true };
+const EMPTY_NEW = { name: "", source_type: "", credit_limit: "", payment_days: "", active: true, active_merch: true };
 
 export default function SuppliersUI({ exposure, facilityLimits = [], hsbc = null, suppliers = [] }) {
   const router = useRouter();
@@ -166,7 +167,9 @@ function ManageSuppliers({ suppliers, post, busy }) {
     if (!np.name.trim()) return;
     post({
       op: "upsert", name: np.name.trim(), source_type: np.source_type || null,
-      credit_limit: np.credit_limit === "" ? null : Number(np.credit_limit), active: np.active,
+      credit_limit: np.credit_limit === "" ? null : Number(np.credit_limit),
+      payment_days: np.payment_days === "" ? null : Number(np.payment_days),
+      active: np.active, active_merch: np.active_merch,
     }, { note: `Supplier “${np.name.trim()}” saved.` }).then((j) => { if (j) { setNp(EMPTY_NEW); setShowNew(false); } });
   }
 
@@ -181,11 +184,21 @@ function ManageSuppliers({ suppliers, post, busy }) {
           <div style={{ padding: "14px 16px", borderRadius: 10, border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--line))", background: "var(--accent-bg)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, alignItems: "end" }}>
               <label style={{ ...field, gridColumn: "1 / -1" }}><span style={labelSt}>Name *</span><input style={inputSt} value={np.name} onChange={(e) => setNp((s) => ({ ...s, name: e.target.value }))} placeholder="e.g. MINISO HQ (Guangzhou)" /></label>
-              <label style={field}><span style={labelSt}>Source type</span><input style={inputSt} value={np.source_type} onChange={(e) => setNp((s) => ({ ...s, source_type: e.target.value }))} placeholder="e.g. MINISO / LOCAL" /></label>
+              <label style={field}><span style={labelSt}>Source</span>
+                <select style={inputSt} value={np.source_type} onChange={(e) => setNp((s) => ({ ...s, source_type: e.target.value }))}>
+                  <option value="">—</option>
+                  {SUPPLIER_SOURCE_TYPES.map((o) => <option key={o.code} value={o.code}>{o.label}</option>)}
+                </select>
+              </label>
+              <label style={field}><span style={labelSt}>Payment days</span><input type="number" min="0" style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={np.payment_days} onChange={(e) => setNp((s) => ({ ...s, payment_days: e.target.value }))} placeholder="e.g. 30" /></label>
               <label style={field}><span style={labelSt}>Credit limit (£)</span><MoneyInput style={inputSt} value={np.credit_limit} onChange={(e) => setNp((s) => ({ ...s, credit_limit: e.target.value }))} placeholder="blank = none" /></label>
               <label style={{ ...field, flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <input type="checkbox" checked={np.active} onChange={(e) => setNp((s) => ({ ...s, active: e.target.checked }))} />
                 <span style={labelSt}>Active</span>
+              </label>
+              <label style={{ ...field, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={np.active_merch} onChange={(e) => setNp((s) => ({ ...s, active_merch: e.target.checked }))} />
+                <span style={labelSt}>Active to Merch</span>
               </label>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
@@ -205,9 +218,11 @@ function ManageSuppliers({ suppliers, post, busy }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
               <thead><tr>
                 <th style={th}>Name</th>
-                <th style={th}>Source type</th>
+                <th style={th}>Source</th>
+                <th style={{ ...th, textAlign: "right" }}>Payment days</th>
                 <th style={{ ...th, textAlign: "right" }}>Credit limit (£)</th>
                 <th style={{ ...th, textAlign: "center" }}>Active</th>
+                <th style={{ ...th, textAlign: "center" }}>Active to Merch</th>
                 <th style={{ ...th, textAlign: "right" }}></th>
               </tr></thead>
               <tbody>
@@ -224,26 +239,38 @@ function ManageSuppliers({ suppliers, post, busy }) {
 function SupplierRow({ s, post, busy }) {
   const [name, setName] = useState(s.name || "");
   const [sourceType, setSourceType] = useState(s.source_type || "");
+  const [paymentDays, setPaymentDays] = useState(s.payment_days == null ? "" : String(s.payment_days));
   const [creditLimit, setCreditLimit] = useState(s.credit_limit == null ? "" : String(s.credit_limit));
   const [active, setActive] = useState(s.active !== false);
+  const [activeMerch, setActiveMerch] = useState(s.active_merch !== false);
 
   const dirty = name !== (s.name || "") || sourceType !== (s.source_type || "")
-    || creditLimit !== (s.credit_limit == null ? "" : String(s.credit_limit)) || active !== (s.active !== false);
+    || paymentDays !== (s.payment_days == null ? "" : String(s.payment_days))
+    || creditLimit !== (s.credit_limit == null ? "" : String(s.credit_limit))
+    || active !== (s.active !== false) || activeMerch !== (s.active_merch !== false);
 
   function save() {
     if (!name.trim()) return;
     post({
       op: "upsert", id: s.id, name: name.trim(), source_type: sourceType || null,
-      credit_limit: creditLimit === "" ? null : Number(creditLimit), active,
+      payment_days: paymentDays === "" ? null : Number(paymentDays),
+      credit_limit: creditLimit === "" ? null : Number(creditLimit), active, active_merch: activeMerch,
     }, { note: `Supplier “${name.trim()}” saved.` });
   }
 
   return (
     <tr>
       <td style={{ ...td, minWidth: 200 }}><input style={{ ...inputSt, width: "100%" }} value={name} onChange={(e) => setName(e.target.value)} /></td>
-      <td style={td}><input style={{ ...inputSt, width: 130 }} value={sourceType} onChange={(e) => setSourceType(e.target.value)} placeholder="—" /></td>
+      <td style={td}>
+        <select style={{ ...inputSt, width: 140 }} value={sourceType} onChange={(e) => setSourceType(e.target.value)}>
+          <option value="">—</option>
+          {SUPPLIER_SOURCE_TYPES.map((o) => <option key={o.code} value={o.code}>{o.label}</option>)}
+        </select>
+      </td>
+      <td style={{ ...td, textAlign: "right" }}><input type="number" min="0" style={{ ...inputSt, width: 90, textAlign: "right" }} className="fos-num" value={paymentDays} onChange={(e) => setPaymentDays(e.target.value)} placeholder="—" /></td>
       <td style={{ ...td, textAlign: "right" }}><MoneyInput style={{ ...inputSt, width: 130, textAlign: "right" }} className="fos-num" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="none" /></td>
       <td style={{ ...td, textAlign: "center" }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /></td>
+      <td style={{ ...td, textAlign: "center" }}><input type="checkbox" checked={activeMerch} onChange={(e) => setActiveMerch(e.target.checked)} /></td>
       <td style={{ ...td, textAlign: "right" }}>
         <button style={{ ...btn("var(--accent)"), padding: "6px 12px", opacity: dirty ? 1 : 0.5 }} disabled={busy || !dirty || !name.trim()} onClick={save}>Save</button>
       </td>
