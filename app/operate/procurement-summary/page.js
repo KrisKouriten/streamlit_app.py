@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { listForClose } from "../../../lib/procurement-close";
+import { facilityCustomerRefs } from "../../../lib/treasury";
 import { getFxRates } from "../../../lib/fx";
 import { findRate } from "../../../lib/fx-rules";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
@@ -36,6 +37,8 @@ export default async function ProcurementSummaryClose() {
   // The COSTING USD→GBP rate (from the Exchange Rates tab) values foreign stock.
   const fxRates = await getFxRates().catch(() => []);
   const costingRate = findRate(fxRates, "USD", "COSTING");
+  // Customer references from the HSBC facility, to suggest on the LC forms.
+  const custRefs = await facilityCustomerRefs().catch(() => []);
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
@@ -47,7 +50,7 @@ export default async function ProcurementSummaryClose() {
           This screen needs the procurement finance-close columns (migration <span style={{ fontFamily: "var(--mono)" }}>073_procurement_finance_close.sql</span>). Apply it, refresh, and procurement purchases will appear here.
         </EmptyState>
       ) : (
-        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} />
+        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} facilityCustomerRefs={custRefs} />
       )}
     </div>
   );
