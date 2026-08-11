@@ -70,6 +70,10 @@ const css = `
 html{scrollbar-gutter:stable}
 html,body{background:var(--bg);color:var(--ink);font-family:var(--sans);
   -webkit-font-smoothing:antialiased;line-height:1.5;letter-spacing:-0.008em}
+/* Never let a page push the window wider than the viewport — wide tables get
+   their own inner horizontal scroll (see .fos-tbl), so the page chrome stays
+   put and content is never clipped off the right of the screen. */
+html,body{overflow-x:clip;max-width:100vw}
 body{min-height:100vh;background-image:var(--key-light);background-repeat:no-repeat}
 body::after{content:"";position:fixed;inset:0;z-index:80;pointer-events:none;opacity:var(--grain-opacity);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
