@@ -311,25 +311,27 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                 return (
                   <Panel title="Documentary Credits" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ`}>
                     <StatRow>
-                      <Stat label="DC value" value={cur(dc.totalValue)} sub={`${dc.count} DC${dc.count === 1 ? "" : "s"} · USD`} />
-                      <Stat label="Value @ spot" value={money(dc.totalSpotGbp || 0)} sub="GBP at spot FX" />
-                      <Stat label="Value @ costing" value={money(dc.totalCostingGbp || 0)} sub="GBP at costing FX" />
+                      <Stat label="DC value" value={cur(dc.totalValue)} sub="full DC amount · USD" />
+                      <Stat label="Total LC value" value={cur(dc.totalLcValue)} sub="LCs logged · USD" />
+                      <Stat label="Balance" value={cur(dc.totalBalance)} tone={dc.totalBalance < -0.005 ? "red" : dc.totalBalance <= 0.005 ? "amber" : "green"} sub="DC value − LCs" />
+                      <Stat label="LC value @ spot" value={money(dc.totalSpotGbp || 0)} sub="GBP at spot FX" />
+                      <Stat label="LC value @ costing" value={money(dc.totalCostingGbp || 0)} sub="GBP at costing FX" />
                     </StatRow>
                     <Table
                       columns={[
                         { label: "DC reference", render: (r) => r.dc_reference },
                         { label: "Request", render: (r) => r.purchaseRef },
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
-                        { label: "DC value", align: "right", render: (r) => cur(r.value_usd) },
-                        { label: "GBP @ spot", align: "right", render: (r) => (r.gbp_spot != null ? money(r.gbp_spot) : "—") },
-                        { label: "GBP @ costing", align: "right", render: (r) => (r.gbp_costing != null ? money(r.gbp_costing) : "—") },
+                        { label: "DC value", align: "right", render: (r) => (r.dc_value != null ? cur(r.dc_value) : "—") },
+                        { label: "Total LC value", align: "right", render: (r) => cur(r.lc_value) },
+                        { label: "Balance", align: "right", render: (r) => (r.balance != null ? cur(r.balance) : "—") },
                         { label: "Expected payment", render: (r) => dmy(r.due_date) },
                       ]}
                       rows={dc.rows}
                       empty="—"
                     />
                     <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>
-                      DC value is the total of the LC amounts logged under each DC (<strong>Procurement → Manage LC</strong>), shown in GBP at the spot and costing FX rates from Exchange Rates. Expected payment is the earliest LC payment date under the DC.
+                      DC value is the full documentary credit keyed on <strong>Procurement → Manage LC</strong>; total LC value is the sum of the LCs logged under it (a DC can hold several); balance is DC value − total LC value. The GBP stats convert the LC total at the spot/costing FX rates. A DC with no value keyed shows &ldquo;—&rdquo;.
                     </div>
                   </Panel>
                 );
