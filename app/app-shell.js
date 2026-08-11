@@ -16,7 +16,7 @@ export default function AppShell({ userName, canBuddy = false, hiddenNav = [], c
       <RecentTracker />
       <div style={{ display: "flex", alignItems: "stretch", minHeight: "calc(100vh - 57px)" }}>
         <Sidebar hiddenNav={hiddenNav} />
-        <main style={{ flex: 1, minWidth: 0 }}>
+        <main style={{ flex: 1, minWidth: 0, maxWidth: "100%", overflowX: "clip" }}>
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
