@@ -410,8 +410,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                               const dcRow = { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", marginBottom: 6 };
                               return (
                                 <div style={{ marginBottom: 14 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Documentary Credits <span style={{ color: "var(--faint)", fontWeight: 500 }}>· amount used vs balance remaining</span></div>
-                                  {!(r.dcs || []).length && <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 8, lineHeight: 1.5 }}>No DC recorded yet. Add a DC (its reference + value) below, then group each LC under it — the LCs draw against the DC value.</div>}
+                                  <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 8 }}>Documentary Credits <span style={{ color: "var(--faint)", fontWeight: 500 }}>· group each LC under its DC</span></div>
+                                  {!(r.dcs || []).length && <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 8, lineHeight: 1.5 }}>No DC recorded yet. Add a DC (its reference + value) below, then group each LC under it.</div>}
                                   {groups.map((g) => {
                                     if (g.ungrouped) return (
                                       <div key="ungrouped" style={{ ...dcRow, borderStyle: "dashed" }}>
@@ -419,8 +419,6 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                         <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.count} LC{g.count === 1 ? "" : "s"} · {curMoney(g.used, r)} not assigned to a DC</span>
                                       </div>
                                     );
-                                    const util = g.dc_value ? Math.max(0, Math.min(1, g.used / g.dc_value)) : 0;
-                                    const barColor = g.over ? "var(--red)" : util > 0.9 ? "var(--amber)" : "var(--accent)";
                                     const editing = editDc?.dc_id === g.dc_id;
                                     return (
                                       <div key={g.dc_id} style={{ marginBottom: 6 }}>
@@ -428,19 +426,10 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                           <span style={{ fontWeight: 650, fontSize: 12.5, minWidth: 130 }}>{g.dc_reference}</span>
                                           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.count} LC{g.count === 1 ? "" : "s"}</span>
                                           <span style={{ fontSize: 12 }}><span style={labelSt}>Value </span>{g.dc_value != null ? curMoney(g.dc_value, r) : "—"}</span>
-                                          <span style={{ fontSize: 12 }}><span style={labelSt}>Used </span><span className="fos-num">{curMoney(g.used, r)}</span></span>
-                                          <span style={{ fontSize: 12, fontWeight: 600, color: g.over ? "var(--red)" : "var(--ink)" }}>
-                                            <span style={labelSt}>Remaining </span>{g.dc_value != null ? curMoney(g.remaining, r) : "—"}{g.over ? " · over" : ""}
-                                          </span>
                                           <span style={{ flex: 1 }} />
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => openEditDc(g)}>Edit</button>}
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => deleteDcRow(r, g)}>Delete</button>}
                                         </div>
-                                        {g.dc_value != null && (
-                                          <div style={{ height: 5, borderRadius: 3, background: "var(--raise)", overflow: "hidden", margin: "0 2px 8px" }}>
-                                            <div style={{ height: "100%", width: `${util * 100}%`, background: barColor }} />
-                                          </div>
-                                        )}
                                         {editing && (
                                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", padding: "8px 12px", background: "var(--raise)", borderRadius: 8, marginBottom: 8 }}>
                                             <Field label="DC reference"><input style={{ ...inputSt, width: 180 }} value={editDc.dc_reference} onChange={(e) => editDcField("dc_reference", e.target.value)} /></Field>

@@ -8,6 +8,7 @@ import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money, pct } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
+import RegisterTabs from "./register-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -282,24 +283,19 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                 </Panel>
               )}
 
-              <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · split by source`}>
+              <Panel title="Procurement register" note={`${d.proc.registerCount} purchases · Miniso / Local tabs`}>
                 {(() => {
                   const reg = d.proc.register || [];
                   // Group by the supplier's master classification (report_source:
                   // MINISO / LOCAL / OTHER), falling back to the row source.
                   const grp = (r) => r.report_source || (r.source === "MINISO" ? "MINISO" : r.source === "LOCAL" ? "LOCAL" : "OTHER");
-                  const groups = PROC_REGISTER_GROUPS
-                    .map(([key, label, lc]) => [key, label, lc, reg.filter((r) => grp(r) === key)])
-                    .filter(([, , , rows]) => rows.length);
-                  if (!groups.length) return <div style={{ fontSize: 13, color: "var(--faint)" }}>No procurement purchases yet.</div>;
-                  return groups.map(([key, label, lc, rows]) => (
-                    <div key={key} style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 650, margin: "2px 0 8px" }}>
-                        {label} <span style={{ color: "var(--faint)", fontWeight: 500, fontSize: 11.5 }}>· {rows.length} purchase{rows.length === 1 ? "" : "s"}</span>
-                      </div>
-                      <Table columns={procRegisterColumns({ lc })} rows={rows} empty="—" />
-                    </div>
-                  ));
+                  // One tab per source so a long Miniso list doesn't crowd out Local.
+                  // Each tab's table is built here (server) and shown one at a time.
+                  const tabs = PROC_REGISTER_GROUPS.map(([key, label, lc]) => {
+                    const rows = reg.filter((r) => grp(r) === key);
+                    return { key, label, count: rows.length, content: <Table columns={procRegisterColumns({ lc })} rows={rows} empty="—" /> };
+                  });
+                  return <RegisterTabs tabs={tabs} />;
                 })()}
                 {d.proc.excludedMerch > 0 && (
                   <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 4 }}>
@@ -316,10 +312,8 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                     <StatRow>
                       <Stat label="DC value" value={cur(dc.totalValue)} sub="total credit" />
                       <Stat label="Used (LCs logged)" value={cur(dc.totalUsed)} sub="in Procurement" />
-                      <Stat label="Drawn on facility" value={cur(dc.totalDrawn || 0)} sub="on HSBC facility" />
-                      <Stat label="Balance remaining" value={cur(dc.totalRemaining)} tone={dc.totalRemaining < 0 ? "red" : dc.totalRemaining <= 0.0001 ? "amber" : "green"}
+                      <Stat label="Remaining" value={cur(dc.totalRemaining)} tone={dc.totalRemaining < 0 ? "red" : dc.totalRemaining <= 0.0001 ? "amber" : "green"}
                         sub={dc.overCount ? `${dc.overCount} over value` : "value − used"} />
-                      <Stat label="LCs not on facility" value={String(dc.notOnFacilityCount || 0)} tone={dc.notOnFacilityCount ? "amber" : undefined} sub="awaiting HSBC" />
                     </StatRow>
                     <Table
                       columns={[
@@ -328,15 +322,13 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
                         { label: "DC value", align: "right", render: (r) => (r.dc_value != null ? cur(r.dc_value) : "—") },
                         { label: "Used", align: "right", render: (r) => cur(r.used) },
-                        { label: "Drawn", align: "right", render: (r) => cur(r.drawn || 0) },
                         { label: "Remaining", align: "right", render: (r) => (r.dc_value != null ? cur(r.remaining) : "—") },
-                        { label: "", render: (r) => (r.over ? <Badge tone="red">Over value</Badge> : r.dc_value == null ? <Badge tone="muted">No value set</Badge> : r.notOnFacility ? <Badge tone="amber">{r.notOnFacility} not on facility</Badge> : "") },
                       ]}
                       rows={dc.rows}
                       empty="—"
                     />
                     <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>
-                      Balance remaining is the DC value less the LCs logged. Enter each DC&rsquo;s value on <strong>Procurement → Manage LC</strong> for a balance to show; &ldquo;drawn on facility&rdquo; comes from the HSBC extract uploaded in Treasury.
+                      DC value is the full documentary credit; used is the LC subtotals logged in Procurement; remaining is DC value less used. Enter each DC&rsquo;s value on <strong>Procurement → Manage LC</strong> — a DC with no value keyed shows &ldquo;—&rdquo;.
                     </div>
                   </Panel>
                 );
