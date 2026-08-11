@@ -311,25 +311,24 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                 return (
                   <Panel title="Documentary Credits" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ`}>
                     <StatRow>
-                      <Stat label="DC value" value={cur(dc.totalValue)} sub={`${dc.count} DC${dc.count === 1 ? "" : "s"} · USD`} />
-                      <Stat label="Value @ spot" value={money(dc.totalSpotGbp || 0)} sub="GBP at spot FX" />
-                      <Stat label="Value @ costing" value={money(dc.totalCostingGbp || 0)} sub="GBP at costing FX" />
+                      <Stat label="DC value" value={cur(dc.totalValue)} sub={`${dc.count} DC${dc.count === 1 ? "" : "s"} · ${money(dc.totalSpotGbp || 0)} @ spot`} />
+                      <Stat label="LC value" value={cur(dc.totalLcValue || 0)} sub="quoted in Treasury" />
+                      <Stat label="Balance" value={cur(dc.totalBalance || 0)} sub="DC value − LC value" />
                     </StatRow>
                     <Table
                       columns={[
                         { label: "DC reference", render: (r) => r.dc_reference },
-                        { label: "Request", render: (r) => r.purchaseRef },
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
                         { label: "DC value", align: "right", render: (r) => cur(r.dc_value) },
-                        { label: "GBP @ spot", align: "right", render: (r) => (r.gbp_spot != null ? money(r.gbp_spot) : "—") },
-                        { label: "GBP @ costing", align: "right", render: (r) => (r.gbp_costing != null ? money(r.gbp_costing) : "—") },
+                        { label: "LC value", align: "right", render: (r) => cur(r.lc_value || 0) },
+                        { label: "Balance", align: "right", render: (r) => cur(r.balance || 0) },
                         { label: "Expected payment", render: (r) => dmy(r.due_date) },
                       ]}
                       rows={dc.rows}
                       empty="—"
                     />
                     <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>
-                      DC value is the total of the LC amounts logged under each DC (<strong>Procurement → Manage LC</strong>) — a DC can hold several LCs — shown in GBP at the spot and costing FX rates. Expected payment is the earliest LC payment date under the DC.
+                      <strong>DC value</strong> is the total of the LC amounts logged under each DC (<strong>Procurement → Manage LC</strong>) — a DC can hold several LCs. <strong>LC value</strong> is what Treasury has quoted for those LCs (drawn on the HSBC trade facility). <strong>Balance</strong> is DC value − LC value. Expected payment is the earliest LC payment date under the DC.
                     </div>
                   </Panel>
                 );
