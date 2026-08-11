@@ -307,28 +307,29 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               {d.proc.dc && d.proc.dc.count > 0 && (() => {
                 const dc = d.proc.dc;
                 const cur = (v) => procCcyAmt(v, dc.currency);
+                const dmy = (s) => { if (!s) return "—"; const x = new Date(s); return isNaN(x) ? s : x.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }); };
                 return (
-                  <Panel title="Documentary Credit drawdown" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ · ${dc.currency}`}>
+                  <Panel title="Documentary Credits" note={`${dc.count} DC${dc.count === 1 ? "" : "s"} · Miniso HQ`}>
                     <StatRow>
-                      <Stat label="DC value" value={cur(dc.totalValue)} sub="total credit" />
-                      <Stat label="Used (LCs logged)" value={cur(dc.totalUsed)} sub="in Procurement" />
-                      <Stat label="Remaining" value={cur(dc.totalRemaining)} tone={dc.totalRemaining < 0 ? "red" : dc.totalRemaining <= 0.0001 ? "amber" : "green"}
-                        sub={dc.overCount ? `${dc.overCount} over value` : "value − used"} />
+                      <Stat label="DC value" value={cur(dc.totalValue)} sub={`${dc.count} DC${dc.count === 1 ? "" : "s"} · USD`} />
+                      <Stat label="Value @ spot" value={money(dc.totalSpotGbp || 0)} sub="GBP at spot FX" />
+                      <Stat label="Value @ costing" value={money(dc.totalCostingGbp || 0)} sub="GBP at costing FX" />
                     </StatRow>
                     <Table
                       columns={[
                         { label: "DC reference", render: (r) => r.dc_reference },
                         { label: "Request", render: (r) => r.purchaseRef },
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
-                        { label: "DC value", align: "right", render: (r) => (r.dc_value != null ? cur(r.dc_value) : "—") },
-                        { label: "Used", align: "right", render: (r) => cur(r.used) },
-                        { label: "Remaining", align: "right", render: (r) => (r.dc_value != null ? cur(r.remaining) : "—") },
+                        { label: "DC value", align: "right", render: (r) => cur(r.value_usd) },
+                        { label: "GBP @ spot", align: "right", render: (r) => (r.gbp_spot != null ? money(r.gbp_spot) : "—") },
+                        { label: "GBP @ costing", align: "right", render: (r) => (r.gbp_costing != null ? money(r.gbp_costing) : "—") },
+                        { label: "Expected payment", render: (r) => dmy(r.due_date) },
                       ]}
                       rows={dc.rows}
                       empty="—"
                     />
                     <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 }}>
-                      DC value is the full documentary credit; used is the LC subtotals logged in Procurement; remaining is DC value less used. Enter each DC&rsquo;s value on <strong>Procurement → Manage LC</strong> — a DC with no value keyed shows &ldquo;—&rdquo;.
+                      DC value is the total of the LC amounts logged under each DC (<strong>Procurement → Manage LC</strong>), shown in GBP at the spot and costing FX rates from Exchange Rates. Expected payment is the earliest LC payment date under the DC.
                     </div>
                   </Panel>
                 );
