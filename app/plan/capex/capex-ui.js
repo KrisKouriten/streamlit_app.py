@@ -372,6 +372,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
     tax_rate: selected.tax_rate == null ? "" : String(Number(selected.tax_rate) * 100),
     discount_rate: selected.discount_rate == null ? "" : String(Number(selected.discount_rate) * 100),
     rent: selected.rent ?? "", business_rates: selected.business_rates ?? "", service_charge: selected.service_charge ?? "",
+    years: selected.years == null ? "" : String(selected.years),
     status: selected.status || "PLANNED",
   }));
   const [showEdit, setShowEdit] = useState(false);
@@ -380,6 +381,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
 
   function saveAssumptions() {
     const patch = { status: edit.status };
+    if (edit.years !== "" && edit.years != null) patch.years = Math.min(30, Math.max(1, Math.round(Number(edit.years))));
     if (edit.year1_revenue !== "") patch.year1_revenue = Number(edit.year1_revenue);
     for (const k of ["revenue_growth_pct", "gross_margin_pct", "payroll_pct", "opex_pct", "tax_rate", "discount_rate"]) {
       if (edit[k] !== "") patch[k] = Number(edit[k]) / 100;
@@ -426,7 +428,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
 
       {/* 10-year model */}
       <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>10-year model
+        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>{(modelRows.length || Number(selected.years) || 10)}-year model
           <span style={{ fontSize: 12, fontWeight: 400, color: "var(--faint)" }}> · discount rate {pct(summary.discountRate)}{paybackIdx >= 0 && modelRows[paybackIdx] ? ` · payback in year ${modelRows[paybackIdx].year}` : ""}</span>
         </div>
         {!modelRows.length ? (
@@ -486,6 +488,7 @@ function ProjectDrill({ selected, base, goBack, canManage, post, busy }) {
                 <label style={field}><span style={labelSt}>Opex (%)</span><input type="number" step="0.1" style={inputSt} value={edit.opex_pct} onChange={setEK("opex_pct")} /></label>
                 <label style={field}><span style={labelSt}>Tax rate (%)</span><input type="number" step="0.1" style={inputSt} value={edit.tax_rate} onChange={setEK("tax_rate")} /></label>
                 <label style={field}><span style={labelSt}>Discount rate (%)</span><input type="number" step="0.1" style={inputSt} value={edit.discount_rate} onChange={setEK("discount_rate")} /></label>
+                <label style={field}><span style={labelSt}>Model length (years)</span><input type="number" step="1" min="1" max="30" style={inputSt} value={edit.years} onChange={setEK("years")} /></label>
                 <label style={field}><span style={labelSt}>Rent (£/yr)</span><MoneyInput style={inputSt} value={edit.rent} onValue={setEV("rent")} /></label>
                 <label style={field}><span style={labelSt}>Business rates (£/yr)</span><MoneyInput style={inputSt} value={edit.business_rates} onValue={setEV("business_rates")} /></label>
                 <label style={field}><span style={labelSt}>Service charge (£/yr)</span><MoneyInput style={inputSt} value={edit.service_charge} onValue={setEV("service_charge")} /></label>
