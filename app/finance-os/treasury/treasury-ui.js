@@ -199,10 +199,10 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
   const products = [...new Set(rows.map((r) => r.product_type).filter(Boolean))];
 
   function download() {
-    const head = ["Reference", "Beneficiary", "Currency", "Payment amount", "Facility GBP", "Product", "Cost driver", "Start", "Due", "Days", "Settlement month", "Status"];
+    const head = ["Reference", "DC reference", "Beneficiary", "Currency", "Payment amount", "Facility GBP", "Product", "Cost driver", "Start", "Due", "Days", "Settlement month", "Status"];
     const esc = (v) => { const x = v == null ? "" : String(v); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
     const lines = [head.join(",")];
-    for (const r of filtered) lines.push([r.reference, r.beneficiary, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
+    for (const r of filtered) lines.push([r.reference, r.in_procurement ? (r.dc_reference || "") : "NOT IN PROCUREMENT", r.beneficiary, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
     const a = document.createElement("a");
     a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(lines.join("\n"));
     a.download = `bank-trade-facility-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -259,14 +259,17 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 980 }}>
             <thead><tr>
-              {["Reference", "Beneficiary", "Product", "Cost driver", "Ccy", "Payment", "Facility GBP", "Start", "Due", "Days", "Settle"].map((h, i) => (
-                <th key={h} style={{ ...th, textAlign: i >= 5 && i <= 6 ? "right" : "left" }}>{h}</th>
+              {["Reference", "DC", "Beneficiary", "Product", "Cost driver", "Ccy", "Payment", "Facility GBP", "Start", "Due", "Days", "Settle"].map((h, i) => (
+                <th key={h} style={{ ...th, textAlign: i >= 6 && i <= 7 ? "right" : "left" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
                   <td style={td}>{r.reference}</td>
+                  <td style={td}>{r.in_procurement
+                    ? (r.dc_reference || <span title={`LC logged (${r.dc_purchase_ref || "—"}) but not grouped under a DC`} style={{ color: "var(--faint)" }}>no DC</span>)
+                    : <span title="This drawing's LC reference isn't logged in Procurement — check for a mis-keyed LC reference or an extra LC on the facility."><Badge tone="amber">Not in procurement</Badge></span>}</td>
                   <td style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{r.beneficiary}</td>
                   <td style={td}>{r.product_type === "Post-shipment buyer loan" ? <Badge tone="accent">Buyer loan</Badge> : <Badge tone="muted">TradePay</Badge>}</td>
                   <td style={td}>{r.cost_driver}</td>
