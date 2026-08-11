@@ -425,7 +425,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                         <div style={dcRow}>
                                           <span style={{ fontWeight: 650, fontSize: 12.5, minWidth: 130 }}>{g.dc_reference}</span>
                                           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{g.count} LC{g.count === 1 ? "" : "s"}</span>
-                                          <span style={{ fontSize: 12 }}><span style={labelSt}>Value </span>{g.dc_value != null ? curMoney(g.dc_value, r) : "—"}</span>
+                                          <span style={{ fontSize: 12 }}><span style={labelSt}>Value </span>{curMoney(g.used, r)}</span>
                                           <span style={{ flex: 1 }} />
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => openEditDc(g)}>Edit</button>}
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => deleteDcRow(r, g)}>Delete</button>}
