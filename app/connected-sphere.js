@@ -207,6 +207,35 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
       }
 
+      // The dark core — a black ball with a warm halo at the centre of the sphere.
+      // Drawn here, before the wireframe and arcs, so it occludes the stars behind
+      // it while the orbit rings sweep around and in front of it.
+      if (P.glow && P.centerValue == null) {
+        const hp = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(time * 1.6));
+        const ballR = R * 0.20;
+        // Warm halo — a soft corona, brightest just outside the rim, fading out.
+        ctx.globalCompositeOperation = ADD;
+        const halo = ctx.createRadialGradient(cx, cy, ballR * 0.55, cx, cy, ballR * 2.6);
+        halo.addColorStop(0, "rgba(" + GOLD_B + ",0)");
+        halo.addColorStop(0.32, "rgba(" + GOLD_B + "," + (0.34 + 0.12 * hp) + ")");
+        halo.addColorStop(0.6, "rgba(" + AMBER + ",0.14)");
+        halo.addColorStop(1, "rgba(" + AMBER + ",0)");
+        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, ballR * 2.6, 0, 6.283); ctx.fill();
+        // The black ball — opaque, subtly shaded so it reads as a sphere.
+        ctx.globalCompositeOperation = "source-over";
+        const ball = ctx.createRadialGradient(cx - ballR * 0.28, cy - ballR * 0.32, ballR * 0.1, cx, cy, ballR);
+        ball.addColorStop(0, "rgba(24,21,17,1)");
+        ball.addColorStop(0.7, "rgba(7,6,5,1)");
+        ball.addColorStop(1, "rgba(0,0,0,1)");
+        ctx.fillStyle = ball; ctx.beginPath(); ctx.arc(cx, cy, ballR, 0, 6.283); ctx.fill();
+        // A crisp warm rim right at the edge — the corona's bright ring.
+        ctx.globalCompositeOperation = ADD;
+        ctx.strokeStyle = "rgba(255,244,214," + (0.5 + 0.16 * hp) + ")";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(cx, cy, ballR + 0.4, 0, 6.283); ctx.stroke();
+        ctx.globalCompositeOperation = "source-over";
+      }
+
       ctx.lineWidth = 1;
       for (const ring of WIRE) {
         ctx.beginPath();
@@ -281,25 +310,6 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
           ctx.textBaseline = "middle";
           ctx.fillText(n.l, q.x + rr + 5, q.y);
         }
-      }
-
-      const pulse = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(time * 1.6));
-      if (P.glow && P.centerValue == null) {
-        ctx.globalCompositeOperation = ADD;
-        const coreR = R * (0.17 + 0.02 * pulse);
-        const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.4);
-        cg.addColorStop(0, "rgba(" + GOLD_B + ",0.85)");
-        cg.addColorStop(0.22, "rgba(" + GOLD + "," + (0.40 + 0.18 * pulse) + ")");
-        cg.addColorStop(0.6, "rgba(" + AMBER + ",0.10)");
-        cg.addColorStop(1, "rgba(" + AMBER + ",0)");
-        ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, coreR * 3.4, 0, 6.283); ctx.fill();
-        const hotR = coreR * (0.95 + 0.06 * pulse);
-        const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
-        hot.addColorStop(0, "rgba(255,251,238," + (0.85 + 0.12 * pulse) + ")");
-        hot.addColorStop(0.4, "rgba(" + GOLD_B + ",0.7)");
-        hot.addColorStop(1, "rgba(" + GOLD + ",0)");
-        ctx.fillStyle = hot; ctx.beginPath(); ctx.arc(cx, cy, hotR, 0, 6.283); ctx.fill();
-        ctx.globalCompositeOperation = "source-over";
       }
 
       if (P.centerValue != null) {
