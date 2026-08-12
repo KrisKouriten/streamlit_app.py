@@ -134,7 +134,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     for (let i = 0; i < 1050; i++) {
       const u = rnd() * 2 - 1;                                 // along the plane, -1..1
       const v = (rnd() + rnd() + rnd() - 1.5) * 0.42;          // gaussian across the plane
-      const core = Math.exp(-(u * u) * 1.4);                   // brighter toward the centre
+      const core = Math.exp(-((u - 0.5) * (u - 0.5)) * 1.8);   // bright galactic core sits to the RIGHT, so the sphere (centre) is not overshadowed
       BAND.push({ u, v, b: (0.30 + rnd() * 0.5) * (0.45 + core * 0.7),
         sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
     }
@@ -183,11 +183,13 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
       };
       ctx.globalCompositeOperation = ADD;
-      // Warm galactic-centre glow.
-      const [cxg, cyg] = toScreen(0, 0.05);
+      // Warm galactic-centre glow — offset to the right so the sphere sits on a
+      // calmer patch of sky and the bright bulge reads to one side (as in the
+      // reference), never behind and overpowering the sphere.
+      const [cxg, cyg] = toScreen(0.5, 0.06);
       const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
-      coreGas.addColorStop(0, "rgba(255,246,226,0.56)");
-      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.30)");
+      coreGas.addColorStop(0, "rgba(255,246,226,0.5)");
+      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.26)");
       coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
       ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
       // Dense starfield strung along the plane.
