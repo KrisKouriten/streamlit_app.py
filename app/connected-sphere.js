@@ -130,7 +130,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       return MAGENTA_S;
     }
     // The galactic plane is built from a dense VOLUME of fine stars (not gas): a
-    // luminous river of ~2600 points, concentrated across the whole plane rather
+    // luminous river of ~3600 points, concentrated across the whole plane rather
     // than a single bright bulge, brightening gently toward one side.
     const BAND = [];
     for (let i = 0; i < 3600; i++) {
