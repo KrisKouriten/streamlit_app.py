@@ -40,6 +40,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     const GOLD = "231,212,146";
     const GOLD_B = "244,230,172";
     const AMBER = "207,143,74";
+    const ORBIT = "234,238,247"; // the orbit lines — a near-white, faintly cool line so they read bolder than the warm gold
     const TONE = { green: "126,200,120", amber: "224,180,80", red: "220,110,90", accent: GOLD_B, faint: "120,116,104" };
     const ADD = "lighter"; // the sphere always sits on a dark stage, so additive glow
 
@@ -219,12 +220,12 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
       }
 
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.3;
       for (const ring of WIRE) {
         ctx.beginPath();
         let started = false;
         for (const v of ring) { const q = project(v, ay); if (!started) { ctx.moveTo(q.x, q.y); started = true; } else ctx.lineTo(q.x, q.y); }
-        ctx.strokeStyle = "rgba(" + GOLD + ",0.05)"; ctx.stroke();
+        ctx.strokeStyle = "rgba(" + ORBIT + ",0.12)"; ctx.stroke();
       }
 
       ctx.globalCompositeOperation = ADD;
@@ -243,7 +244,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         const al = dA(za);
         ctx.beginPath(); ctx.moveTo(proj[0].x, proj[0].y);
         for (let k = 1; k < proj.length; k++) ctx.lineTo(proj[k].x, proj[k].y);
-        ctx.strokeStyle = "rgba(" + GOLD + "," + (0.16 * al) + ")"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.strokeStyle = "rgba(" + ORBIT + "," + (0.22 * al) + ")"; ctx.lineWidth = 1.4; ctx.stroke();
       }
 
       for (const arc of ARCS) {
