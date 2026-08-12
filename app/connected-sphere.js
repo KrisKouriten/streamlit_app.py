@@ -104,10 +104,10 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     }
 
     const STARS = [];
-    for (let i = 0; i < 240; i++) {
+    for (let i = 0; i < 560; i++) {
       const r = rnd();
       const col = r < 0.6 ? "247,249,255" : r < 0.82 ? "205,218,255" : r < 0.93 ? GOLD_B : "224,168,214";
-      STARS.push({ x: rnd(), y: rnd(), r: 0.45 + rnd() * 1.5, a: 0.35 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9, col });
+      STARS.push({ x: rnd(), y: rnd(), r: 0.5 + rnd() * 1.6, a: 0.5 + rnd() * 0.5, tw: rnd() * 6.283, glow: rnd() > 0.86, col });
     }
     // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
     // of stars across the sky with a warm central bulge and a dark dust lane, so the
@@ -123,20 +123,22 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
           WARM_S = "255,244,224", MAGENTA_S = "224,168,214";
     function bandColor(core) {
       const r = rnd();
-      if (core > 0.6 && r < 0.42) return WARM_S;               // warm stars near the centre
-      if (r < 0.50) return WHITE;
-      if (r < 0.74) return PALEBLUE;
-      if (r < 0.86) return GOLD_B;
-      if (r < 0.94) return "236,168,96";
+      if (core > 0.7 && r < 0.16) return WARM_S;               // a rare warm star near the densest part
+      if (r < 0.64) return WHITE;                              // the river is mostly white/pale-blue starlight,
+      if (r < 0.90) return PALEBLUE;                           // resolved into countless fine stars, not gas
+      if (r < 0.96) return GOLD_B;
       return MAGENTA_S;
     }
+    // The galactic plane is built from a dense VOLUME of fine stars (not gas): a
+    // luminous river of ~3600 points, concentrated across the whole plane rather
+    // than a single bright bulge, brightening gently toward one side.
     const BAND = [];
-    for (let i = 0; i < 760; i++) {
+    for (let i = 0; i < 3600; i++) {
       const u = rnd() * 2 - 1;                                 // along the plane, -1..1
-      const v = (rnd() + rnd() + rnd() - 1.5) * 0.42;          // gaussian across the plane
-      const core = Math.exp(-(u * u) * 1.4);                   // brighter toward the centre
-      BAND.push({ u, v, b: (0.30 + rnd() * 0.5) * (0.45 + core * 0.7),
-        sz: 0.35 + rnd() * (Math.abs(v) < 0.3 ? 1.25 : 0.75), col: bandColor(core) });
+      const v = (rnd() + rnd() + rnd() - 1.5) * 0.40;          // gaussian across the plane
+      const core = Math.exp(-((u - 0.35) * (u - 0.35)) * 1.0); // gentle, so the river reads as continuous
+      BAND.push({ u, v, b: (0.28 + rnd() * 0.52) * (0.55 + core * 0.5),
+        sz: 0.3 + rnd() * (Math.abs(v) < 0.28 ? 1.0 : 0.55), col: bandColor(core) });
     }
     const GAL_ANGLE = -0.13;
 
@@ -183,17 +185,20 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
       };
       ctx.globalCompositeOperation = ADD;
-      // Warm galactic-centre glow.
-      const [cxg, cyg] = toScreen(0, 0.05);
-      const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
-      coreGas.addColorStop(0, "rgba(255,246,226,0.42)");
-      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.20)");
+      // A faint warm haze where the star density peaks — kept very low, because the
+      // galaxy is meant to read as a VOLUME OF STARS, not a cloud of gas. This is
+      // just the collective glow of unresolved starlight toward the core, offset to
+      // the right so the sphere sits on a calmer patch of sky.
+      const [cxg, cyg] = toScreen(0.35, 0.06);
+      const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.34);
+      coreGas.addColorStop(0, "rgba(255,247,231,0.16)");
+      coreGas.addColorStop(0.30, "rgba(" + GOLD_B + ",0.06)");
       coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
-      ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
+      ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.34, 0, 6.283); ctx.fill();
       // Dense starfield strung along the plane.
       for (const p of BAND) {
         const [px, py] = toScreen(p.u, p.v);
-        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
+        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 1.25) + ")";
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
