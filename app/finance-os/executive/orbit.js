@@ -69,9 +69,9 @@ export default function Orbit({ core, nodes }) {
             const x = 50 + R * Math.cos((a * Math.PI) / 180);
             const y = 50 + R * Math.sin((a * Math.PI) / 180);
             return <line key={i} className={`orb-line ${shown ? "" : "pre"}`} x1="50" y1="50" x2={x} y2={y}
-              stroke="var(--accent-deep)" strokeWidth="0.35" pathLength="1" style={{ transitionDelay: `${i * 70}ms` }} />;
+              stroke="color-mix(in srgb, var(--accent) 55%, var(--accent-deep))" strokeWidth="0.5" pathLength="1" style={{ transitionDelay: `${i * 70}ms` }} />;
           })}
-          <circle cx="50" cy="50" r={R} fill="none" stroke="var(--line)" strokeWidth="0.25" strokeDasharray="0.6 1.4" opacity={shown ? 1 : 0} style={{ transition: "opacity .8s ease .3s" }} />
+          <circle cx="50" cy="50" r={R} fill="none" stroke="color-mix(in srgb, var(--accent) 45%, var(--line))" strokeWidth="0.4" strokeDasharray="1.2 1.2" opacity={shown ? 1 : 0} style={{ transition: "opacity .8s ease .3s" }} />
         </svg>
 
         {/* core */}
