@@ -174,8 +174,8 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
 
       ctx.clearRect(0, 0, W, H);
 
-      // Milky-Way backdrop — mottled nebula gas, a warm galactic-centre glow, a
-      // dense starfield and irregular dark dust; the sphere sits in front.
+      // Milky-Way backdrop — a starfield strung along the galactic plane; no gas
+      // or haze, so the sphere sits on a clean, dark sky.
       const gca = Math.cos(GAL_ANGLE), gsa = Math.sin(GAL_ANGLE);
       const bx = 0.5 * W, by = 0.46 * H, halfLen = 0.9 * W, thick = 0.30 * H;
       const toScreen = (u, v) => {
@@ -183,14 +183,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         return [bx + lx * gca - ly * gsa, by + lx * gsa + ly * gca];
       };
       ctx.globalCompositeOperation = ADD;
-      // Warm galactic-centre glow.
-      const [cxg, cyg] = toScreen(0, 0.05);
-      const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
-      coreGas.addColorStop(0, "rgba(255,246,226,0.42)");
-      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.20)");
-      coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
-      ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
-      // Dense starfield strung along the plane.
+      // Starfield strung along the plane.
       for (const p of BAND) {
         const [px, py] = toScreen(p.u, p.v);
         ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
