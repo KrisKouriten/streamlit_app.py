@@ -104,10 +104,10 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
     }
 
     const STARS = [];
-    for (let i = 0; i < 240; i++) {
+    for (let i = 0; i < 360; i++) {
       const r = rnd();
       const col = r < 0.6 ? "247,249,255" : r < 0.82 ? "205,218,255" : r < 0.93 ? GOLD_B : "224,168,214";
-      STARS.push({ x: rnd(), y: rnd(), r: 0.45 + rnd() * 1.5, a: 0.35 + rnd() * 0.55, tw: rnd() * 6.283, glow: rnd() > 0.9, col });
+      STARS.push({ x: rnd(), y: rnd(), r: 0.5 + rnd() * 1.6, a: 0.5 + rnd() * 0.5, tw: rnd() * 6.283, glow: rnd() > 0.86, col });
     }
     // A stylised edge-on galaxy — the galactic plane seen side-on, a luminous band
     // of stars across the sky with a warm central bulge and a dark dust lane, so the
@@ -131,7 +131,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       return MAGENTA_S;
     }
     const BAND = [];
-    for (let i = 0; i < 760; i++) {
+    for (let i = 0; i < 1050; i++) {
       const u = rnd() * 2 - 1;                                 // along the plane, -1..1
       const v = (rnd() + rnd() + rnd() - 1.5) * 0.42;          // gaussian across the plane
       const core = Math.exp(-(u * u) * 1.4);                   // brighter toward the centre
@@ -186,14 +186,14 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       // Warm galactic-centre glow.
       const [cxg, cyg] = toScreen(0, 0.05);
       const coreGas = ctx.createRadialGradient(cxg, cyg, 0, cxg, cyg, W * 0.4);
-      coreGas.addColorStop(0, "rgba(255,246,226,0.42)");
-      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.20)");
+      coreGas.addColorStop(0, "rgba(255,246,226,0.56)");
+      coreGas.addColorStop(0.28, "rgba(" + GOLD_B + ",0.30)");
       coreGas.addColorStop(1, "rgba(" + AMBER + ",0)");
       ctx.fillStyle = coreGas; ctx.beginPath(); ctx.arc(cxg, cyg, W * 0.4, 0, 6.283); ctx.fill();
       // Dense starfield strung along the plane.
       for (const p of BAND) {
         const [px, py] = toScreen(p.u, p.v);
-        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 0.7) + ")";
+        ctx.fillStyle = "rgba(" + p.col + "," + (p.b * 1.25) + ")";
         ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.283); ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";

@@ -4,7 +4,6 @@ import { getSession } from "../../../lib/auth";
 import { getHubData } from "../../../lib/hub";
 import { money, pct, num, dateLabel } from "../ui";
 import ConnectedSphere from "../../connected-sphere";
-import Starfield from "../starfield";
 import PerspectivePanel from "../../perspective-panel";
 import LiveStamp from "../../live-stamp";
 
@@ -118,10 +117,7 @@ export default async function ExecutiveHub() {
       <div style={{ position: "relative", height: "clamp(340px, 44vh, 460px)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 8,
         border: "1px solid var(--line)",
         background: "radial-gradient(120% 90% at 50% 46%, rgba(164,134,63,0.16), transparent 60%), linear-gradient(180deg, #0d0c0a 0%, #12100b 55%, #0d0c0a 100%)" }}>
-        <Starfield intensity={0.8} />
-        <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
-          <ConnectedSphere labels glow={false} centerValue={attention.length} centerCaption="items need attention" pillarTones={pillarTones} />
-        </div>
+        <ConnectedSphere labels glow={false} centerValue={attention.length} centerCaption="items need attention" pillarTones={pillarTones} />
       </div>
 
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 18, lineHeight: 1.5, textAlign: "center", maxWidth: 760, marginInline: "auto" }}>
