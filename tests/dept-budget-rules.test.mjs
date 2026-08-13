@@ -73,6 +73,14 @@ test("validateLine needs a label; validateBudget needs dept + sane year", () => 
   assert.match(validateBudget({ department: "Marketing", budget_year: 1900 }), /valid budget year/);
 });
 
+test("validateBudget requires a Business Project for a project budget", () => {
+  // Business (annual) budgets never need a project.
+  assert.equal(validateBudget({ department: "Property", budget_year: 2026, budget_type: "BUSINESS" }), null);
+  // Project budgets must name the project they belong to.
+  assert.match(validateBudget({ department: "Property", budget_year: 2026, budget_type: "PROJECT" }), /Business Project/);
+  assert.equal(validateBudget({ department: "Property", budget_year: 2026, budget_type: "PROJECT", business_project_id: 7 }), null);
+});
+
 test("state machine: the full chain's legal transitions pass; DRAFT is the only editable state", () => {
   assert.equal(budgetTransitionError("submit_to_finance", "DRAFT"), null);
   assert.equal(budgetTransitionError("finance_pass", "FINANCE_REVIEW"), null);

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { listBudgets, getUserDepartment, listObjectives } from "../../../lib/dept-budget";
 import { listDepartments } from "../../../lib/governance";
+import { getBusinessProjects } from "../../../lib/business-projects";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
 import DeptBudgetUI from "./dept-budget-ui";
 
@@ -14,12 +15,17 @@ export default async function DeptBudgetsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [list, departments, myDept, objectives] = await Promise.all([
+  const [list, departments, myDept, objectives, projects] = await Promise.all([
     listBudgets({}),
     listDepartments(),
     getUserDepartment(session.id),
     listObjectives(),
+    getBusinessProjects().catch(() => []),
   ]);
+  // Live Business Projects a project budget can be assigned to (exclude finished).
+  const businessProjects = (projects || [])
+    .filter((p) => p.status !== "Done" && p.status !== "Complete")
+    .map((p) => ({ id: p.id, name: p.name, status: p.status }));
 
   const isAdminFinance = hasRole(session, "ADMIN", "FINANCE");
   const deptNames = departments.map((d) => d.department_name);
@@ -40,6 +46,7 @@ export default async function DeptBudgetsPage() {
           isAdminFinance={isAdminFinance}
           me={session.email || session.name}
           initialObjectives={objectives}
+          businessProjects={businessProjects}
         />
       )}
     </div>

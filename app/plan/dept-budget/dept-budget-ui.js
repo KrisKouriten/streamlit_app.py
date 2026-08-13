@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   MONTHS, MONTH_KEYS, QUARTERS, lineTotal, monthlyTotals, grandTotal, priorYearTotal,
   categoryGroups, variance, budgetSummary, quarterTotals, lineMovers, budgetValidation,
-  availableTransitions, STAGE_LABEL, BUDGET_STAGES,
+  availableTransitions, STAGE_LABEL, BUDGET_STAGES, BUDGET_TYPES,
 } from "../../../lib/dept-budget-rules";
 import {
   KINDS, KIND_LABEL, CLASSIFICATIONS, CLASSIFICATION_LABEL, PHASINGS, PHASING_LABEL,
@@ -32,7 +32,7 @@ const money0 = (v) => `£${Math.round(Number(v) || 0).toLocaleString("en-GB")}`;
 const moneyC = (v) => { const a = Math.abs(Number(v) || 0); const s = (Number(v) || 0) < 0 ? "−" : ""; if (a >= 1e6) return `${s}£${(a / 1e6).toFixed(2)}m`; if (a >= 1e3) return `${s}£${Math.round(a / 1e3)}k`; return `${s}£${Math.round(a)}`; };
 const dmy = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
 
-export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me, initialObjectives = [] }) {
+export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me, initialObjectives = [], businessProjects = [] }) {
   const router = useRouter();
   const keyRef = useRef(1);
   const thisYear = new Date().getFullYear();
@@ -56,6 +56,8 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const [nd, setNd] = useState(editableDepts[0] || "");
   const [nyear, setNyear] = useState(thisYear);
   const [nver, setNver] = useState("");
+  const [ntype, setNtype] = useState("BUSINESS");   // BUSINESS | PROJECT
+  const [nproj, setNproj] = useState("");           // business_project_id when PROJECT
 
   const status = loaded?.budget?.status;
   const editing = loaded?.canEdit && status === "DRAFT";
@@ -114,8 +116,12 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
 
   async function createBudget() {
     if (!nd) { setError("Choose a department"); return; }
-    const r = await api({ action: "create", department: nd, budget_year: Number(nyear), version_label: nver });
-    if (r) { setNver(""); await loadBudget(r.budgetId); router.refresh(); }
+    if (ntype === "PROJECT" && !nproj) { setError("Choose the Business Project this budget is for"); return; }
+    const r = await api({
+      action: "create", department: nd, budget_year: Number(nyear), version_label: nver,
+      budget_type: ntype, business_project_id: ntype === "PROJECT" ? Number(nproj) : null,
+    });
+    if (r) { setNver(""); setNtype("BUSINESS"); setNproj(""); await loadBudget(r.budgetId); router.refresh(); }
   }
 
   function upd(key, field, value) { setLines((ls) => ls.map((l) => (l._key === key ? { ...l, [field]: value } : l))); setDirty(true); }
@@ -185,7 +191,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
     }
   }
 
-  const TABS = [["overview", "Overview"], ["campaigns", "Campaigns & initiatives"], ["financial", "Financial View"], ["review", "Review & Submit"]];
+  const TABS = [["overview", "Overview"], ["campaigns", "Tasks & activities"], ["financial", "Financial View"], ["review", "Review & Submit"]];
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18, alignItems: "start" }}>
@@ -208,6 +214,21 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
               <span style={labelSt}>Version label</span>
               <input value={nver} onChange={(e) => setNver(e.target.value)} placeholder="Working draft" style={inputSt} />
             </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={labelSt}>Budget type</span>
+              <select value={ntype} onChange={(e) => { setNtype(e.target.value); if (e.target.value !== "PROJECT") setNproj(""); }} style={inputSt}>
+                {BUDGET_TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
+              </select>
+            </label>
+            {ntype === "PROJECT" && (
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={labelSt}>Business project</span>
+                <select value={nproj} onChange={(e) => setNproj(e.target.value)} style={inputSt}>
+                  <option value="">{businessProjects.length ? "— choose project —" : "No projects — add in Business Projects"}</option>
+                  {businessProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+            )}
             <button onClick={createBudget} disabled={busy || !editableDepts.length} style={btn("var(--accent)")}>Create from template</button>
           </div>
         </div>
@@ -220,6 +241,9 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
                 onKeyDown={(e) => { if (e.key === "Enter") loadBudget(b.budget_id); }}
                 style={{ position: "relative", textAlign: "left", padding: "8px 30px 8px 10px", borderRadius: 9, cursor: "pointer", border: `1px solid ${selId === b.budget_id ? "var(--accent)" : "var(--line)"}`, background: selId === b.budget_id ? "var(--accent-bg)" : "transparent" }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600 }}>{b.department} · {b.budget_year}</div>
+                {b.budget_type === "PROJECT" && (
+                  <div style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--accent)", marginTop: 2 }}>◆ Project{b.project_name ? ` · ${b.project_name}` : ""}</div>
+                )}
                 <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", justifyContent: "space-between", marginTop: 2 }}>
                   <span>{b.version_label}</span>
                   <span style={{ color: STAGE_TONE[b.status] || "var(--muted)", fontWeight: 600 }}>{STAGE_LABEL[b.status] || b.status}</span>
