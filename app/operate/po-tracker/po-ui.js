@@ -8,6 +8,7 @@ import {
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
+import SupplierPicker from "../supplier-picker";
 
 const gbp = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 // The submitter, stored as an email or name — show a readable form.
@@ -277,8 +278,8 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
           <label style={field}><span style={labelSt}>Date *</span><DateField value={f.po_date} onChange={setDate("po_date")} /></label>
-          <label style={field}><span style={labelSt}>Supplier *</span><input style={inputSt} list="fos-suppliers" value={f.supplier} onChange={set("supplier")} />
-            <datalist id="fos-suppliers">{supplierNames.map((n) => <option key={n} value={n} />)}</datalist>
+          <label style={field}><span style={labelSt}>Supplier *</span>
+            <SupplierPicker options={supplierNames} value={f.supplier} onChange={(name) => setF((s) => ({ ...s, supplier: name }))} selectStyle={inputSt} required />
           </label>
           <label style={field}><span style={labelSt}>Payment terms</span><input style={inputSt} placeholder="e.g. 30 days" value={f.payment_terms} onChange={set("payment_terms")} /></label>
           <label style={field}><span style={labelSt}>Due date</span><DateField value={f.payment_date} onChange={(iso) => { setDueTouched(true); setDate("payment_date")(iso); }} />

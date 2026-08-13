@@ -162,6 +162,7 @@ function ExposureTable({ rows, totals }) {
 function ManageSuppliers({ suppliers, post, busy }) {
   const [showNew, setShowNew] = useState(false);
   const [np, setNp] = useState(EMPTY_NEW);
+  const pendingCount = suppliers.filter((s) => s.pending_details).length;
 
   function addSupplier() {
     if (!np.name.trim()) return;
@@ -210,7 +211,15 @@ function ManageSuppliers({ suppliers, post, busy }) {
       </div>
 
       <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Suppliers <span style={{ fontSize: 12, fontWeight: 400, color: "var(--faint)" }}>· {suppliers.length}</span></div>
+        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          Suppliers <span style={{ fontSize: 12, fontWeight: 400, color: "var(--faint)" }}>· {suppliers.length}</span>
+          {pendingCount > 0 && (
+            <span style={{ fontSize: 11.5, fontWeight: 500 }}>
+              <Badge tone="amber">{pendingCount} awaiting details</Badge>
+              <span style={{ color: "var(--faint)", marginLeft: 8, fontWeight: 400 }}>added while raising a request — set their source, terms & credit limit, then Save</span>
+            </span>
+          )}
+        </div>
         {!suppliers.length ? (
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No suppliers yet. Add one above.</div>
         ) : (
@@ -265,7 +274,12 @@ function SupplierRow({ s, post, busy }) {
 
   return (
     <tr>
-      <td style={{ ...td, minWidth: 200 }}><input style={{ ...inputSt, width: "100%" }} value={name} onChange={(e) => setName(e.target.value)} /></td>
+      <td style={{ ...td, minWidth: 200 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <input style={{ ...inputSt, width: "100%" }} value={name} onChange={(e) => setName(e.target.value)} />
+          {s.pending_details && <span><Badge tone="amber">New — needs details</Badge></span>}
+        </div>
+      </td>
       <td style={td}>
         <select style={{ ...inputSt, width: 140 }} value={sourceType} onChange={(e) => setSourceType(e.target.value)}>
           <option value="">—</option>
