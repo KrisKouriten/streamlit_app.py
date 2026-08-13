@@ -3,7 +3,7 @@ import { getSession, hasRole, isAdmin } from "../../../../lib/auth";
 import {
   getPo, updatePo, submitForSignoff, returnToDraft,
   approvePo, rejectPo, deletePo, setInvoice, closePo, challengePo, reopenFinance, setPaymentStatus,
-  computeSelfApprovalDecision, overrideRoute,
+  resubmitChallenge, computeSelfApprovalDecision, overrideRoute,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
 import { canDeletePo } from "../../../../lib/po-rules";
@@ -40,6 +40,20 @@ export async function POST(request, { params }) {
         return NextResponse.json(await submitForSignoff(id, session));
       case "return":
         return NextResponse.json(await returnToDraft(id, session));
+
+      // Submitter resolves a Finance challenge: after editing, resubmit. The
+      // creator (or an admin) may do this; the route Finance chose decides where
+      // the P.O lands.
+      case "resubmit-challenge": {
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        const me = (session.email || session.name || "").toLowerCase();
+        const isOwner = (loaded.po.created_by || "").toLowerCase() === me;
+        if (!isOwner && !isAdmin(session)) {
+          return NextResponse.json({ error: "Only the P.O's submitter (or an admin) can resubmit it" }, { status: 403 });
+        }
+        return NextResponse.json(await resubmitChallenge(id, session));
+      }
 
       // Live "Self-approval status" preview. Uses the saved P.O by default; the
       // editor may pass department/value for an in-progress figure.
@@ -93,7 +107,7 @@ export async function POST(request, { params }) {
         if (!isFinance(session)) return NextResponse.json({ error: "Finance or admin only" }, { status: 403 });
         if (body.op === "set-invoice") return NextResponse.json(await setInvoice(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
         if (body.op === "close") return NextResponse.json(await closePo(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
-        if (body.op === "challenge") return NextResponse.json(await challengePo(id, { reasons: body.reasons || [], note: body.note || null }, session));
+        if (body.op === "challenge") return NextResponse.json(await challengePo(id, { reasons: body.reasons || [], note: body.note || null, returnRoute: body.returnRoute || null }, session));
         if (body.op === "set-payment-status") return NextResponse.json(await setPaymentStatus(id, { payment_status: body.payment_status, paid_date: body.paid_date || null }, session));
         return NextResponse.json(await reopenFinance(id, session));
       }
