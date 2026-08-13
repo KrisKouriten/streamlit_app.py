@@ -384,9 +384,22 @@ test("invoiceTotals sums total, paid and outstanding", () => {
 
 test("derivePaymentStatus reflects how many invoices are paid", () => {
   assert.equal(derivePaymentStatus([]), null);
-  assert.equal(derivePaymentStatus([{ paid: false }, { paid: false }]), "UNPAID");
-  assert.equal(derivePaymentStatus([{ paid: true }, { paid: false }]), "PART_PAID");
-  assert.equal(derivePaymentStatus([{ paid: true }, { paid: true }]), "PAID");
+  assert.equal(derivePaymentStatus([{ paid: false, invoice_amount: 100 }, { paid: false, invoice_amount: 100 }]), "UNPAID");
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 100 }, { paid: false, invoice_amount: 100 }]), "PART_PAID");
+  // No P.O value supplied → falls back to "every invoice paid" = PAID.
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 100 }, { paid: true, invoice_amount: 100 }]), "PAID");
+});
+
+test("derivePaymentStatus measures paid invoices against the P.O value", () => {
+  // One £330 invoice paid against a £1,700 P.O is PART_PAID, not PAID.
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 330 }], 1700), "PART_PAID");
+  // Paid invoices covering the P.O value → PAID (within 1p tolerance).
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 1700 }], 1700), "PAID");
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 1000 }, { paid: true, invoice_amount: 700 }], 1700), "PAID");
+  // Covers the value but one invoice still unpaid → PART_PAID (paid sum short).
+  assert.equal(derivePaymentStatus([{ paid: true, invoice_amount: 1000 }, { paid: false, invoice_amount: 700 }], 1700), "PART_PAID");
+  // Nothing paid → UNPAID regardless of value.
+  assert.equal(derivePaymentStatus([{ paid: false, invoice_amount: 500 }], 1700), "UNPAID");
 });
 
 test("invoicesReconcile checks the invoiced total against the P.O value", () => {
