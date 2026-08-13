@@ -692,7 +692,7 @@ The top-down **target** is set by Finance/Admin. Budgets are governed data
 timeline, seeded from `finance.dept_budget_template`, migrations 049–050) and audited
 on every change.
 
-**Operational planning (the Campaigns & initiatives tab).** Instead of keying cost
+**Operational planning (the Tasks & activities tab).** Instead of keying cost
 lines directly, a department builds its budget in its own language — **campaigns**
 (Marketing), **projects** (Architecture & Build), **contracts** (Logistics),
 **programmes/initiatives** (others). Each initiative carries an **objective** (chosen
