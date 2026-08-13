@@ -48,8 +48,10 @@ export default function DepartmentSignoff({ departments, signoffs, users }) {
                   </span>
                 )) : <span style={{ fontSize: 12, color: "var(--faint)" }}>No sign-off assigned yet.</span>}
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <select value={pick[dept] || ""} onChange={(e) => setPick((p) => ({ ...p, [dept]: e.target.value }))} style={{ ...input, flex: 1 }}>
+              <div style={{ display: "flex", gap: 6, minWidth: 0 }}>
+                {/* minWidth:0 lets the select shrink inside the flex row instead of
+                    growing to its widest option ("Name (email)") and overflowing. */}
+                <select value={pick[dept] || ""} onChange={(e) => setPick((p) => ({ ...p, [dept]: e.target.value }))} style={{ ...input, flex: 1, minWidth: 0 }}>
                   <option value="">Add a person…</option>
                   {users.filter((u) => !people.some((p) => p.signoff_email === u.email)).map((u) => (
                     <option key={u.email} value={u.email}>{u.name} ({u.email})</option>
