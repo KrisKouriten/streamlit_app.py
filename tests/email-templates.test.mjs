@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inviteEmail, resetEmail, poSignoffEmail, poDecisionEmail, poChallengeEmail } from "../lib/email/templates.js";
+import { inviteEmail, resetEmail, poSignoffEmail, poDecisionEmail, poChallengeEmail, merchRequestEmail } from "../lib/email/templates.js";
 
 const LINK = "https://finance.kouriten.com/set-password?token=abc123";
 const PO_LINK = "https://finance.kouriten.com/operate/po-tracker";
@@ -68,4 +68,15 @@ test("P.O challenge email lists reasons (array or string) and the note", () => {
   // Accepts a pre-joined string too.
   const s = poChallengeEmail({ ref: "PO-56", reasons: "Duplicate", value: 10, link: PO_LINK });
   assert.match(s.html, /Duplicate/);
+});
+
+test("merch request email names the channel, value and submitter for reviewers", () => {
+  const link = "https://finance.kouriten.com/operate/procurement";
+  const e = merchRequestEmail({ ref: "Request #88", submitter: "mia@kouriten.com", channel: "Retail stores", supplier: "Fatface Co", value: 250000, period: "2026-09", reason: "AW replenishment", link });
+  assert.match(e.subject, /Request #88/);
+  assert.match(e.subject, /£250,000/);
+  assert.ok(e.html.includes(link));
+  assert.match(e.html, /Retail stores/);
+  assert.match(e.text, /mia@kouriten\.com/);
+  assert.match(e.text, /AW replenishment/);
 });
