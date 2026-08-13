@@ -199,10 +199,10 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           <button onClick={() => toggleDetail(p)} title="Show P.O details" aria-expanded={detailFor === p.po_id}
-                            style={{ background: "none", border: "none", padding: 0, marginRight: 6, cursor: "pointer", color: "var(--muted)", font: "inherit" }}>
-                            <span style={{ display: "inline-block", transform: detailFor === p.po_id ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: detailFor === p.po_id ? "var(--accent)" : "var(--ink)", font: "inherit", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "underline", textDecorationColor: "var(--line-strong)", textUnderlineOffset: 3 }}>
+                            <span style={{ display: "inline-block", transform: detailFor === p.po_id ? "rotate(90deg)" : "none", transition: "transform .15s", color: "var(--accent)" }}>▸</span>
+                            {poRef(p)}
                           </button>
-                          {poRef(p)}
                           {p.recharge_enabled && (
                             <div title={p.finance_status === "CLOSED" ? "Recharge auto-posted to Intercompany · Inventory & Recharges on close" : "Set up to be recharged — posts to Intercompany on close"}
                               style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 5, color: "var(--accent)", background: "var(--accent-bg)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)", whiteSpace: "nowrap" }}>
@@ -298,7 +298,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          Use the ▸ to expand a P.O and see its full details. Record the invoice number and net amount against a signed-off P.O, then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
+          Click a <strong>P.O number</strong> (▸) to expand it and see its full details. Record the invoice number and net amount against a signed-off P.O, then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
         </div>
       </div>
     </div>
