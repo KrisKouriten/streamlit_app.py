@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
-  invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, challengeReasonLabels,
-  termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef,
+  invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, canEditPo, isChallenged, challengeReasonLabels,
+  CHALLENGE_RETURN_ROUTES, termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
@@ -73,6 +73,9 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const [msg, setMsg] = useState(null);
   const [rowErr, setRowErr] = useState({}); // per-PO submit errors
   const [dueTouched, setDueTouched] = useState(false); // has the user hand-set the due date?
+  const [editing, setEditing] = useState(null);        // { poId, po } when editing an existing P.O
+  const editingChallenged = !!editing && isChallenged(editing.po);
+  const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
 
   const approverSet = useMemo(() => new Set((approverDepts || []).map((d) => (d || "").toLowerCase())), [approverDepts]);
   const canApprove = (po) => isAdmin || approverSet.has((po.department || "").toLowerCase());
@@ -167,6 +170,77 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
     finally { setBusy(false); }
   }
 
+  // Load an existing P.O into the form for editing (drafts, rejected, or a P.O
+  // Finance has challenged). Hydrates the header + recharge allocation.
+  async function beginEdit(p) {
+    setError(null); setMsg(null);
+    try {
+      const res = await fetch(`/api/purchase-orders/${p.po_id}`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Could not load the P.O");
+      const po = j.po || p;
+      const iso = (v) => (v ? String(v).slice(0, 10) : "");
+      setF({
+        po_date: iso(po.po_date), supplier: po.supplier || "", payment_terms: po.payment_terms || "",
+        payment_date: iso(po.payment_date), currency: po.currency || "GBP",
+        payment_value: po.payment_value != null ? String(po.payment_value) : "",
+        po_category: po.po_category || "",
+        fulfilment_start_date: iso(po.fulfilment_start_date), fulfilment_days: po.fulfilment_days != null ? String(po.fulfilment_days) : "",
+        department: po.department || "", notes: po.notes || "",
+        is_marketing: !!po.is_marketing, marketing_levy: po.is_marketing ? (po.marketing_levy ?? null) : null,
+        recharge_enabled: !!po.recharge_enabled, recharge_ho_only: !!po.recharge_ho_only,
+        marketing_budget_category: po.marketing_budget_category || "", marketing_campaign: po.marketing_campaign || "",
+        business_project_id: po.business_project_id != null ? String(po.business_project_id) : "",
+      });
+      setRecharge(po.recharge_ho_only ? [] : (j.recharge || []).map((r) => ({ store_code: r.store_code, store_name: r.store_name, pct: Number(r.pct) })));
+      setDueTouched(true);
+      setEditing({ poId: p.po_id, po });
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { setRowErr((s) => ({ ...s, [p.po_id]: e.message })); }
+  }
+
+  function cancelEdit() {
+    setEditing(null); setF(EMPTY); setRecharge([]); setDueTouched(false); setError(null); setMsg(null);
+  }
+
+  // Save edits to an existing P.O, then (optionally) put it back into the flow —
+  // "submit" for a draft/rejected P.O, "resubmit-challenge" for a challenged one.
+  async function saveEdit(sendOn) {
+    setBusy(true); setError(null); setMsg(null);
+    try {
+      const patch = {
+        po_date: f.po_date || null, supplier: f.supplier, payment_terms: f.payment_terms || null,
+        payment_date: f.payment_date || null, currency: f.currency,
+        payment_value: f.payment_value === "" ? 0 : Number(f.payment_value),
+        po_category: f.po_category, fulfilment_start_date: f.fulfilment_start_date || null,
+        fulfilment_days: f.fulfilment_days === "" ? null : Number(f.fulfilment_days),
+        department: f.department, notes: f.notes || null,
+        is_marketing: !!f.is_marketing, marketing_levy: f.is_marketing ? f.marketing_levy : null,
+        recharge_enabled: !!f.recharge_enabled, recharge_ho_only: !!f.recharge_ho_only,
+        recharge: f.recharge_enabled && !f.recharge_ho_only ? recharge : [],
+        marketing_budget_category: f.marketing_budget_category || null, marketing_campaign: f.marketing_campaign || null,
+        business_project_id: f.business_project_id || null,
+      };
+      const res = await fetch(`/api/purchase-orders/${editing.poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "update", patch }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Could not save changes");
+      if (sendOn) {
+        const op = editingChallenged ? "resubmit-challenge" : "submit";
+        const r2 = await fetch(`/api/purchase-orders/${editing.poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op }) });
+        const j2 = await r2.json();
+        if (!r2.ok) throw new Error(j2.error || "Saved, but could not resubmit");
+        setMsg(editingChallenged
+          ? (j2.route === "TO_SIGNOFF" ? "Saved and sent back for department sign-off." : "Saved and sent back to Finance.")
+          : "Saved and submitted for sign-off.");
+      } else {
+        setMsg("Changes saved.");
+      }
+      setEditing(null); setF(EMPTY); setRecharge([]); setDueTouched(false);
+      router.refresh();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function poOp(poId, op) {
     setRowErr((s) => ({ ...s, [poId]: null }));
     try {
@@ -184,10 +258,22 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
 
   return (
     <div>
-      {/* ---- New P.O ---- */}
+      {/* ---- New / Edit P.O ---- */}
       <div style={card}>
-        <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>Raise a purchase order</div>
-        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 16 }}>A unique P.O number is generated automatically when you save — no need to raise it in Xero first. All fields marked are required.</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 4 }}>{editing ? `Edit ${poRef(editing.po)}` : "Raise a purchase order"}</div>
+          {editing && <button style={ghost} onClick={cancelEdit}>Cancel edit</button>}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 16 }}>
+          {editing ? "Make your changes below, then save — or save and send it on." : "A unique P.O number is generated automatically when you save — no need to raise it in Xero first. All fields marked are required."}
+        </div>
+        {editingChallenged && (
+          <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 10, background: "var(--red-bg)", border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--red)" }}>Finance challenged this P.O — {challengeReasonLabels(editing.po.challenge_reasons).join(" · ")}</div>
+            {editing.po.challenge_note && <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 4 }}>{editing.po.challenge_note}</div>}
+            {returnRouteLabel(editing.po.challenge_return_route) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>On resubmit: {returnRouteLabel(editing.po.challenge_return_route)}</div>}
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
           <label style={field}><span style={labelSt}>Date *</span><DateField value={f.po_date} onChange={setDate("po_date")} /></label>
@@ -315,10 +401,21 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         {msg && <div style={{ color: "var(--green)", fontSize: 13, marginTop: 12 }}>{msg}</div>}
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
-          <button style={ghost} disabled={busy} onClick={() => create(false)}>Save draft</button>
-          <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || (willSelfApprove ? "Within self-approval — signs off automatically" : "Submit for department-head sign-off")} onClick={() => create(true)}>
-            {busy ? "Working…" : willSelfApprove ? "Create & sign off" : "Create & submit for sign-off"}
-          </button>
+          {editing ? (
+            <>
+              <button style={ghost} disabled={busy} onClick={() => saveEdit(false)}>Save changes</button>
+              <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || "Save and send it on"} onClick={() => saveEdit(true)}>
+                {busy ? "Working…" : editingChallenged ? "Save & resubmit" : "Save & submit for sign-off"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button style={ghost} disabled={busy} onClick={() => create(false)}>Save draft</button>
+              <button style={btn("var(--accent)")} disabled={busy || !!gate} title={gate || (willSelfApprove ? "Within self-approval — signs off automatically" : "Submit for department-head sign-off")} onClick={() => create(true)}>
+                {busy ? "Working…" : willSelfApprove ? "Create & sign off" : "Create & submit for sign-off"}
+              </button>
+            </>
+          )}
           {gate && <span style={{ fontSize: 12, color: "var(--faint)" }}>{gate}</span>}
         </div>
       </div>
@@ -355,6 +452,9 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                     </td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {canEditPo(p) && editing?.poId !== p.po_id && (
+                          <button style={isChallenged(p) ? btn("var(--red)") : ghost} onClick={() => beginEdit(p)}>{isChallenged(p) ? "Edit & resubmit" : "Edit"}</button>
+                        )}
                         {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
                         {p.status === "PENDING_SIGNOFF" && canApprove(p) && (
                           <>
@@ -384,7 +484,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red until resolved.
+          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose).
         </div>
       </div>
     </div>

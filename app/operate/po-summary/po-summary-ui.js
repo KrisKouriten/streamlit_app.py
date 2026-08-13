@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
@@ -43,9 +43,12 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
   const [challengeFor, setChallengeFor] = useState(null);
   const [chReasons, setChReasons] = useState(() => new Set());
   const [chNote, setChNote] = useState("");
+  const [chRoute, setChRoute] = useState(DEFAULT_CHALLENGE_RETURN_ROUTE);
   const [rowErr, setRowErr] = useState({});
   const [rowMsg, setRowMsg] = useState({});
   const [busy, setBusy] = useState(null);
+  const [detailFor, setDetailFor] = useState(null);   // po_id whose detail panel is open
+  const [detail, setDetail] = useState({});            // po_id -> { loading, data, error }
 
   const rows = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filter) || FILTERS[FILTERS.length - 1];
@@ -95,18 +98,40 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
 
   function openChallenge(p) {
     setChallengeFor(p.po_id);
+    setDetailFor(null);
     // pre-fill from any existing challenge
     const existing = challengeReasonLabels(p.challenge_reasons);
     const codes = CHALLENGE_REASONS.filter((r) => existing.includes(r.label)).map((r) => r.code);
     setChReasons(new Set(codes));
     setChNote(p.challenge_note || "");
+    setChRoute(p.challenge_return_route || DEFAULT_CHALLENGE_RETURN_ROUTE);
   }
   function toggleReason(code, on) {
     setChReasons((cur) => { const n = new Set(cur); if (on) n.add(code); else n.delete(code); return n; });
   }
   async function submitChallenge(p) {
-    await op(p.po_id, { op: "challenge", reasons: [...chReasons], note: chNote || null }, "Challenge raised.");
-    setChallengeFor(null); setChReasons(new Set()); setChNote("");
+    await op(p.po_id, { op: "challenge", reasons: [...chReasons], note: chNote || null, returnRoute: chRoute }, "Challenge raised.");
+    setChallengeFor(null); setChReasons(new Set()); setChNote(""); setChRoute(DEFAULT_CHALLENGE_RETURN_ROUTE);
+  }
+  const noteNeeded = challengeNoteRequired([...chReasons]);
+  const challengeBlocked = chReasons.size === 0 || (noteNeeded && !chNote.trim());
+
+  // Lazy-load a P.O's full detail (header + recharge allocation) on expand.
+  async function toggleDetail(p) {
+    if (detailFor === p.po_id) { setDetailFor(null); return; }
+    setChallengeFor(null);
+    setDetailFor(p.po_id);
+    if (!detail[p.po_id]) {
+      setDetail((s) => ({ ...s, [p.po_id]: { loading: true } }));
+      try {
+        const res = await fetch(`/api/purchase-orders/${p.po_id}`);
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || "Could not load details");
+        setDetail((s) => ({ ...s, [p.po_id]: { loading: false, data: j } }));
+      } catch (e) {
+        setDetail((s) => ({ ...s, [p.po_id]: { loading: false, error: e.message } }));
+      }
+    }
   }
 
   function download(all) {
@@ -173,6 +198,10 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           <input type="checkbox" checked={selected.has(String(p.po_id))} onChange={(e) => toggleRow(p.po_id, e.target.checked)} />
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                          <button onClick={() => toggleDetail(p)} title="Show P.O details" aria-expanded={detailFor === p.po_id}
+                            style={{ background: "none", border: "none", padding: 0, marginRight: 6, cursor: "pointer", color: "var(--muted)", font: "inherit" }}>
+                            <span style={{ display: "inline-block", transform: detailFor === p.po_id ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span>
+                          </button>
                           {poRef(p)}
                           {p.recharge_enabled && (
                             <div title={p.finance_status === "CLOSED" ? "Recharge auto-posted to Intercompany · Inventory & Recharges on close" : "Set up to be recharged — posts to Intercompany on close"}
@@ -221,6 +250,13 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           {rowErr[p.po_id] && <div style={{ color: "var(--red)", fontSize: 11.5, marginTop: 4 }}>{rowErr[p.po_id]}</div>}
                         </td>
                       </tr>
+                      {detailFor === p.po_id && (
+                        <tr>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                            <PoDetail state={detail[p.po_id]} po={p} money={money} />
+                          </td>
+                        </tr>
+                      )}
                       {challengeFor === p.po_id && (
                         <tr>
                           <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
@@ -233,11 +269,23 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                                 </label>
                               ))}
                             </div>
-                            <textarea rows={2} placeholder="Optional note for the department (what needs resolving)…" style={{ ...inputSt, width: "100%", resize: "vertical" }} value={chNote} onChange={(e) => setChNote(e.target.value)} />
+                            <textarea rows={2} placeholder={noteNeeded ? "Required — explain the ‘Other’ reason for the department…" : "Optional note for the department (what needs resolving)…"} style={{ ...inputSt, width: "100%", resize: "vertical", borderColor: noteNeeded && !chNote.trim() ? "var(--red)" : "var(--line)" }} value={chNote} onChange={(e) => setChNote(e.target.value)} />
+                            <div style={{ marginTop: 10 }}>
+                              <div style={{ ...labelSt, marginBottom: 5 }}>After the submitter fixes it</div>
+                              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                                {CHALLENGE_RETURN_ROUTES.map((r) => (
+                                  <label key={r.code} style={{ display: "flex", gap: 6, fontSize: 12.5, alignItems: "center" }}>
+                                    <input type="radio" name={`chRoute-${p.po_id}`} checked={chRoute === r.code} onChange={() => setChRoute(r.code)} />
+                                    <span>{r.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
                             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                              <button style={btn("var(--red)")} disabled={chReasons.size === 0 || busy === p.po_id} onClick={() => submitChallenge(p)}>Raise challenge</button>
+                              <button style={btn("var(--red)")} disabled={challengeBlocked || busy === p.po_id} onClick={() => submitChallenge(p)}>Raise challenge</button>
                               <button style={ghost} onClick={() => setChallengeFor(null)}>Cancel</button>
                               {chReasons.size === 0 && <span style={{ fontSize: 11.5, color: "var(--faint)", alignSelf: "center" }}>Choose at least one reason.</span>}
+                              {chReasons.size > 0 && noteNeeded && !chNote.trim() && <span style={{ fontSize: 11.5, color: "var(--faint)", alignSelf: "center" }}>Add a note for ‘Other’.</span>}
                             </div>
                           </td>
                         </tr>
@@ -250,14 +298,75 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          Record the invoice number and net amount against a signed-off P.O, then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it under one of the four reasons (shown &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests until resolved). Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
+          Use the ▸ to expand a P.O and see its full details. Record the invoice number and net amount against a signed-off P.O, then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
         </div>
       </div>
     </div>
   );
 }
 
-// A keyed group of two <tr> rows (the row + its optional challenge panel).
+// A keyed group of <tr> rows (the row + its optional detail / challenge panels).
 function FragmentRow({ children }) {
   return <>{children}</>;
+}
+
+const routeLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
+const ukDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB") : "—");
+
+// The expandable P.O detail panel — header fields, marketing tags, recharge
+// allocation and any live challenge — loaded on demand so the summary table
+// stays light. `state` is { loading } | { data:{ po, recharge } } | { error }.
+function PoDetail({ state, po, money }) {
+  if (!state || state.loading) return <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Loading details…</div>;
+  if (state.error) return <div style={{ fontSize: 12.5, color: "var(--red)" }}>{state.error}</div>;
+  const d = state.data?.po || po;
+  const recharge = state.data?.recharge || [];
+  const dl = { fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 2 };
+  const dv = { fontSize: 13, color: "var(--ink)" };
+  const Item = ({ k, children }) => (<div><div style={dl}>{k}</div><div style={dv}>{children ?? "—"}</div></div>);
+  const reasons = challengeReasonLabels(d.challenge_reasons);
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px 20px" }}>
+        <Item k="P.O date">{ukDate(d.po_date)}</Item>
+        <Item k="Category">{d.po_category}</Item>
+        <Item k="Submitted by">{d.created_by ? String(d.created_by).split("@")[0] : "—"}</Item>
+        <Item k="Net value">{money(d.payment_value, d.currency)}</Item>
+        <Item k="Payment terms">{d.payment_terms}</Item>
+        <Item k="Due date">{ukDate(d.payment_date)}</Item>
+        <Item k="Fulfilment start">{ukDate(d.fulfilment_start_date)}</Item>
+        <Item k="Fulfilment days">{d.fulfilment_days ?? "—"}</Item>
+        <Item k="Invoice no">{d.invoice_number}</Item>
+        <Item k="Invoice net">{d.invoice_amount != null ? money(d.invoice_amount, d.currency) : "—"}</Item>
+        {d.is_marketing && <Item k="Marketing">{d.marketing_levy ? "Levy — allocate, no invoice" : "Non-levy — finance to invoice"}</Item>}
+        {d.marketing_budget_category && <Item k="Budget link">{d.marketing_budget_category}</Item>}
+        {d.marketing_campaign && <Item k="Campaign">{d.marketing_campaign}</Item>}
+      </div>
+      {d.notes && (
+        <div style={{ marginTop: 12 }}>
+          <div style={dl}>Notes</div>
+          <div style={{ fontSize: 13, color: "var(--ink)", whiteSpace: "pre-wrap" }}>{d.notes}</div>
+        </div>
+      )}
+      {recharge.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={dl}>Recharge allocation</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+            {recharge.map((r) => (
+              <span key={r.recharge_id ?? `${r.store_code}-${r.store_name}`} style={{ fontSize: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px" }}>
+                {r.store_name || r.store_code} · {Number(r.pct)}%{r.amount != null ? ` · ${money(r.amount, d.currency)}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {d.finance_status === "CHALLENGED" && (
+        <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "var(--red-bg)", border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--red)" }}>Under challenge — {reasons.join(" · ")}</div>
+          {d.challenge_note && <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 4 }}>{d.challenge_note}</div>}
+          {routeLabel(d.challenge_return_route) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>On fix: {routeLabel(d.challenge_return_route)}</div>}
+        </div>
+      )}
+    </div>
+  );
 }

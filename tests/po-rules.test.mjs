@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import {
   validatePo, rechargeTotal, rechargeError, equalSplit, rechargeAmounts,
   invoiceOutcome, canSubmitForSignoff, poTransitionError, isEditablePo, PO_STATUSES, PO_TRANSITIONS,
-  displayStatus, canDeletePo, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
+  displayStatus, canDeletePo, canEditPo, isChallenged, financeActionError, committedAmount, challengeReasonLabels, isSignedOff,
   termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS,
   poRef, paymentStatusOf, isPaymentStatus, selfApproveAllowed,
   selfApprovalDecision, validateDeptPoPolicy, isMeasurementPeriod,
   PO_APPROVAL_ROUTES, CANCELLED_PO_POLICIES,
+  CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, isChallengeReturnRoute,
+  challengeNoteRequired, challengeValidationError, isChallengeReason,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -300,4 +302,59 @@ test("selfApprovalDecision: no policy falls back to the org-wide limit", () => {
 test("selfApprovalDecision: inactive policy also falls back", () => {
   const d = selfApprovalDecision({ value: 400, policy: { ...marketingPolicy, active: false }, orgLimit: 500 });
   assert.equal(d.selfApprove, true);
+});
+
+// ---- Challenge: Other reason + return route (migration 098) ----
+
+test("CHALLENGE_REASONS includes the Other option", () => {
+  assert.ok(CHALLENGE_REASONS.some((r) => r.code === "OTHER"));
+  assert.equal(isChallengeReason("OTHER"), true);
+  assert.equal(isChallengeReason("NONSENSE"), false);
+});
+
+test("challengeNoteRequired only when Other is chosen", () => {
+  assert.equal(challengeNoteRequired(["INVOICE_VALUE"]), false);
+  assert.equal(challengeNoteRequired(["INVOICE_VALUE", "OTHER"]), true);
+  assert.equal(challengeNoteRequired("OTHER"), true);
+});
+
+test("challengeValidationError: needs a reason", () => {
+  assert.match(challengeValidationError({ reasons: [] }), /at least one/i);
+});
+
+test("challengeValidationError: Other needs a note", () => {
+  assert.match(challengeValidationError({ reasons: ["OTHER"], note: "" }), /note/i);
+  assert.equal(challengeValidationError({ reasons: ["OTHER"], note: "Wrong cost centre" }), null);
+});
+
+test("challengeValidationError: rejects an unknown reason or route", () => {
+  assert.match(challengeValidationError({ reasons: ["MADE_UP"] }), /Unknown challenge reason/);
+  assert.match(challengeValidationError({ reasons: ["INVOICE_VALUE"], returnRoute: "SIDEWAYS" }), /valid return route/i);
+});
+
+test("challengeValidationError: passes a plain reason with no note", () => {
+  assert.equal(challengeValidationError({ reasons: ["INVOICE_VALUE"], returnRoute: "TO_FINANCE" }), null);
+});
+
+test("CHALLENGE_RETURN_ROUTES has the two routes", () => {
+  assert.deepEqual(CHALLENGE_RETURN_ROUTES.map((r) => r.code).sort(), ["TO_FINANCE", "TO_SIGNOFF"]);
+  assert.equal(isChallengeReturnRoute("TO_FINANCE"), true);
+  assert.equal(isChallengeReturnRoute("nope"), false);
+});
+
+// ---- Editability of a challenged P.O ----
+
+test("canEditPo: drafts, rejected and challenged are editable; others are not", () => {
+  assert.equal(canEditPo({ status: "DRAFT" }), true);
+  assert.equal(canEditPo({ status: "REJECTED" }), true);
+  assert.equal(canEditPo({ status: "APPROVED", finance_status: "CHALLENGED" }), true);
+  assert.equal(canEditPo({ status: "APPROVED", finance_status: "OPEN" }), false);
+  assert.equal(canEditPo({ status: "APPROVED", finance_status: "CLOSED" }), false);
+  assert.equal(canEditPo({ status: "PENDING_SIGNOFF" }), false);
+});
+
+test("isChallenged reflects the finance lifecycle", () => {
+  assert.equal(isChallenged({ status: "APPROVED", finance_status: "CHALLENGED" }), true);
+  assert.equal(isChallenged({ status: "APPROVED", finance_status: "OPEN" }), false);
+  assert.equal(isChallenged({ status: "REJECTED" }), false);
 });
