@@ -318,6 +318,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                     <Table
                       columns={[
                         { label: "DC reference", render: (r) => r.dc_reference },
+                        { label: "Request", render: (r) => r.purchaseRef || "—" },
                         { label: "LCs", align: "right", render: (r) => String(r.count) },
                         { label: "DC value", align: "right", render: (r) => cur(r.dc_value) },
                         { label: "LC value", align: "right", render: (r) => cur(r.lc_value || 0) },

@@ -258,6 +258,11 @@ function SupplierRow({ s, post, busy }) {
     }, { note: `Supplier “${name.trim()}” saved.` });
   }
 
+  function del() {
+    if (!window.confirm(`Delete supplier “${s.name}”? This removes it from the master list. Existing purchases keep their supplier name. This cannot be undone.`)) return;
+    post({ op: "delete", id: s.id }, { note: `Supplier “${s.name}” deleted.` });
+  }
+
   return (
     <tr>
       <td style={{ ...td, minWidth: 200 }}><input style={{ ...inputSt, width: "100%" }} value={name} onChange={(e) => setName(e.target.value)} /></td>
@@ -272,7 +277,10 @@ function SupplierRow({ s, post, busy }) {
       <td style={{ ...td, textAlign: "center" }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /></td>
       <td style={{ ...td, textAlign: "center" }}><input type="checkbox" checked={activeMerch} onChange={(e) => setActiveMerch(e.target.checked)} /></td>
       <td style={{ ...td, textAlign: "right" }}>
-        <button style={{ ...btn("var(--accent)"), padding: "6px 12px", opacity: dirty ? 1 : 0.5 }} disabled={busy || !dirty || !name.trim()} onClick={save}>Save</button>
+        <div style={{ display: "inline-flex", gap: 6 }}>
+          <button style={{ ...btn("var(--accent)"), padding: "6px 12px", opacity: dirty ? 1 : 0.5 }} disabled={busy || !dirty || !name.trim()} onClick={save}>Save</button>
+          <button title="Delete supplier" style={{ ...ghost, color: "var(--red)", borderColor: "color-mix(in srgb, var(--red) 40%, var(--line))" }} disabled={busy} onClick={del}>Delete</button>
+        </div>
       </td>
     </tr>
   );

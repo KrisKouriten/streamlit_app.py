@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { upsertSupplier, setFacilityLimit } from "../../../lib/suppliers";
+import { upsertSupplier, setFacilityLimit, deleteSupplier } from "../../../lib/suppliers";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,10 @@ export async function POST(request) {
   try {
     if (body.op === "facility-limit") {
       const r = await setFacilityLimit(body, actor);
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.op === "delete") {
+      const r = await deleteSupplier(body.id, actor);
       return NextResponse.json({ ok: true, ...r });
     }
     const r = await upsertSupplier(body, actor);
