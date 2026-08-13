@@ -10,6 +10,7 @@ import {
   PO_APPROVAL_ROUTES, CANCELLED_PO_POLICIES,
   CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, isChallengeReturnRoute,
   challengeNoteRequired, challengeValidationError, isChallengeReason,
+  validatePoInvoice, invoiceTotals, derivePaymentStatus, invoicesReconcile, invoiceSummaryRef,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -357,4 +358,46 @@ test("isChallenged reflects the finance lifecycle", () => {
   assert.equal(isChallenged({ status: "APPROVED", finance_status: "CHALLENGED" }), true);
   assert.equal(isChallenged({ status: "APPROVED", finance_status: "OPEN" }), false);
   assert.equal(isChallenged({ status: "REJECTED" }), false);
+});
+
+// ---- Multiple invoices per P.O (migration 099) ----
+
+test("validatePoInvoice needs a number and a positive amount", () => {
+  assert.match(validatePoInvoice({ invoice_amount: 100 }), /invoice number/i);
+  assert.match(validatePoInvoice({ invoice_number: "INV-1", invoice_amount: 0 }), /greater than zero/i);
+  assert.equal(validatePoInvoice({ invoice_number: "INV-1", invoice_amount: 100 }), null);
+});
+
+test("invoiceTotals sums total, paid and outstanding", () => {
+  const inv = [
+    { invoice_amount: 1000, paid: true },
+    { invoice_amount: 650, paid: false },
+  ];
+  const t = invoiceTotals(inv);
+  assert.equal(t.count, 2);
+  assert.equal(t.total, 1650);
+  assert.equal(t.paid, 1000);
+  assert.equal(t.outstanding, 650);
+  assert.equal(t.paidCount, 1);
+  assert.deepEqual(invoiceTotals([]), { count: 0, total: 0, paid: 0, outstanding: 0, paidCount: 0 });
+});
+
+test("derivePaymentStatus reflects how many invoices are paid", () => {
+  assert.equal(derivePaymentStatus([]), null);
+  assert.equal(derivePaymentStatus([{ paid: false }, { paid: false }]), "UNPAID");
+  assert.equal(derivePaymentStatus([{ paid: true }, { paid: false }]), "PART_PAID");
+  assert.equal(derivePaymentStatus([{ paid: true }, { paid: true }]), "PAID");
+});
+
+test("invoicesReconcile checks the invoiced total against the P.O value", () => {
+  const inv = [{ invoice_amount: 1000 }, { invoice_amount: 650 }];
+  assert.equal(invoicesReconcile(inv, 1650), true);
+  assert.equal(invoicesReconcile(inv, 1650.005), true);   // within 1p
+  assert.equal(invoicesReconcile(inv, 1700), false);
+});
+
+test("invoiceSummaryRef summarises the invoice numbers", () => {
+  assert.equal(invoiceSummaryRef([]), null);
+  assert.equal(invoiceSummaryRef([{ invoice_number: "INV-1" }]), "INV-1");
+  assert.equal(invoiceSummaryRef([{ invoice_number: "INV-1" }, { invoice_number: "INV-2" }, { invoice_number: "INV-3" }]), "INV-1 +2");
 });

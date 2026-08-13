@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, invoiceTotals, invoicesReconcile } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
@@ -35,11 +35,6 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
   const [filter, setFilter] = useState("ATTENTION");
   const [dept, setDept] = useState("");
   const [selected, setSelected] = useState(() => new Set());
-  const [inv, setInv] = useState(() => {
-    const m = {};
-    for (const p of initialPos) m[p.po_id] = { number: p.invoice_number || "", amount: p.invoice_amount != null ? String(p.invoice_amount) : "" };
-    return m;
-  });
   const [challengeFor, setChallengeFor] = useState(null);
   const [chReasons, setChReasons] = useState(() => new Set());
   const [chNote, setChNote] = useState("");
@@ -49,6 +44,9 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
   const [busy, setBusy] = useState(null);
   const [detailFor, setDetailFor] = useState(null);   // po_id whose detail panel is open
   const [detail, setDetail] = useState({});            // po_id -> { loading, data, error }
+  const [invoicesFor, setInvoicesFor] = useState(null); // po_id whose invoices panel is open
+  const [invCache, setInvCache] = useState({});         // po_id -> { loading, invoices, error }
+  const [invNew, setInvNew] = useState({});             // po_id -> { number, amount, paid }
 
   const rows = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filter) || FILTERS[FILTERS.length - 1];
@@ -88,11 +86,10 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
     finally { setBusy(null); }
   }
 
-  const saveInvoice = (p) => op(p.po_id, { op: "set-invoice", invoice_number: inv[p.po_id]?.number || null, invoice_amount: inv[p.po_id]?.amount || null }, "Invoice saved.");
   const setPayment = (p, payment_status) => op(p.po_id, { op: "set-payment-status", payment_status }, `Marked ${paymentStatusOf({ payment_status }).label.toLowerCase()}.`);
   const closePo = (p) => {
-    if (!window.confirm(`Close P.O ${p.xero_po_number}? It will be reported as committed spend on the Departmental Budget Dashboard.`)) return;
-    op(p.po_id, { op: "close", invoice_number: inv[p.po_id]?.number || null, invoice_amount: inv[p.po_id]?.amount || null }, "Closed — now committed spend.");
+    if (!window.confirm(`Close ${poRef(p)}? It will be reported as committed spend on the Departmental Budget Dashboard.`)) return;
+    op(p.po_id, { op: "close" }, "Closed — now committed spend.");
   };
   const reopen = (p) => op(p.po_id, { op: "reopen-finance" }, "Re-opened.");
 
@@ -133,6 +130,47 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
       }
     }
   }
+
+  // ---- Multiple invoices ----
+  async function loadInvoices(poId) {
+    setInvCache((s) => ({ ...s, [poId]: { ...(s[poId] || {}), loading: true } }));
+    try {
+      const res = await fetch(`/api/purchase-orders/${poId}`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Could not load invoices");
+      setInvCache((s) => ({ ...s, [poId]: { loading: false, invoices: j.invoices || [] } }));
+    } catch (e) {
+      setInvCache((s) => ({ ...s, [poId]: { loading: false, error: e.message } }));
+    }
+  }
+  function toggleInvoices(p) {
+    if (invoicesFor === p.po_id) { setInvoicesFor(null); return; }
+    setChallengeFor(null); setDetailFor(null);
+    setInvoicesFor(p.po_id);
+    if (!invNew[p.po_id]) setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", paid: false } }));
+    if (!invCache[p.po_id]?.invoices) loadInvoices(p.po_id);
+  }
+  // Invoice ops POST then refresh the row + reload the invoice list.
+  async function invOp(poId, body, successMsg) {
+    setBusy(poId); setRowErr((s) => ({ ...s, [poId]: null })); setRowMsg((s) => ({ ...s, [poId]: null }));
+    try {
+      const res = await fetch(`/api/purchase-orders/${poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Action failed");
+      if (successMsg) setRowMsg((s) => ({ ...s, [poId]: successMsg }));
+      await loadInvoices(poId);
+      router.refresh();
+    } catch (e) { setRowErr((s) => ({ ...s, [poId]: e.message })); }
+    finally { setBusy(null); }
+  }
+  const setInvNewField = (poId, k, v) => setInvNew((s) => ({ ...s, [poId]: { ...(s[poId] || {}), [k]: v } }));
+  async function addInvoice(p) {
+    const f = invNew[p.po_id] || {};
+    await invOp(p.po_id, { op: "add-invoice", invoice: { invoice_number: f.number, invoice_amount: f.amount, paid: !!f.paid } }, "Invoice added.");
+    setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", paid: false } }));
+  }
+  const toggleInvoicePaid = (poId, i) => invOp(poId, { op: "update-invoice", invoice_id: i.invoice_id, patch: { paid: !i.paid } }, i.paid ? "Marked unpaid." : "Marked paid.");
+  const removeInvoice = (poId, i) => { if (window.confirm(`Delete invoice ${i.invoice_number || ""}?`)) invOp(poId, { op: "delete-invoice", invoice_id: i.invoice_id }, "Invoice removed."); };
 
   function download(all) {
     const base = "/api/purchase-orders/export";
@@ -219,7 +257,13 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                           {p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</div>}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          {signed ? (
+                          {!signed ? <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span> : p.invoice_amount != null ? (
+                            <>
+                              <span style={{ display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: TONE_FG[paymentStatusOf(p).tone], background: TONE_BG[paymentStatusOf(p).tone], border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px" }}>{paymentStatusOf(p).label}</span>
+                              <div style={{ fontSize: 9.5, color: "var(--faint)", marginTop: 3 }}>from invoices</div>
+                              {p.paid_date && <div style={{ fontSize: 10, color: "var(--faint)" }}>{new Date(p.paid_date).toLocaleDateString("en-GB")}</div>}
+                            </>
+                          ) : (
                             <>
                               <select style={{ ...inputSt, width: 110, color: TONE_FG[paymentStatusOf(p).tone] }} value={paymentStatusOf(p).code} disabled={isBusy}
                                 onChange={(e) => setPayment(p, e.target.value)}>
@@ -227,20 +271,22 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                               </select>
                               {p.paid_date && <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3 }}>{new Date(p.paid_date).toLocaleDateString("en-GB")}</div>}
                             </>
+                          )}
+                        </td>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                          {signed ? (
+                            <button onClick={() => toggleInvoices(p)} aria-expanded={invoicesFor === p.po_id}
+                              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", font: "inherit", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                              {p.invoice_number ? p.invoice_number : "＋ Add invoice"}
+                            </button>
                           ) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          <input style={{ ...inputSt, width: 120 }} placeholder="—" value={inv[p.po_id]?.number || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "number", e.target.value)} />
-                        </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          <MoneyInput style={{ ...inputSt, width: 110, textAlign: "right" }} placeholder="—" value={inv[p.po_id]?.amount || ""} disabled={!signed} onChange={(e) => setInvField(p.po_id, "amount", e.target.value)} />
-                        </td>
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", textAlign: "right" }}>{p.invoice_amount != null ? money(p.invoice_amount, p.currency) : "—"}</td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {!signed ? (
                             <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department sign-off</span>
                           ) : (
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(p)}>Save invoice</button>
                               {p.finance_status !== "CLOSED" && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closePo(p)}>Close</button>}
                               {p.finance_status !== "CLOSED" && <button style={btn("var(--red)")} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>}
                               {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={ghost} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
@@ -254,6 +300,18 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                         <tr>
                           <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <PoDetail state={detail[p.po_id]} po={p} money={money} />
+                          </td>
+                        </tr>
+                      )}
+                      {invoicesFor === p.po_id && (
+                        <tr>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                            <InvoicesPanel
+                              p={p} state={invCache[p.po_id]} nf={invNew[p.po_id] || { number: "", amount: "", paid: false }}
+                              setField={(k, v) => setInvNewField(p.po_id, k, v)} onAdd={() => addInvoice(p)}
+                              onTogglePaid={(i) => toggleInvoicePaid(p.po_id, i)} onRemove={(i) => removeInvoice(p.po_id, i)}
+                              busy={busy === p.po_id} money={money} inputSt={inputSt} btn={btn} ghost={ghost}
+                            />
                           </td>
                         </tr>
                       )}
@@ -298,7 +356,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          Click a <strong>P.O number</strong> (▸) to expand it and see its full details. Record the invoice number and net amount against a signed-off P.O, then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
+          Click a <strong>P.O number</strong> (▸) to expand it and see its full details. Click the <strong>Invoice no</strong> cell to add one or more invoices to a P.O — each with its own paid state, so the Payment status rolls up to <em>Part-paid</em> until all are paid. Then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
         </div>
       </div>
     </div>
@@ -308,6 +366,65 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
 // A keyed group of <tr> rows (the row + its optional detail / challenge panels).
 function FragmentRow({ children }) {
   return <>{children}</>;
+}
+
+// The invoices panel — list each invoice against a P.O with its paid toggle, add
+// a new one, and see the invoiced total reconcile against the P.O value.
+function InvoicesPanel({ p, state, nf, setField, onAdd, onTogglePaid, onRemove, busy, money, inputSt, btn, ghost }) {
+  const invoices = state?.invoices || [];
+  const t = invoiceTotals(invoices);
+  const reconciles = invoicesReconcile(invoices, p.payment_value);
+  const closed = p.finance_status === "CLOSED";
+  const lbl = { fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" };
+  const canAdd = String(nf.number || "").trim() && Number(nf.amount) > 0;
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Invoices — {p.xero_po_number || p.po_number} <span style={{ fontWeight: 400, color: "var(--faint)" }}>· P.O value {money(p.payment_value, p.currency)}</span></div>
+      {state?.loading && <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Loading invoices…</div>}
+      {state?.error && <div style={{ fontSize: 12.5, color: "var(--red)" }}>{state.error}</div>}
+      {!state?.loading && (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, maxWidth: 720 }}>
+          <thead><tr>{["Invoice no", "Amount", "Paid", ""].map((h, i) => (
+            <th key={h} style={{ textAlign: i === 1 ? "right" : "left", padding: "4px 8px", ...lbl, borderBottom: "1px solid var(--line)" }}>{h}</th>
+          ))}</tr></thead>
+          <tbody>
+            {invoices.map((i) => (
+              <tr key={i.invoice_id}>
+                <td style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)" }}>{i.invoice_number || "—"}</td>
+                <td className="fos-num" style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>{money(i.invoice_amount, p.currency)}</td>
+                <td style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)" }}>
+                  <label style={{ display: "inline-flex", gap: 6, alignItems: "center", cursor: closed ? "default" : "pointer" }}>
+                    <input type="checkbox" checked={!!i.paid} disabled={busy || closed} onChange={() => onTogglePaid(i)} />
+                    <span style={{ color: i.paid ? "var(--green)" : "var(--muted)" }}>{i.paid ? `Paid${i.paid_date ? ` · ${new Date(i.paid_date).toLocaleDateString("en-GB")}` : ""}` : "Unpaid"}</span>
+                  </label>
+                </td>
+                <td style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>
+                  {!closed && <button style={{ ...ghost, color: "var(--red)", padding: "3px 8px" }} disabled={busy} onClick={() => onRemove(i)}>Delete</button>}
+                </td>
+              </tr>
+            ))}
+            {!invoices.length && !state?.loading && <tr><td colSpan={4} style={{ padding: "8px", color: "var(--faint)" }}>No invoices yet — add the first below.</td></tr>}
+          </tbody>
+          {invoices.length > 0 && (
+            <tfoot><tr>
+              <td style={{ padding: "6px 8px", fontWeight: 650 }}>Total · {t.count} invoice{t.count === 1 ? "" : "s"} <span style={{ fontWeight: 400, color: "var(--faint)" }}>({money(t.paid, p.currency)} paid)</span></td>
+              <td className="fos-num" style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: reconciles ? "var(--green)" : "var(--amber)" }}>{money(t.total, p.currency)}</td>
+              <td colSpan={2} style={{ padding: "6px 8px", fontSize: 11.5, color: reconciles ? "var(--green)" : "var(--amber)" }}>{reconciles ? "✓ reconciles to P.O" : `${money(Math.abs(t.total - (Number(p.payment_value) || 0)), p.currency)} vs P.O value`}</td>
+            </tr></tfoot>
+          )}
+        </table>
+      )}
+      {!closed && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Invoice no</span><input style={{ ...inputSt, width: 150 }} value={nf.number} onChange={(e) => setField("number", e.target.value)} placeholder="e.g. INV-1042" /></label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Amount (£)</span><input style={{ ...inputSt, width: 120, textAlign: "right" }} className="fos-num" value={nf.amount} onChange={(e) => setField("amount", e.target.value)} placeholder="0.00" /></label>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12.5, paddingBottom: 8 }}><input type="checkbox" checked={!!nf.paid} onChange={(e) => setField("paid", e.target.checked)} /> Paid</label>
+          <button style={{ ...btn("var(--accent)"), padding: "7px 14px" }} disabled={busy || !canAdd} onClick={onAdd}>Add invoice</button>
+        </div>
+      )}
+      {closed && <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 8 }}>This P.O is closed — re-open it to change its invoices.</div>}
+    </div>
+  );
 }
 
 const routeLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
