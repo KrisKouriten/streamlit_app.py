@@ -83,8 +83,8 @@ export default function SupplierPicker({
       {!adding ? (
         <select style={selectStyle} value={value || ""} onChange={onSelect} required={required} disabled={disabled}>
           <option value="">{placeholder}</option>
-          {all.map((n) => <option key={n} value={n}>{n}</option>)}
           <option value={ADD}>＋ Add new supplier…</option>
+          {all.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       ) : (
         <div style={{ display: "flex", gap: 6, alignItems: "stretch", flexWrap: "wrap" }}>
