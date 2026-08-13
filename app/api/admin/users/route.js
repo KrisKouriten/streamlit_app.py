@@ -102,6 +102,9 @@ export async function POST(request) {
       if (!rows.length) return NextResponse.json({ error: "A user with that email already exists" }, { status: 409 });
       const userId = rows[0].id;
       await setUserRole(userId, role, session.email);
+      // Optional department chosen on the create form — persisted the same way as
+      // the per-row department dropdown (set-department).
+      if (body.department) await setUserDepartment(userId, body.department);
       await query(`INSERT INTO workflow.team_capacity (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [userId]).catch(() => {});
       await audit({ actor: session, eventType: "user.create", objectType: "users", objectRef: email.trim().toLowerCase(), detail: { role, invited: wantsInvite } });
 
