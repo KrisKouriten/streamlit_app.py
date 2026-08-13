@@ -7,9 +7,21 @@ import {
   resubmitChallenge, computeSelfApprovalDecision, overrideRoute,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
-import { canDeletePo } from "../../../../lib/po-rules";
+import { canDeletePo, challengeReasonLabels } from "../../../../lib/po-rules";
+import { resolveBaseUrl } from "../../../../lib/invite-rules";
+import { notifyPoAwaitingSignoff, notifyPoDecision, notifyPoChallenge } from "../../../../lib/workflow-notify";
 
 export const dynamic = "force-dynamic";
+
+// Public origin for links in workflow emails — the same-origin Origin header
+// (guaranteed by the CSRF gate) is most reliable; fall back to forwarded host,
+// then env. Notifications are best-effort, so a missing base URL never blocks.
+function baseUrlOf(request) {
+  const host = request.headers.get("host");
+  const origin = request.headers.get("origin")
+    || (host ? `${request.headers.get("x-forwarded-proto") || "https"}://${host}` : null);
+  return resolveBaseUrl({ origin, env: process.env });
+}
 
 async function canApprove(session, department) {
   if (isAdmin(session)) return true;
@@ -37,8 +49,18 @@ export async function POST(request, { params }) {
     switch (body.op) {
       case "update":
         return NextResponse.json(await updatePo(id, body.patch || {}, session));
-      case "submit":
-        return NextResponse.json(await submitForSignoff(id, session));
+      case "submit": {
+        const result = await submitForSignoff(id, session);
+        // Only ping approvers when it actually routes to sign-off (not self-approved).
+        if (result.status === "PENDING_SIGNOFF") {
+          try {
+            const loaded = await getPo(id);
+            const approverEmails = await getApproverEmails(loaded.po.department);
+            await notifyPoAwaitingSignoff({ po: loaded.po, approverEmails, baseUrl: baseUrlOf(request) });
+          } catch (e) { console.error("po submit notify failed:", e.message); }
+        }
+        return NextResponse.json(result);
+      }
       case "return":
         return NextResponse.json(await returnToDraft(id, session));
 
@@ -88,7 +110,11 @@ export async function POST(request, { params }) {
         if (!(await canApprove(session, loaded.po.department))) {
           return NextResponse.json({ error: "Only this department's sign-off approvers (or an admin) can sign off" }, { status: 403 });
         }
-        return NextResponse.json(await (body.op === "approve" ? approvePo(id, session) : rejectPo(id, session)));
+        const result = await (body.op === "approve" ? approvePo(id, session) : rejectPo(id, session));
+        try {
+          await notifyPoDecision({ po: loaded.po, decision: body.op === "approve" ? "APPROVED" : "REJECTED", actor: session, baseUrl: baseUrlOf(request) });
+        } catch (e) { console.error("po decision notify failed:", e.message); }
+        return NextResponse.json(result);
       }
 
       case "delete": {
@@ -114,7 +140,14 @@ export async function POST(request, { params }) {
         if (body.op === "delete-invoice") return NextResponse.json(await deletePoInvoice(body.invoice_id, session));
         if (body.op === "set-invoice") return NextResponse.json(await setInvoice(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
         if (body.op === "close") return NextResponse.json(await closePo(id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, session));
-        if (body.op === "challenge") return NextResponse.json(await challengePo(id, { reasons: body.reasons || [], note: body.note || null, returnRoute: body.returnRoute || null }, session));
+        if (body.op === "challenge") {
+          const r = await challengePo(id, { reasons: body.reasons || [], note: body.note || null, returnRoute: body.returnRoute || null }, session);
+          try {
+            const loaded = await getPo(id);
+            await notifyPoChallenge({ po: loaded.po, reasons: challengeReasonLabels(body.reasons || []), note: body.note || null, baseUrl: baseUrlOf(request) });
+          } catch (e) { console.error("po challenge notify failed:", e.message); }
+          return NextResponse.json(r);
+        }
         if (body.op === "set-payment-status") return NextResponse.json(await setPaymentStatus(id, { payment_status: body.payment_status, paid_date: body.paid_date || null }, session));
         return NextResponse.json(await reopenFinance(id, session));
       }
