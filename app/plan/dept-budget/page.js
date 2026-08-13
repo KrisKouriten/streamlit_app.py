@@ -20,10 +20,11 @@ export default async function DeptBudgetsPage() {
     listDepartments(),
     getUserDepartment(session.id),
     listObjectives(),
-    getBusinessProjects().catch(() => []),
+    getBusinessProjects().catch(() => ({ projects: [] })),
   ]);
   // Live Business Projects a project budget can be assigned to (exclude finished).
-  const businessProjects = (projects || [])
+  // getBusinessProjects returns { ready, projects: [...] }, so read .projects.
+  const businessProjects = ((projects && projects.projects) || [])
     .filter((p) => p.status !== "Done" && p.status !== "Complete")
     .map((p) => ({ id: p.id, name: p.name, status: p.status }));
 
