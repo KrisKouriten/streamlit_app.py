@@ -11,8 +11,8 @@ mechanism powers an emailed "reset your password" link.
    default, so no password field is shown — the account is created with an
    unguessable random password nobody knows and is flagged
    `must_change_password` (shown as **INVITED** in the list).
-2. **An invite email** goes out from a Microsoft 365 mailbox with a link to
-   `/set-password?token=…`.
+2. **An invite email** goes out via Resend (from a verified sender on your own
+   domain) with a link to `/set-password?token=…`.
 3. **The user sets a password** on that public page. The token is single-use and
    expires after `INVITE_TTL_HOURS` (48h). On success the flag clears (status
    becomes **ACTIVE**) and any existing sessions for the account are revoked.
@@ -34,34 +34,29 @@ time-boxed (`expires_at`), and creating a new one supersedes any open link for
 that user. Redemption is a guarded update, so two concurrent submits can't both
 succeed.
 
-## Email transport — Microsoft 365 (Graph)
+## Email transport — Resend
 
-Mail is sent via Microsoft Graph using the application (client-credentials)
-flow, so invites come from a real `@kouriten.com` mailbox.
+Mail is sent via [Resend](https://resend.com) — a single authenticated HTTPS
+POST with an API key, so invites come from a verified sender on your own domain.
 
-**Azure / Entra setup (one-off):**
-1. Register an application in Entra ID.
-2. Under **API permissions**, add **Microsoft Graph → Application permissions →
-   `Mail.Send`**, then **Grant admin consent**.
-3. Under **Certificates & secrets**, create a **client secret**.
-4. (Optional, recommended) Restrict which mailbox the app may send as with an
-   [ApplicationAccessPolicy](https://learn.microsoft.com/graph/auth-limit-mailbox-access)
-   scoped to `MS_GRAPH_SENDER`.
+**Resend setup (one-off):**
+1. Create a Resend account.
+2. Add your **sending domain** and publish the DNS records Resend shows (SPF /
+   DKIM), then wait for it to verify.
+3. Create an **API key**.
 
 **Environment variables** (Vercel project settings or `.env.local`):
 
 | Variable | Purpose |
 | --- | --- |
-| `MS_GRAPH_TENANT_ID` | Entra tenant (GUID or domain) |
-| `MS_GRAPH_CLIENT_ID` | App registration client id |
-| `MS_GRAPH_CLIENT_SECRET` | App registration client secret |
-| `MS_GRAPH_SENDER` | Mailbox to send as, e.g. `no-reply@kouriten.com` |
+| `RESEND_API_KEY` | The Resend API key (starts `re_…`) |
+| `RESEND_SENDER` | From address on a verified domain, e.g. `Miniso UK Finance OS <no-reply@your-domain>` (`EMAIL_FROM` is accepted as an alias) |
 | `APP_BASE_URL` | (Optional) public URL for building links; defaults to the request origin |
 
-**Graceful fallback:** if the four Graph vars aren't all set — or a send fails —
+**Graceful fallback:** if the API key or sender isn't set — or a send fails —
 the user is still created and the admin is shown the one-time link to copy and
 share securely. Nothing blocks on email being configured. `/api/health` reports
-`config.graphEmail` as `set` or `MISSING`.
+`config.email` as `set` or `MISSING`.
 
 ## Migration
 
@@ -74,7 +69,7 @@ and the `governance.user_invite` table. Additive and idempotent.
 - `lib/invite-rules.js` — pure: token state, new-password validation, base-URL
   resolution, link building (unit-tested)
 - `lib/invite.js` — token generation/hashing, create/find/redeem (I/O)
-- `lib/email/graph.js` — Microsoft Graph token cache + `sendMail`
+- `lib/email/resend.js` — Resend transport: `emailConfigured` + `sendMail`
 - `lib/email/templates.js` — pure invite/reset email bodies (unit-tested)
 - `app/api/admin/users/route.js` — invite-on-create + `invite` / `email-reset`
 - `app/api/auth/set-password/route.js` — public redemption endpoint

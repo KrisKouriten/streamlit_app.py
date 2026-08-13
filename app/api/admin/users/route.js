@@ -8,7 +8,7 @@ import { validateDeptPoPolicy } from "../../../../lib/po-rules";
 import { listTemplates } from "../../../../lib/reporting/templates";
 import { createInvite } from "../../../../lib/invite";
 import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../lib/invite-rules";
-import { graphConfigured, sendMail } from "../../../../lib/email/graph";
+import { emailConfigured, sendMail } from "../../../../lib/email/resend";
 import { inviteEmail, resetEmail } from "../../../../lib/email/templates";
 
 const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
@@ -47,7 +47,7 @@ async function deliverLink({ request, user, purpose, actor }) {
       ? resetEmail({ name: user.name, link, expiresHours: ttlHours })
       : inviteEmail({ name: user.name, link, expiresHours: ttlHours, inviterName: actor.name });
 
-  if (!graphConfigured()) {
+  if (!emailConfigured()) {
     return { emailSent: false, reason: "not-configured", link };
   }
   try {
