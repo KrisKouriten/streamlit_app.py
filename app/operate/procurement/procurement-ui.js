@@ -6,6 +6,7 @@ import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META } from "../../../lib/procurement-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import MoneyInput from "../../money-input";
+import SupplierPicker from "../supplier-picker";
 
 /* Procurement Request UI: four sections. Miniso / Local are the cash-tracker
    purchases (monthly cash budget vs committed spend, bucketed by supplier payment
@@ -164,9 +165,9 @@ function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
   const bySource = suppliers.filter((sp) => (isMiniso ? sp.source_type === "MINISO" : sp.source_type !== "MINISO"));
   const supplierOpts = bySource.length ? bySource : suppliers;
   // Picking a supplier pre-fills the payment terms from the master (Local only —
-  // Miniso HQ is fixed 180-day from pickup).
-  function pickSupplier(e) {
-    const name = e.target.value;
+  // Miniso HQ is fixed 180-day from pickup). A freshly added supplier has no terms
+  // yet, so the field is simply left as typed.
+  function pickSupplierName(name) {
     const sup = suppliers.find((sp) => sp.name === name);
     setF((p) => ({ ...p, supplier: name, terms_days: !isMiniso && sup && sup.payment_days != null ? String(sup.payment_days) : p.terms_days }));
   }
@@ -197,10 +198,7 @@ function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
         <Field label="Supplier">
-          <select required value={f.supplier} onChange={pickSupplier} style={inp}>
-            <option value="">{supplierOpts.length ? "— choose supplier —" : "No suppliers — add on Suppliers & Credit"}</option>
-            {supplierOpts.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
-          </select>
+          <SupplierPicker options={supplierOpts} value={f.supplier} onChange={pickSupplierName} selectStyle={inp} required />
         </Field>
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
@@ -604,10 +602,7 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 }}>
             <Field label="Channel"><select style={inp} value={f.channel_code} onChange={set("channel_code")}><option value="">—</option>{channelOpts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
             <Field label="Supplier">
-              <select style={inp} value={f.supplier} onChange={set("supplier")}>
-                <option value="">{suppliers.length ? "— choose supplier —" : "No suppliers — add on Suppliers & Credit"}</option>
-                {suppliers.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
-              </select>
+              <SupplierPicker options={suppliers} value={f.supplier} onChange={(name) => setF((s) => ({ ...s, supplier: name }))} selectStyle={inp} />
             </Field>
             <Field label="Category"><input style={inp} value={f.category} onChange={set("category")} placeholder="e.g. Core range" /></Field>
             <Field label="Amount (£)"><MoneyInput style={{ ...inp, textAlign: "right" }} className="fos-num" value={f.amount_gbp} onChange={set("amount_gbp")} placeholder="e.g. 250000" /></Field>
