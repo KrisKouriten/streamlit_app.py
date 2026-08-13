@@ -15,7 +15,7 @@ export default function UsersAdmin({ me }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [linkInfo, setLinkInfo] = useState(null); // { email, link, reason } — manual fallback
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "FINANCE" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "FINANCE", department: "" });
   const [invite, setInvite] = useState(false); // default: admin sets a starter password (email invites need M365/Resend wired up)
   const [requireChange, setRequireChange] = useState(true); // force a change at first sign-in
 
@@ -57,13 +57,13 @@ export default function UsersAdmin({ me }) {
 
   async function createUser(e) {
     e.preventDefault();
-    const body = { action: "create", name: form.name, email: form.email, role: form.role };
+    const body = { action: "create", name: form.name, email: form.email, role: form.role, department: form.department || null };
     if (!invite) { body.password = form.password; body.requireChange = requireChange; } // omit password -> server emails an invite
     const ok = await post(body, "", (data) => {
       if (data.invited) reflectDelivery(data, `Invite sent to ${form.email}.`);
       else setNotice(`User ${form.email} created.`);
     });
-    if (ok) setForm({ name: "", email: "", password: "", role: "FINANCE" });
+    if (ok) setForm({ name: "", email: "", password: "", role: "FINANCE", department: "" });
   }
 
   async function resetPassword(u) {
@@ -161,6 +161,10 @@ export default function UsersAdmin({ me }) {
         )}
         <select style={input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select style={input} value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+          <option value="">Department —</option>
+          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
         <button type="submit" style={btn}>{invite ? "Send invite" : "Create user"}</button>
       </form>
