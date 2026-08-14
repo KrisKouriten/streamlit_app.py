@@ -299,9 +299,12 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
             {tab === "overview" && <Overview lines={lines} monthly={monthly} groups={groups} movers={movers} issues={issues} summary={summary} events={loaded.events || []} approvers={loaded.approvers || []} onGoFinancial={() => setTab("financial")} />}
 
             {tab === "campaigns" && (
-              <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
-                budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")}
-                objectives={objectives} onAddObjective={addObjectiveOpt} lineOptions={lineOptions} />
+              <>
+                <MiscTask misc={loaded.misc} />
+                <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
+                  budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")}
+                  objectives={objectives} onAddObjective={addObjectiveOpt} lineOptions={lineOptions} />
+              </>
             )}
 
             {tab === "financial" && (
@@ -620,6 +623,41 @@ function ReviewSubmit({ status, issues, summary, allowed, approvers, dirty, busy
 }
 
 // ---- Operational planning: campaigns / projects / contracts ----
+
+// The auto "Miscellaneous" task — small spend logged on the Miscellaneous spend
+// screen, rolled up against this budget. Read-only here (maintained there).
+function MiscTask({ misc }) {
+  const total = Number(misc?.total) || 0;
+  const count = Number(misc?.count) || 0;
+  const cats = Object.entries(misc?.byCategory || {}).filter(([, v]) => Number(v) > 0).sort((a, b) => b[1] - a[1]);
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}>
+            Miscellaneous
+            <span style={{ fontSize: 10, fontFamily: "var(--mono)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 5px" }}>auto</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 3 }}>Small spend that doesn&rsquo;t need a P.O — maintained on Miscellaneous spend.</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div className="fos-num" style={{ fontSize: 20, fontWeight: 700 }}>{money0(total)}</div>
+          <div style={{ fontSize: 11, color: "var(--faint)" }}>{count} {count === 1 ? "entry" : "entries"}</div>
+        </div>
+      </div>
+      {cats.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+          {cats.map(([c, v]) => (
+            <span key={c} style={{ fontSize: 11.5, padding: "3px 8px", borderRadius: 7, background: "var(--raise)", border: "1px solid var(--line)" }}>
+              {c} <span className="fos-num" style={{ color: "var(--muted)" }}>{money0(v)}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <a href="/plan/misc-spend" style={{ display: "inline-block", marginTop: 14, fontSize: 12.5, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>Log / manage miscellaneous spend →</a>
+    </div>
+  );
+}
 
 // A dropdown of shared objectives with an inline "+ Add new…" that persists.
 function ObjectiveField({ value, objectives = [], onAddObjective, onChange }) {
