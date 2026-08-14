@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { createTxn, ingestCsv, toggleRecon, CATEGORIES } from "../../../lib/intercompany";
+import { createTxn, updateTxn, deleteTxn, ingestCsv, toggleRecon, CATEGORIES } from "../../../lib/intercompany";
 
 export async function POST(request) {
   const session = await getSession();
@@ -22,6 +22,14 @@ export async function POST(request) {
     }
     if (body.action === "recon") {
       await toggleRecon(Number(body.txnId), body.flag, body.value, session);
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "update") {
+      await updateTxn(Number(body.txnId), body, session);
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "delete") {
+      await deleteTxn(Number(body.txnId), session);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

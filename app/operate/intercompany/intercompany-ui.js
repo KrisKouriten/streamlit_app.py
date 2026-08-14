@@ -55,30 +55,14 @@ export default function IntercompanyUI({ cats, entities, canManage }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
           <thead><tr>
             {["Date", "Credit (out) → Debit (in)", cat.amountLabel, cat.cols.includes("invoice_number") ? "Invoice" : null,
-              cat.cols.includes("supplier_name") ? "Supplier" : null, "Reference", "Reconciliation"].filter((x) => x !== null).map((h, i) => (
+              cat.cols.includes("supplier_name") ? "Supplier" : null, "Reference", "Reconciliation", canManage ? "" : null].filter((x) => x !== null).map((h, i) => (
               <th key={i} style={{ textAlign: i === 2 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 500, fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {cat.txns.length === 0 && <tr><td colSpan={7} style={{ padding: "16px", color: "var(--faint)", fontSize: 13 }}>No transactions yet. {canManage ? "Add one or upload a CSV." : ""}</td></tr>}
+            {cat.txns.length === 0 && <tr><td colSpan={9} style={{ padding: "16px", color: "var(--faint)", fontSize: 13 }}>No transactions yet. {canManage ? "Add one or upload a CSV." : ""}</td></tr>}
             {cat.txns.map((t) => (
-              <tr key={t.txn_id}>
-                <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap", color: "var(--muted)" }}>{dateStr(t.txn_date)}</td>
-                <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
-                  <span style={{ fontWeight: 560 }}>{t.credit_name || "?"}</span> <span style={{ color: "var(--faint)" }}>→</span> <span style={{ fontWeight: 560 }}>{t.debit_name || "?"}</span>
-                </td>
-                <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{money(t.gross_amount)}</td>
-                {cat.cols.includes("invoice_number") && <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", color: "var(--muted)", whiteSpace: "nowrap" }}>{t.invoice_number || "—"}</td>}
-                {cat.cols.includes("supplier_name") && <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", color: "var(--muted)", whiteSpace: "nowrap" }}>{t.supplier_name || "—"}</td>}
-                <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", color: "var(--muted)", whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 11.5 }}>{t.reference || "—"}</td>
-                <td style={{ padding: "9px 12px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {cat.recon.map(([flag, label]) => (
-                      <ReconChip key={flag} txnId={t.txn_id} flag={flag} label={label} value={t[flag]} canManage={canManage} router={router} setErr={setErr} />
-                    ))}
-                  </div>
-                </td>
-              </tr>
+              <TxnRow key={t.txn_id} t={t} cat={cat} entities={entities} canManage={canManage} router={router} setErr={setErr} />
             ))}
           </tbody>
         </table>
@@ -140,24 +124,102 @@ function Controls({ cat, entities, router, setMsg, setErr }) {
         </label>
         <span style={{ fontSize: 11, color: "var(--faint)" }}>CSV columns: {cat.csvTemplate}</span>
       </div>
-      {adding && <AddForm cat={cat} entities={entities} router={router} onDone={() => { setAdding(false); setMsg("Transaction added."); }} setErr={setErr} />}
+      {adding && <TxnForm cat={cat} entities={entities} submitLabel="Add"
+        onDone={() => { setAdding(false); setMsg("Transaction added."); router.refresh(); }}
+        onCancel={() => setAdding(false)} setErr={setErr} />}
     </div>
   );
 }
 
-function AddForm({ cat, entities, router, onDone, setErr }) {
-  const [f, setF] = useState({ creditEntityId: "", debitEntityId: "", txn_date: "", currency: "GBP", gross_amount: "", net_amount: "", vat_amount: "", reference: "", invoice_number: "", supplier_name: "", nominal: "", payment_method: "" });
+const miniBtn = { fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--line-strong)", background: "transparent", color: "var(--muted)" };
+const emptyForm = { creditEntityId: "", debitEntityId: "", txn_date: "", currency: "GBP", gross_amount: "", net_amount: "", vat_amount: "", reference: "", invoice_number: "", supplier_name: "", nominal: "", payment_method: "" };
+
+// Map a stored transaction row back onto the editable form shape.
+function txnToForm(t) {
+  return {
+    creditEntityId: t.credit_entity_id != null ? String(t.credit_entity_id) : "",
+    debitEntityId: t.debit_entity_id != null ? String(t.debit_entity_id) : "",
+    txn_date: t.txn_date ? String(t.txn_date).slice(0, 10) : "",
+    currency: t.currency || "GBP",
+    gross_amount: t.gross_amount ?? "",
+    net_amount: t.net_amount ?? "",
+    vat_amount: t.vat_amount ?? "",
+    reference: t.reference || "",
+    invoice_number: t.invoice_number || "",
+    supplier_name: t.supplier_name || "",
+    nominal: t.nominal || "",
+    payment_method: t.payment_method || "",
+  };
+}
+
+// One row of the ledger, plus its inline edit panel when editing.
+function TxnRow({ t, cat, entities, canManage, router, setErr }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function del() {
+    if (typeof window !== "undefined" && !window.confirm("Delete this transaction? This cannot be undone.")) return;
+    setBusy(true); setErr("");
+    try { await api({ action: "delete", txnId: t.txn_id }); router.refresh(); }
+    catch (e) { setErr(e.message); setBusy(false); }
+  }
+  const cell = { padding: "9px 12px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
+  return (
+    <>
+      <tr>
+        <td style={{ ...cell, color: "var(--muted)" }}>{dateStr(t.txn_date)}</td>
+        <td style={cell}>
+          <span style={{ fontWeight: 560 }}>{t.credit_name || "?"}</span> <span style={{ color: "var(--faint)" }}>→</span> <span style={{ fontWeight: 560 }}>{t.debit_name || "?"}</span>
+        </td>
+        <td style={{ ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(t.gross_amount)}</td>
+        {cat.cols.includes("invoice_number") && <td style={{ ...cell, color: "var(--muted)" }}>{t.invoice_number || "—"}</td>}
+        {cat.cols.includes("supplier_name") && <td style={{ ...cell, color: "var(--muted)" }}>{t.supplier_name || "—"}</td>}
+        <td style={{ ...cell, color: "var(--muted)", fontFamily: "var(--mono)", fontSize: 11.5 }}>{t.reference || "—"}</td>
+        <td style={cell}>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {cat.recon.map(([flag, label]) => (
+              <ReconChip key={flag} txnId={t.txn_id} flag={flag} label={label} value={t[flag]} canManage={canManage} router={router} setErr={setErr} />
+            ))}
+          </div>
+        </td>
+        {canManage && (
+          <td style={cell}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={editing ? { ...miniBtn, borderColor: "var(--accent)", color: "var(--accent)" } : miniBtn} onClick={() => setEditing((x) => !x)}>{editing ? "Close" : "Edit"}</button>
+              <button style={{ ...miniBtn, color: "var(--red)", borderColor: "var(--line-strong)" }} onClick={del} disabled={busy}>Delete</button>
+            </div>
+          </td>
+        )}
+      </tr>
+      {editing && (
+        <tr>
+          <td colSpan={9} style={{ padding: "0 12px 14px", borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
+            <TxnForm cat={cat} entities={entities} initial={txnToForm(t)} mode="update" txnId={t.txn_id} submitLabel="Save changes"
+              onDone={() => { setEditing(false); router.refresh(); }} onCancel={() => setEditing(false)} setErr={setErr} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// Shared add/edit form. mode "create" or "update"; on update, txnId is sent.
+function TxnForm({ cat, entities, initial, mode = "create", txnId, submitLabel = "Add", onDone, onCancel, setErr }) {
+  const [f, setF] = useState(initial || emptyForm);
+  const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const has = (c) => cat.cols.includes(c);
   async function submit() {
-    setErr("");
+    setErr(""); setBusy(true);
     try {
-      await api({ action: "create", category: cat.key, ...f,
+      await api({ action: mode, category: cat.key, txnId, ...f,
+        creditEntityId: f.creditEntityId === "" ? null : Number(f.creditEntityId),
+        debitEntityId: f.debitEntityId === "" ? null : Number(f.debitEntityId),
         gross_amount: f.gross_amount === "" ? null : Number(f.gross_amount),
         net_amount: f.net_amount === "" ? null : Number(f.net_amount),
         vat_amount: f.vat_amount === "" ? null : Number(f.vat_amount) });
-      onDone(); router.refresh();
+      onDone();
     } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
   const Sel = ({ k, ph }) => (
     <select style={input} value={f[k]} onChange={set(k)}>
@@ -178,7 +240,10 @@ function AddForm({ cat, entities, router, onDone, setErr }) {
       {has("nominal") && <Field label="Nominal"><input style={input} value={f.nominal} onChange={set("nominal")} /></Field>}
       {has("payment_method") && <Field label="Payment method"><input style={input} value={f.payment_method} onChange={set("payment_method")} /></Field>}
       <Field label="Reference"><input style={input} value={f.reference} onChange={set("reference")} /></Field>
-      <button style={btn()} onClick={submit}>Add</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={btn()} onClick={submit} disabled={busy}>{busy ? "Saving…" : submitLabel}</button>
+        {onCancel && <button style={ghost} onClick={onCancel} disabled={busy}>Cancel</button>}
+      </div>
     </div>
   );
 }
