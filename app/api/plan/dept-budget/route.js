@@ -10,6 +10,7 @@ import {
   listInitiatives, createInitiative, updateInitiative, deleteInitiative,
   saveInitiativeCosts, budgetIdOfInitiative,
 } from "../../../../lib/dept-initiative";
+import { miscTotalForBudget } from "../../../../lib/misc-spend";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,9 @@ export async function GET(request) {
       allowed[action] = await canTransition(session, dept, action);
     }
     const initiatives = await listInitiatives(Number(id));
-    return NextResponse.json({ ...loaded, initiatives, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
+    // The auto "Miscellaneous" task total for this budget (from Miscellaneous spend).
+    const misc = await miscTotalForBudget(Number(id));
+    return NextResponse.json({ ...loaded, initiatives, misc, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
   }
 
   const department = url.searchParams.get("department") || null;
