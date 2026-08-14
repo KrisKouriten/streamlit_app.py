@@ -8,6 +8,10 @@ const input = { height: 34, padding: "0 10px", border: "1px solid var(--line-str
 const btn = (bg = "var(--accent)", fg = "#1a1813") => ({ height: 34, padding: "0 14px", border: "none", borderRadius: 8, background: bg, color: fg, fontSize: 13, fontWeight: 600, cursor: "pointer" });
 const ghost = { height: 34, padding: "0 12px", background: "transparent", color: "var(--muted)", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 12.5, cursor: "pointer" };
 const dateStr = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : "—");
+// Year-month key from a date value, taken textually from the ISO string so it is
+// timezone-independent and always matches the displayed month.
+const ymKey = (d) => (d ? String(d instanceof Date ? d.toISOString() : d).slice(0, 7) : "");
+const ymLabel = (m) => { const [y, mo] = m.split("-"); return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" }); };
 
 async function api(body) {
   const res = await fetch("/api/intercompany", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -19,9 +23,21 @@ async function api(body) {
 export default function IntercompanyUI({ cats, entities, canManage }) {
   const router = useRouter();
   const [tab, setTab] = useState(cats[0].key);
+  const [month, setMonth] = useState("all");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const cat = cats.find((c) => c.key === tab);
+
+  // Month filter: distinct months in this ledger (newest first), and the rows /
+  // summary for the selected month. Recomputed client-side so tiles focus too.
+  const months = [...new Set(cat.txns.map((t) => ymKey(t.txn_date)).filter(Boolean))].sort().reverse();
+  const filtered = month !== "all";
+  const txns = filtered ? cat.txns.filter((t) => ymKey(t.txn_date) === month) : cat.txns;
+  const view = {
+    n: txns.length,
+    total: txns.reduce((s, t) => s + (Number(t.gross_amount) || 0), 0),
+    bs_reconciled: txns.filter((t) => t.recon_balance_sheet).length,
+  };
 
   return (
     <div>
@@ -30,7 +46,7 @@ export default function IntercompanyUI({ cats, entities, canManage }) {
         {cats.map((c) => {
           const on = c.key === tab;
           return (
-            <button key={c.key} onClick={() => { setTab(c.key); setMsg(""); setErr(""); }} style={{
+            <button key={c.key} onClick={() => { setTab(c.key); setMonth("all"); setMsg(""); setErr(""); }} style={{
               fontSize: 12.5, padding: "7px 14px", borderRadius: 8, cursor: "pointer",
               border: `1px solid ${on ? "var(--accent)" : "var(--line-strong)"}`,
               background: on ? "var(--accent-bg)" : "transparent", color: on ? "var(--accent)" : "var(--muted)", fontWeight: on ? 700 : 500,
@@ -39,19 +55,32 @@ export default function IntercompanyUI({ cats, entities, canManage }) {
         })}
       </div>
 
-      {/* summary */}
+      {/* summary — reflects the selected month */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
-        <Tile label="Transactions" value={cat.summary.n} />
-        <Tile label="Total value" value={money(cat.summary.total, { compact: true })} />
-        <Tile label="Balance-sheet reconciled" value={`${cat.summary.bs_reconciled} / ${cat.summary.n}`} tone={cat.summary.n && cat.summary.bs_reconciled === cat.summary.n ? "green" : cat.summary.bs_reconciled ? "amber" : undefined} />
+        <Tile label={filtered ? "Transactions · " + ymLabel(month) : "Transactions"} value={view.n} />
+        <Tile label={filtered ? "Total value · " + ymLabel(month) : "Total value"} value={money(view.total, { compact: true })} />
+        <Tile label="Balance-sheet reconciled" value={`${view.bs_reconciled} / ${view.n}`} tone={view.n && view.bs_reconciled === view.n ? "green" : view.bs_reconciled ? "amber" : undefined} />
       </div>
 
       {canManage && <Controls cat={cat} entities={entities} router={router} setMsg={setMsg} setErr={setErr} />}
       {msg && <div style={{ fontSize: 12.5, color: "var(--green)", margin: "8px 0" }}>{msg}</div>}
       {err && <div style={{ fontSize: 12.5, color: "var(--red)", margin: "8px 0", whiteSpace: "pre-wrap" }}>{err}</div>}
 
+      {/* month filter */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ fontSize: 11.5, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".04em" }}>Month</label>
+          <select value={month} onChange={(e) => setMonth(e.target.value)} style={{ ...input, width: "auto", minWidth: 160 }}>
+            <option value="all">All months</option>
+            {months.map((m) => <option key={m} value={m}>{ymLabel(m)}</option>)}
+          </select>
+          {filtered && <button style={ghost} onClick={() => setMonth("all")}>Clear</button>}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--faint)" }}>Showing {txns.length} of {cat.txns.length}</div>
+      </div>
+
       {/* table */}
-      <div style={{ overflowX: "auto", border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--surface)", marginTop: 12 }}>
+      <div style={{ overflowX: "auto", border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--surface)", marginTop: 10 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
           <thead><tr>
             {["Date", "Credit (out) → Debit (in)", cat.amountLabel, cat.cols.includes("invoice_number") ? "Invoice" : null,
@@ -60,8 +89,8 @@ export default function IntercompanyUI({ cats, entities, canManage }) {
             ))}
           </tr></thead>
           <tbody>
-            {cat.txns.length === 0 && <tr><td colSpan={9} style={{ padding: "16px", color: "var(--faint)", fontSize: 13 }}>No transactions yet. {canManage ? "Add one or upload a CSV." : ""}</td></tr>}
-            {cat.txns.map((t) => (
+            {txns.length === 0 && <tr><td colSpan={9} style={{ padding: "16px", color: "var(--faint)", fontSize: 13 }}>{cat.txns.length ? "No transactions in " + ymLabel(month) + "." : `No transactions yet. ${canManage ? "Add one or upload a CSV." : ""}`}</td></tr>}
+            {txns.map((t) => (
               <TxnRow key={t.txn_id} t={t} cat={cat} entities={entities} canManage={canManage} router={router} setErr={setErr} />
             ))}
           </tbody>
