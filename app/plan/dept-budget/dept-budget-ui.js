@@ -300,7 +300,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
 
             {tab === "campaigns" && (
               <>
-                <MiscTask misc={loaded.misc} />
+                <MiscTask misc={loaded.misc} lines={lines} />
                 <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
                   budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")}
                   objectives={objectives} onAddObjective={addObjectiveOpt} lineOptions={lineOptions} />
@@ -624,12 +624,26 @@ function ReviewSubmit({ status, issues, summary, allowed, approvers, dirty, busy
 
 // ---- Operational planning: campaigns / projects / contracts ----
 
-// The auto "Miscellaneous" task — small spend logged on the Miscellaneous spend
-// screen, rolled up against this budget. Read-only here (maintained there).
-function MiscTask({ misc }) {
+// The auto "Miscellaneous" task — small spend logged on the Miscellaneous Spend
+// screen, rolled up against this budget and benchmarked against the miscellaneous
+// budget, which sits on the "Contingency" line under the "Other" category.
+// Read-only here (spend maintained on Miscellaneous Spend, budget in Financial View).
+function MiscTask({ misc, lines = [] }) {
   const total = Number(misc?.total) || 0;
   const count = Number(misc?.count) || 0;
   const cats = Object.entries(misc?.byCategory || {}).filter(([, v]) => Number(v) > 0).sort((a, b) => b[1] - a[1]);
+
+  // Miscellaneous budget = the "Contingency" line under "Other". Fall back to the
+  // whole "Other" category if the budget isn't broken out onto a Contingency line.
+  const otherLines = lines.filter((l) => (l.category || "").trim().toLowerCase() === "other");
+  const contLine = otherLines.find((l) => /contingenc/i.test(l.line_label || ""));
+  const budget = contLine ? lineTotal(contLine) : otherLines.reduce((s, l) => s + lineTotal(l), 0);
+  const benchLabel = contLine ? "Other · Contingency" : otherLines.length ? "Other" : null;
+  const hasBudget = budget > 0;
+  const pct = hasBudget ? Math.round((total / budget) * 100) : null;
+  const remaining = budget - total;
+  const tone = !hasBudget ? "var(--faint)" : pct > 100 ? "var(--red)" : pct > 85 ? "var(--amber)" : "var(--green)";
+
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
@@ -638,13 +652,38 @@ function MiscTask({ misc }) {
             Miscellaneous
             <span style={{ fontSize: 10, fontFamily: "var(--mono)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 5px" }}>auto</span>
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 3 }}>Small spend that doesn&rsquo;t need a P.O — maintained on Miscellaneous spend.</div>
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 3 }}>Small spend that doesn&rsquo;t need a P.O — maintained on Miscellaneous Spend, benchmarked against the Contingency budget under Other.</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="fos-num" style={{ fontSize: 20, fontWeight: 700 }}>{money0(total)}</div>
-          <div style={{ fontSize: 11, color: "var(--faint)" }}>{count} {count === 1 ? "entry" : "entries"}</div>
+          <div style={{ fontSize: 11, color: "var(--faint)" }}>{count} {count === 1 ? "entry" : "entries"} logged</div>
         </div>
       </div>
+
+      {/* Benchmark vs the Contingency (miscellaneous) budget */}
+      <div style={{ marginTop: 14, padding: "12px 14px", background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10 }}>
+        {hasBudget ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+              <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Spent vs miscellaneous budget <span style={{ color: "var(--faint)" }}>({benchLabel})</span></span>
+              <span className="fos-num" style={{ fontSize: 12.5, fontWeight: 700, color: tone }}>{pct}% used</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 5, background: "var(--line)", overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: tone, transition: "width .3s" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 8, fontSize: 11.5 }}>
+              <span style={{ color: "var(--faint)" }}>Budget <span className="fos-num" style={{ color: "var(--muted)" }}>{money0(budget)}</span></span>
+              <span style={{ color: "var(--faint)" }}>Spent <span className="fos-num" style={{ color: "var(--muted)" }}>{money0(total)}</span></span>
+              <span style={{ color: tone, fontWeight: 600 }}>{remaining >= 0 ? `${money0(remaining)} remaining` : `${money0(-remaining)} over budget`}</span>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
+            No miscellaneous budget set. Add a <b>Contingency</b> line under the <b>Other</b> category in Financial View to benchmark this spend.
+          </div>
+        )}
+      </div>
+
       {cats.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
           {cats.map(([c, v]) => (
@@ -654,7 +693,7 @@ function MiscTask({ misc }) {
           ))}
         </div>
       )}
-      <a href="/plan/misc-spend" style={{ display: "inline-block", marginTop: 14, fontSize: 12.5, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>Log / manage miscellaneous spend →</a>
+      <a href="/plan/misc-spend" style={{ display: "inline-block", marginTop: 14, fontSize: 12.5, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>Log / manage Miscellaneous Spend →</a>
     </div>
   );
 }

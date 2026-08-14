@@ -114,7 +114,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
 
       {/* add / edit form */}
       <div style={{ ...card, ...(editId ? { border: "1px solid color-mix(in srgb, var(--accent) 35%, var(--line))", background: "var(--accent-bg)" } : {}) }}>
-        <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 12 }}>{editId ? "Edit spend entry" : "Log miscellaneous spend"}</div>
+        <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 12 }}>{editId ? "Edit spend entry" : "Log Miscellaneous Spend"}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
           <label style={field}><span style={labelSt}>Date</span><DateField value={f.spend_date} onChange={(iso) => setF((s) => ({ ...s, spend_date: iso }))} /></label>
           <label style={field}><span style={labelSt}>Department *</span>

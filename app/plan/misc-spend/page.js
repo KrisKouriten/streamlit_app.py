@@ -23,11 +23,11 @@ export default async function MiscSpendPage() {
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
-      <PageHeader crumb="Plan — HO" title="Miscellaneous spend"
+      <PageHeader crumb="Plan — HO" title="Miscellaneous Spend"
         right="Log small spend that doesn't need a P.O, against a budget" />
       {!list.ready ? (
         <EmptyState title="One migration to run">
-          Miscellaneous spend needs migration <span style={{ fontFamily: "var(--mono)" }}>103_misc_spend.sql</span> (idempotent). Run it, refresh, then log your first entry.
+          Miscellaneous Spend needs migration <span style={{ fontFamily: "var(--mono)" }}>103_misc_spend.sql</span> (idempotent). Run it, refresh, then log your first entry.
         </EmptyState>
       ) : (
         <MiscSpendUI
