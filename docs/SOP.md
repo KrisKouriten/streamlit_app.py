@@ -358,9 +358,15 @@ bucketed by the month cash actually leaves against a per-month **cash budget** t
 merch team edit inline. CSV-uploadable; illustrative seed until a real extract loads.
 
 ### 5.10 Intercompany (OPERATE)
-A three-ledger tracker — cash, inventory & recharges, disbursements — across the
-group's entities, with CSV upload and manual entry. UK dates (DD/MM/YYYY) normalise
-to ISO on load.
+A three-ledger tracker — **Bank Cash**, **Inventory & Recharges**, **Disbursements** —
+across the group's entities, with CSV upload and manual entry (ADMIN/FINANCE). UK dates
+(DD/MM/YYYY) normalise to ISO on load. Every row can be **edited or deleted** in place,
+and each ledger has a **Month filter** that narrows the table and refocuses the summary
+tiles (transactions · total value · balance-sheet reconciled) on the chosen month.
+Reconciliation is tracked per row via the ledger's own flags (credit / debit /
+balance-sheet / cashflow for cash; settled-on-Xero + balance-sheet for disbursements).
+On **Disbursements**, **Payment method** is a fixed list — **Bank** or **Trade Pay** —
+and shows as its own column in the ledger.
 
 ### 5.11 Finance Agent Control Centre (DIGITAL FINANCE TEAM)
 AI agents assist; they never act. Two agents ship today: **Store Priorities**
@@ -731,6 +737,16 @@ template (`DEPT_BUDGET_PACK`): a summary (target · planned · variance · expec
 contribution), the initiatives and their objectives, and the full **zero-based cost
 detail** (driver × qty × unit cost → annual). Pull it into a report and export it
 (PowerPoint / PDF / Word / Excel) to present to the SLT for approval.
+
+**Miscellaneous Spend (PLAN — HO).** Small planned costs that don't warrant a P.O are
+logged on **Miscellaneous Spend** (`/plan/misc-spend`) against a Departmental Budget —
+any signed-in user can record and edit their own department's entries. Each budget's
+**Campaigns** tab shows an auto **Miscellaneous** card that rolls up this spend and
+**benchmarks it against the miscellaneous budget**, which sits on the **Contingency**
+line under the **Other** category: a used-% bar with budget · spent · remaining,
+shading green → amber → red as it approaches and then exceeds the set-aside. If there
+is no Contingency line the card falls back to the whole Other category and prompts you
+to add one (`finance.misc_spend`, migration 103).
 
 *Coming next:* AI suggestions (suggested phasing from history, missing-cost warnings),
 scenario generation, and driver-based planning.

@@ -12,6 +12,7 @@ const dateStr = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-di
 // timezone-independent and always matches the displayed month.
 const ymKey = (d) => (d ? String(d instanceof Date ? d.toISOString() : d).slice(0, 7) : "");
 const ymLabel = (m) => { const [y, mo] = m.split("-"); return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" }); };
+const PAYMENT_METHODS = ["Bank", "Trade Pay"];
 
 async function api(body) {
   const res = await fetch("/api/intercompany", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -84,7 +85,7 @@ export default function IntercompanyUI({ cats, entities, canManage }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
           <thead><tr>
             {["Date", "Credit (out) → Debit (in)", cat.amountLabel, cat.cols.includes("invoice_number") ? "Invoice" : null,
-              cat.cols.includes("supplier_name") ? "Supplier" : null, "Reference", "Reconciliation", canManage ? "" : null].filter((x) => x !== null).map((h, i) => (
+              cat.cols.includes("supplier_name") ? "Supplier" : null, "Reference", cat.cols.includes("payment_method") ? "Payment method" : null, "Reconciliation", canManage ? "" : null].filter((x) => x !== null).map((h, i) => (
               <th key={i} style={{ textAlign: i === 2 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 500, fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
@@ -203,6 +204,7 @@ function TxnRow({ t, cat, entities, canManage, router, setErr }) {
         {cat.cols.includes("invoice_number") && <td style={{ ...cell, color: "var(--muted)" }}>{t.invoice_number || "—"}</td>}
         {cat.cols.includes("supplier_name") && <td style={{ ...cell, color: "var(--muted)" }}>{t.supplier_name || "—"}</td>}
         <td style={{ ...cell, color: "var(--muted)", fontFamily: "var(--mono)", fontSize: 11.5 }}>{t.reference || "—"}</td>
+        {cat.cols.includes("payment_method") && <td style={{ ...cell, color: "var(--muted)" }}>{t.payment_method || "—"}</td>}
         <td style={cell}>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             {cat.recon.map(([flag, label]) => (
@@ -267,7 +269,12 @@ function TxnForm({ cat, entities, initial, mode = "create", txnId, submitLabel =
       {has("invoice_number") && <Field label="Invoice number"><input style={input} value={f.invoice_number} onChange={set("invoice_number")} /></Field>}
       {has("supplier_name") && <Field label="Supplier"><input style={input} value={f.supplier_name} onChange={set("supplier_name")} /></Field>}
       {has("nominal") && <Field label="Nominal"><input style={input} value={f.nominal} onChange={set("nominal")} /></Field>}
-      {has("payment_method") && <Field label="Payment method"><input style={input} value={f.payment_method} onChange={set("payment_method")} /></Field>}
+      {has("payment_method") && <Field label="Payment method">
+        <select style={input} value={f.payment_method || ""} onChange={set("payment_method")}>
+          <option value="">Select…</option>
+          {(f.payment_method && !PAYMENT_METHODS.includes(f.payment_method) ? [f.payment_method, ...PAYMENT_METHODS] : PAYMENT_METHODS).map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </Field>}
       <Field label="Reference"><input style={input} value={f.reference} onChange={set("reference")} /></Field>
       <div style={{ display: "flex", gap: 8 }}>
         <button style={btn()} onClick={submit} disabled={busy}>{busy ? "Saving…" : submitLabel}</button>
