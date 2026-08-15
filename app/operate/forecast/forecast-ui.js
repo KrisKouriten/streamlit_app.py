@@ -20,7 +20,7 @@ async function post(body) {
 
 const k = (v) => money(v, { compact: true });
 
-export default function ForecastUI({ data, ready, canManage }) {
+export default function ForecastUI({ data, ready, canManage, canExport = false }) {
   const router = useRouter();
   const [tab, setTab] = useState("STORES");
   const [view, setView] = useState("monthly"); // "monthly" | "annual"
@@ -114,7 +114,7 @@ export default function ForecastUI({ data, ready, canManage }) {
             }}>{label}</button>
           ))}
         </div>
-        <a className="fos-btn-ghost" href="/api/forecast/export" style={{ textDecoration: "none" }}>Download Excel</a>
+        {canExport && <a className="fos-btn-ghost" href="/api/forecast/export" style={{ textDecoration: "none" }}>Download Excel</a>}
       </div>
 
       {view === "annual"

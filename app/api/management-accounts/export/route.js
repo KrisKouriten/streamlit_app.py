@@ -3,16 +3,18 @@ import { getSession } from "../../../../lib/auth";
 import { buildManagementAccountsWorkbook } from "../../../../lib/ma-export";
 import { PERIODS } from "../../../../lib/ma-boardpack-view";
 import { audit } from "../../../../lib/governance";
+import { canExport } from "../../../../lib/reporting/report-access-rules";
 
 export const dynamic = "force-dynamic";
 
 // Download the Management Accounts board pack as an Excel workbook — one sheet
 // per loaded scope (Store / Head Office / Franchise / Consolidated) for the
-// chosen year and period. Any signed-in user may download (viewing, not
-// mutating); the download is audited.
+// chosen year and period. Restricted to the reporting-protection group
+// (Finance / Exec / Head / Admin); the download is audited.
 export async function GET(request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!canExport(session)) return NextResponse.json({ error: "Downloading packs is restricted to Finance, Exec and department heads." }, { status: 403 });
 
   const url = new URL(request.url);
   const year = url.searchParams.get("year") || null;
