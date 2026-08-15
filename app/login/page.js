@@ -79,22 +79,42 @@ export default function LoginPage() {
     <div className="fos-force-dark" style={{ minHeight: "100vh", position: "relative", overflow: "hidden", color: "var(--ink)",
       background: "radial-gradient(120% 90% at 50% 46%, rgba(164,134,63,0.16), transparent 60%), linear-gradient(180deg, #0d0c0a 0%, #12100b 55%, #0d0c0a 100%)" }}>
 
-      {/* the connected sphere — the whole concept, live */}
-      <ConnectedSphere labels />
+      <style>{`
+        @keyframes lgRise { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: none; } }
+        @keyframes lgSphereIn { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: none; } }
+        .lg-rise { opacity: 0; animation: lgRise .8s cubic-bezier(.2,.7,.2,1) both; }
+        .lg-sphere-in { animation: lgSphereIn 1.2s cubic-bezier(.2,.7,.2,1) both; }
+        @media (prefers-reduced-motion: reduce) {
+          .lg-rise, .lg-sphere-in { animation: none; opacity: 1; }
+        }
+      `}</style>
+
+      {/* the connected sphere — the whole concept, live. Scales in on first paint and
+          carries a slight brightness/saturation + bloom lift so it stands out. */}
+      <div className="lg-sphere-in" style={{ position: "absolute", inset: 0, zIndex: 0,
+        filter: "brightness(1.09) saturate(1.14) drop-shadow(0 0 60px rgba(197,158,74,.28))" }}>
+        <ConnectedSphere labels />
+      </div>
+
+      {/* vignette + film grain — kills gradient banding and adds atmosphere */}
+      <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
+        background: "radial-gradient(120% 90% at 50% 42%, transparent 52%, rgba(0,0,0,.5))" }} />
+      <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none", opacity: 0.05, mixBlendMode: "overlay",
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")" }} />
 
       {/* tagline overlay (non-interactive) */}
       <div style={{ position: "relative", zIndex: 2, minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "clamp(20px,4vw,46px)", pointerEvents: "none" }}>
         <div style={{ maxWidth: 640 }}>
-          <span className="fos-eyebrow">Miniso UK · Finance OS</span>
-          <h1 style={{ fontWeight: 600, fontSize: "clamp(30px,5.4vw,58px)", lineHeight: 1.03, letterSpacing: "-.03em", margin: "18px 0 0", textWrap: "balance", textShadow: "0 2px 40px rgba(0,0,0,.6)" }}>
+          <span className="fos-eyebrow lg-rise" style={{ animationDelay: "60ms" }}>Miniso UK · Finance OS</span>
+          <h1 className="lg-rise" style={{ animationDelay: "150ms", fontWeight: 600, fontSize: "clamp(30px,5.4vw,58px)", lineHeight: 1.03, letterSpacing: "-.03em", margin: "18px 0 0", textWrap: "balance", textShadow: "0 2px 40px rgba(0,0,0,.6)" }}>
             One sphere.<br />
-            <span style={{ background: "linear-gradient(96deg, #f4e6ac, #e7d492 55%, #a4863f)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Every number connected.</span>
+            <span style={{ backgroundImage: "linear-gradient(96deg, #f4e6ac, #e7d492 55%, #a4863f)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Every number connected.</span>
           </h1>
-          <p style={{ fontSize: "clamp(14px,1.6vw,17px)", color: "var(--muted)", lineHeight: 1.55, margin: "16px 0 0", maxWidth: "44ch" }}>
+          <p className="lg-rise" style={{ animationDelay: "320ms", fontSize: "clamp(14px,1.6vw,17px)", color: "var(--muted)", lineHeight: 1.55, margin: "16px 0 0", maxWidth: "44ch" }}>
             Stores, ledgers, pricing, stock and plans — every feed crossing the same surface and drawn into one control tower at the centre.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
+        <div className="lg-rise" style={{ animationDelay: "460ms", display: "flex", gap: 18, flexWrap: "wrap", fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>
           {[["#f4e6ac", "Pillars"], ["#e7d492", "Data feeds"], ["#cf8f4a", "Live streams"]].map(([c, l]) => (
             <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               <i style={{ width: 8, height: 8, borderRadius: "50%", background: c, boxShadow: `0 0 9px ${c}` }} />{l}
@@ -104,8 +124,8 @@ export default function LoginPage() {
       </div>
 
       {/* top-right sign-in control */}
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="signin-panel" className="fos-btn"
-        style={{ position: "fixed", top: 22, right: 24, zIndex: 6, height: 40, padding: "0 18px", fontSize: 13.5 }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="signin-panel" className="fos-btn lg-rise"
+        style={{ position: "fixed", top: 22, right: 24, zIndex: 6, height: 40, padding: "0 18px", fontSize: 13.5, animationDelay: "560ms" }}>
         {open ? "Close" : "Sign in"}
       </button>
 
