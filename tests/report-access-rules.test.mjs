@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   canAccessReport, hasFullReportAccess, accessibleTemplateKeys, filterViewableReports,
+  canExport, EXPORT_ROLES,
   REPORT_VERBS, REPORT_VERB_COL,
 } from "../lib/reporting/report-access-rules.js";
 
@@ -65,4 +66,21 @@ test("filterViewableReports hides ungranted reports for non-finance", () => {
 test("verb vocab is complete", () => {
   assert.equal(REPORT_VERBS.length, 8);
   for (const v of REPORT_VERBS) assert.ok(REPORT_VERB_COL[v], `missing column for ${v}`);
+});
+
+test("HEAD is a full-access reporting role", () => {
+  assert.equal(hasFullReportAccess(["HEAD"]), true);
+  assert.equal(canAccessReport({ roles: ["HEAD"], permissions: [], templateKey: "FINANCE_BOARD_DECK", verb: "export" }), true);
+});
+
+test("canExport allows only the reporting-protection group", () => {
+  for (const r of EXPORT_ROLES) assert.equal(canExport({ roles: [r] }), true, `${r} should export`);
+  assert.equal(canExport({ roles: ["ADMIN"] }), true);
+  assert.equal(canExport({ roles: ["EXEC"] }), true);
+  assert.equal(canExport({ roles: ["FINANCE"] }), true);
+  assert.equal(canExport({ roles: ["HEAD"] }), true);
+  assert.equal(canExport({ roles: ["OPS"] }), false);
+  assert.equal(canExport({ roles: ["FRANCHISEE"] }), false);
+  assert.equal(canExport({ roles: [] }), false);
+  assert.equal(canExport(null), false);
 });

@@ -11,7 +11,7 @@ import { resolveBaseUrl, setPasswordLink, INVITE_TTL_HOURS } from "../../../../l
 import { emailConfigured, sendMail } from "../../../../lib/email/resend";
 import { inviteEmail, resetEmail } from "../../../../lib/email/templates";
 
-const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "OPS", "FRANCHISEE"];
+const VALID_ROLES = ["ADMIN", "EXEC", "FINANCE", "HEAD", "OPS", "FRANCHISEE"];
 
 function forbidden() {
   return NextResponse.json({ error: "Admin access required" }, { status: 403 });

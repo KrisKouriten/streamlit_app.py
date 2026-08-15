@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { resolveTab, TAB_LABEL, SCOPE_NOTE, PERIODS } from "../../../lib/ma-boardpack-view";
 import { applyPeriod } from "../../../lib/ma-export-rules";
+import { canExport } from "../../../lib/reporting/report-access-rules";
 import { PageHeader, RelatedRail, money } from "../ui";
 import PerspectivePanel from "../../perspective-panel";
 import McControls from "./mc-controls";
@@ -39,7 +40,7 @@ export default async function ManagementAccounts({ searchParams }) {
         { label: "Store Performance", href: "/finance-os/store-sales/league" },
       ]} />
 
-      <McControls tab={tab} years={data.years || []} year={data.year} period={period} storeList={data.storeList} store={data.selected} />
+      <McControls tab={tab} years={data.years || []} year={data.year} period={period} storeList={data.storeList} store={data.selected} canExport={canExport(session)} />
 
       {!data.ready ? (
         <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>

@@ -1,4 +1,5 @@
-import { getSession, hasRole } from "../../../../lib/auth";
+import { getSession } from "../../../../lib/auth";
+import { canExport } from "../../../../lib/reporting/report-access-rules";
 import { posForExport } from "../../../../lib/purchase-orders";
 import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf } from "../../../../lib/po-rules";
 import * as XLSX from "xlsx";
@@ -15,7 +16,7 @@ export const maxDuration = 60;
 export async function GET(request) {
   const session = await getSession();
   if (!session) return new Response(JSON.stringify({ error: "Not signed in" }), { status: 401 });
-  if (!hasRole(session, "ADMIN", "FINANCE")) return new Response(JSON.stringify({ error: "Finance or admin only" }), { status: 403 });
+  if (!canExport(session)) return new Response(JSON.stringify({ error: "Downloading PO exports is restricted to Finance, Exec and department heads." }), { status: 403 });
 
   const url = new URL(request.url);
   const idsParam = url.searchParams.get("ids");

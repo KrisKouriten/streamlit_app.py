@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
+import { canExport } from "../../../lib/reporting/report-access-rules";
 import { getForecast } from "../../../lib/forecast";
 import { computeNominalPnl, SCOPES } from "../../../lib/forecast-rules.js";
 import { PageHeader, RelatedRail } from "../../finance-os/ui";
@@ -59,7 +60,7 @@ export default async function OperateForecast({ searchParams }) {
         { label: "Management Accounts", href: "/finance-os/management-accounts" },
         { label: "Departmental Budgets", href: "/plan/dept-budget" },
       ]} />
-      <ForecastUI data={payload} ready={fc.ready} canManage={canManage} />
+      <ForecastUI data={payload} ready={fc.ready} canManage={canManage} canExport={canExport(session)} />
     </div>
   );
 }

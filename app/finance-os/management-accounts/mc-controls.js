@@ -17,7 +17,7 @@ const PERIOD_OPTS = [
   { key: "ytd", label: "YTD" },
 ];
 
-export default function McControls({ tab, years, year, period, storeList, store }) {
+export default function McControls({ tab, years, year, period, storeList, store, canExport = false }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -64,7 +64,7 @@ export default function McControls({ tab, years, year, period, storeList, store 
             {years.length ? years.map((y) => <button key={y} style={pill(y === year)} onClick={() => go({ year: y })}>{y}</button>)
               : <span style={{ fontSize: 12, color: "var(--faint)" }}>no data</span>}
           </div>
-          {years.length > 0 && (
+          {years.length > 0 && canExport && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <a href={exportHref} style={{ ...pill(false), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }} title="Download the full board pack (all scopes) as Excel">
                 <span aria-hidden>⤓</span> Excel
