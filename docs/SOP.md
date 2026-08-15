@@ -365,8 +365,9 @@ and each ledger has a **Month filter** that narrows the table and refocuses the 
 tiles (transactions · total value · balance-sheet reconciled) on the chosen month.
 Reconciliation is tracked per row via the ledger's own flags (credit / debit /
 balance-sheet / cashflow for cash; settled-on-Xero + balance-sheet for disbursements).
-On **Disbursements**, **Payment method** is a fixed list — **Bank** or **Trade Pay** —
-and shows as its own column in the ledger.
+On **Bank Cash** and **Disbursements**, **Payment method** is a fixed list — **Bank**
+or **Trade Pay** — chosen from a dropdown on entry and shown as its own column in the
+ledger (and accepted in those ledgers' CSV uploads).
 
 ### 5.11 Finance Agent Control Centre (DIGITAL FINANCE TEAM)
 AI agents assist; they never act. Two agents ship today: **Store Priorities**
