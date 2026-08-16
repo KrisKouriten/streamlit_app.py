@@ -24,7 +24,7 @@ function hexToRgb(hex, fallback) {
   return `${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)}`;
 }
 
-export default function ConnectedSphere({ labels = true, glow = true, centerValue = null, centerCaption = "", pillarTones = null, shell = false }) {
+export default function ConnectedSphere({ labels = true, glow = true, centerValue = null, centerCaption = "", pillarTones = null }) {
   const ref = useRef(null);
   const propsRef = useRef({});
   propsRef.current = { labels, glow, centerValue, centerCaption, pillarTones };
@@ -207,19 +207,6 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.fillStyle = "rgba(" + st.col + "," + a + ")"; ctx.fill();
       }
 
-      // Shell mode: a faint translucent white sphere, so the arcs read as flight
-      // paths just above a planet's surface. Drawn opaque (source-over) before the
-      // additive glow layers so it stays a soft solid shell, not a bloom.
-      if (shell) {
-        const body = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.34, R * 0.1, cx, cy, R);
-        body.addColorStop(0, "rgba(255,255,255,0.10)");
-        body.addColorStop(0.72, "rgba(255,255,255,0.045)");
-        body.addColorStop(1, "rgba(255,255,255,0.13)"); // limb brightens
-        ctx.fillStyle = body; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();
-        ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283);
-        ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.lineWidth = 1.1; ctx.stroke();
-      }
-
       ctx.lineWidth = 1;
       for (const ring of WIRE) {
         ctx.beginPath();
@@ -228,16 +215,8 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
         ctx.strokeStyle = "rgba(" + GOLD + ",0.05)"; ctx.stroke();
       }
 
-      // Arcs sit just above the surface in shell mode (like flight paths); the
-      // heads glow white instead of amber.
-      const ALT = shell ? 1.07 : 1.0;
-      const lift = (v) => (shell ? [v[0] * ALT, v[1] * ALT, v[2] * ALT] : v);
-      const HEAD_GLOW = AMBER;
-      const HEAD_DOT = GOLD_B;
-
       ctx.globalCompositeOperation = ADD;
-      // Convergence lines drawn to the centre only in the gold "core" mode.
-      if (!shell) for (let i = 0; i < N; i++) {
+      for (let i = 0; i < N; i++) {
         const q = project(NODES[i].v, ay);
         const g = ctx.createLinearGradient(q.x, q.y, cx, cy);
         g.addColorStop(0, "rgba(" + GOLD + ",0)");
@@ -247,7 +226,7 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
       }
 
       for (const arc of ARCS) {
-        const proj = arc.pts.map((v) => project(lift(v), ay));
+        const proj = arc.pts.map((v) => project(v, ay));
         let za = 0; for (const p of proj) za += p.z; za /= proj.length;
         const al = dA(za);
         ctx.beginPath(); ctx.moveTo(proj[0].x, proj[0].y);
@@ -262,19 +241,18 @@ export default function ConnectedSphere({ labels = true, glow = true, centerValu
           const idx = u * (arc.pts.length - 1);
           const i0 = Math.floor(idx), f = idx - i0;
           const a = arc.pts[i0], b = arc.pts[Math.min(i0 + 1, arc.pts.length - 1)];
-          const v = lift([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
+          const v = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
           const q = project(v, ay), al = dA(q.z), rad = 1.7 * q.s;
           const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rad * 5);
-          g.addColorStop(0, "rgba(" + HEAD_GLOW + "," + (0.9 * al) + ")");
-          g.addColorStop(1, "rgba(" + HEAD_GLOW + ",0)");
+          g.addColorStop(0, "rgba(" + AMBER + "," + (0.9 * al) + ")");
+          g.addColorStop(1, "rgba(" + AMBER + ",0)");
           ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, rad * 5, 0, 6.283); ctx.fill();
-          ctx.fillStyle = "rgba(" + HEAD_DOT + "," + al + ")";
+          ctx.fillStyle = "rgba(" + GOLD_B + "," + al + ")";
           ctx.beginPath(); ctx.arc(q.x, q.y, rad, 0, 6.283); ctx.fill();
         }
       }
 
-      // The gold "streams drawn inward to the core" motif — core mode only.
-      if (!shell) for (let i = 0; i < N; i++) {
+      for (let i = 0; i < N; i++) {
         const cyc = (time * 0.32 + i * 0.137) % 1;
         const u = 1 - cyc, n = NODES[i];
         const q = project([n.v[0] * u, n.v[1] * u, n.v[2] * u], ay);

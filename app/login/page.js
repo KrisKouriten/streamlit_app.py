@@ -92,8 +92,8 @@ export default function LoginPage() {
       {/* the connected sphere — the whole concept, live. Scales in on first paint and
           carries a slight brightness/saturation + bloom lift so it stands out. */}
       <div className="lg-sphere-in" style={{ position: "absolute", inset: 0, zIndex: 0,
-        filter: "brightness(1.04) drop-shadow(0 0 50px rgba(255,255,255,.10))" }}>
-        <ConnectedSphere labels shell />
+        filter: "brightness(1.09) saturate(1.14) drop-shadow(0 0 60px rgba(197,158,74,.28))" }}>
+        <ConnectedSphere labels />
       </div>
 
       {/* vignette + film grain — kills gradient banding and adds atmosphere */}
