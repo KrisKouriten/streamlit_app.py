@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole, isAdmin } from "../../../../../lib/auth";
 import { scopeForSession } from "../../../../../lib/intelligence/permission";
 import { resolveReport, validateReportById, listVersions } from "../../../../../lib/reporting/reports";
+import { confidentialStamp } from "../../../../../lib/reporting/watermark";
+import ScreenWatermark from "../../../../screen-watermark";
 import { PageHeader, EmptyState } from "../../../ui";
 import Builder from "./builder";
 
@@ -26,6 +28,7 @@ export default async function ReportBuilderPage({ params }) {
 
   return (
     <div style={{ padding: "1rem 0" }}>
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Corporate Reporting Centre · Builder" title={resolved.report.title} right={resolved.report.version_label} />
       <Builder
         reportId={String(id)}

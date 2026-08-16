@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
+import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { listTxns, getSummary, listEntitiesForPicker, CATEGORIES } from "../../../lib/intercompany";
 import IntercompanyUI from "./intercompany-ui";
 import PerspectivePanel from "../../perspective-panel";
@@ -9,6 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function Intercompany() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Intercompany" />;
   const canManage = hasRole(session, "ADMIN", "FINANCE");
   const keys = Object.keys(CATEGORIES);
   const cats = [];
@@ -21,6 +26,7 @@ export default async function Intercompany() {
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <header style={{ marginBottom: 18 }}>
         <span className="fos-eyebrow">Operate · Intercompany</span>
         <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", marginTop: 10 }}>Intercompany transactions</div>

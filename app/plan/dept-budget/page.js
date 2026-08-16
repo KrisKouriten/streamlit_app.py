@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
+import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { listBudgets, getUserDepartment, listObjectives } from "../../../lib/dept-budget";
 import { listDepartments } from "../../../lib/governance";
 import { getBusinessProjects } from "../../../lib/business-projects";
@@ -14,6 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function DeptBudgetsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Departmental Budgets" />;
 
   const [list, departments, myDept, objectives, projects] = await Promise.all([
     listBudgets({}),
@@ -33,6 +38,7 @@ export default async function DeptBudgetsPage() {
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Plan — HO" title="Departmental Budgets"
         right="Build, phase and sign off a department's budget for the year" />
       {!list.ready ? (

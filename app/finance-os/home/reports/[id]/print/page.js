@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../../../../lib/auth";
 import { scopeForSession } from "../../../../../../lib/intelligence/permission";
 import { resolveReport } from "../../../../../../lib/reporting/reports";
+import { confidentialStamp } from "../../../../../../lib/reporting/watermark";
+import ScreenWatermark from "../../../../../screen-watermark";
 import { money } from "../../../../ui";
 import PrintButton from "./print-button";
 
@@ -28,6 +30,7 @@ export default async function ReportPrint({ params }) {
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px" }}>
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PrintButton />
 
       {/* Cover */}
