@@ -1,5 +1,6 @@
 import { getSession } from "../../../../lib/auth";
 import { canExport } from "../../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../../lib/reporting/watermark";
 import { posForExport } from "../../../../lib/purchase-orders";
 import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf } from "../../../../lib/po-rules";
 import * as XLSX from "xlsx";
@@ -52,6 +53,10 @@ export async function GET(request) {
   const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "P.O number": "No purchase orders" }]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Purchase Orders");
+  // Confidential download stamp (who + when) on a Provenance sheet.
+  const prov = XLSX.utils.aoa_to_sheet([[confidentialStamp(session, new Date())]]);
+  prov["!cols"] = [{ wch: 90 }];
+  XLSX.utils.book_append_sheet(wb, prov, "Provenance");
   const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
   const stamp = new Date().toISOString().slice(0, 10);

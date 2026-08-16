@@ -4,6 +4,7 @@ import { scopeForSession } from "../../../../../lib/intelligence/permission";
 import { resolveReport, getVersion, recordExport, getReport } from "../../../../../lib/reporting/reports";
 import { getUserDepartmentById, getReportPermissionsForDepartment } from "../../../../../lib/governance";
 import { canAccessReport } from "../../../../../lib/reporting/report-access-rules";
+import { composeWatermark } from "../../../../../lib/reporting/watermark";
 import { buildDeckPptx } from "../../../../../lib/reporting/export-pptx";
 import { buildAppendixWorkbook } from "../../../../../lib/reporting/export-xlsx";
 import { buildReportDocx } from "../../../../../lib/reporting/export-docx";
@@ -61,11 +62,14 @@ export async function GET(request, { params }) {
 
   const report = assembled.report || {};
   const isFinal = ["APPROVED", "ISSUED"].includes(report.status);
-  const watermarkText = !isFinal ? "DRAFT" : (["BOARD", "RESTRICTED"].includes(report.confidentiality) ? report.confidentiality : null);
+  const statusLabel = !isFinal ? "DRAFT" : (["BOARD", "RESTRICTED"].includes(report.confidentiality) ? report.confidentiality : null);
+  // Burn the confidential download stamp (who + when) into every exported file,
+  // keeping the status/confidentiality label as a prefix.
+  const watermarkText = composeWatermark(statusLabel, session, new Date());
 
   let buffer, contentType, ext;
   if (format === "xlsx") {
-    buffer = buildAppendixWorkbook(assembled);
+    buffer = buildAppendixWorkbook(assembled, { watermarkText });
     contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     ext = "xlsx";
   } else if (format === "docx") {

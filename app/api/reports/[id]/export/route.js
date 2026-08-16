@@ -6,6 +6,7 @@ import { buildWorkbook } from "../../../../../lib/ma-export";
 import { PERIODS } from "../../../../../lib/ma-boardpack-view";
 import { audit } from "../../../../../lib/governance";
 import { canExport } from "../../../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../../../lib/reporting/watermark";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: reason || "No data to export" }, { status: 400 });
   }
   const period = PERIODS.includes(p.period) ? p.period : "current";
-  const buffer = buildWorkbook({ title: `Miniso UK — ${report.name}`, tabs, period });
+  const buffer = buildWorkbook({ title: `Miniso UK — ${report.name}`, tabs, period, watermark: confidentialStamp(session, new Date()) });
   if (!buffer) return NextResponse.json({ error: "No data to export" }, { status: 400 });
 
   await audit({ actor: session, eventType: "report.export", objectType: "report_def", objectRef: String(report.report_id) });

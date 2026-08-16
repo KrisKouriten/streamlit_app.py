@@ -4,6 +4,7 @@ import { buildManagementAccountsWorkbook } from "../../../../lib/ma-export";
 import { PERIODS } from "../../../../lib/ma-boardpack-view";
 import { audit } from "../../../../lib/governance";
 import { canExport } from "../../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../../lib/reporting/watermark";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(request) {
   const year = url.searchParams.get("year") || null;
   const period = PERIODS.includes(url.searchParams.get("period")) ? url.searchParams.get("period") : "current";
 
-  const buffer = await buildManagementAccountsWorkbook({ year, period });
+  const buffer = await buildManagementAccountsWorkbook({ year, period, watermark: confidentialStamp(session, new Date()) });
   if (!buffer) {
     return NextResponse.json({ error: "No Management Accounts actuals loaded to export" }, { status: 400 });
   }
