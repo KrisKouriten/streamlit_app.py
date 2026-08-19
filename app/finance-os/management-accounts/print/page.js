@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { getSession } from "../../../../lib/auth";
 import { resolveAllTabs } from "../../../../lib/ma-boardpack-view";
 import { applyPeriod, PERIOD_LABEL } from "../../../../lib/ma-export-rules";
+import { canExport } from "../../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../../lib/reporting/watermark";
+import Restricted from "../../../restricted";
+import ScreenWatermark from "../../../screen-watermark";
 import { money } from "../../ui";
 import PrintButton from "./print-button";
 
@@ -16,6 +20,7 @@ const PERIODS = ["current", "trailing", "ytd"];
 export default async function ManagementAccountsPrint({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Management Accounts" />;
   const sp = await searchParams;
   const year = sp?.year || null;
   const period = PERIODS.includes(sp?.period) ? sp.period : "current";
@@ -24,6 +29,7 @@ export default async function ManagementAccountsPrint({ searchParams }) {
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div style={{ fontSize: 13, color: "var(--muted)" }}>
           Board pack ready to print — use <strong>Print → Save as PDF</strong>. Each scope prints on its own page.

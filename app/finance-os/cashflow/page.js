@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
+import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { getRealCashPosition, getRealCashByEntity, getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, StatRow, Stat, Panel, Table, EntityScopeBanner, Badge, Bar, money } from "../ui";
 import PerspectivePanel from "../../perspective-panel";
@@ -12,12 +16,14 @@ export const dynamic = "force-dynamic";
 export default async function CashFlow() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Cash Flow" />;
 
   const [cash, byEntity, scope] = await Promise.all([getRealCashPosition(), getRealCashByEntity(), getConnectedEntities()]);
   const maxCash = byEntity.reduce((m, r) => Math.max(m, Math.abs(Number(r.available_cash) || 0)), 0);
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Treasury" title="Cash Flow" right={cash ? "Xero cash position" : "Awaiting Xero feed"} />
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>
         <PerspectivePanel pageId="cash-flow" pageName="Cash Flow" />

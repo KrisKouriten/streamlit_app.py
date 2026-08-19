@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { getForecast } from "../../../lib/forecast";
 import { computeNominalPnl, SCOPES } from "../../../lib/forecast-rules.js";
 import { PageHeader, RelatedRail } from "../../finance-os/ui";
@@ -16,6 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function OperateForecast({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Forecast" />;
   const canManage = hasRole(session, "ADMIN", "FINANCE");
 
   const sp = (await searchParams) || {};
@@ -48,6 +52,7 @@ export default async function OperateForecast({ searchParams }) {
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Operate" title="Forecast inputs"
         right={fc.loaded ? "Company stores · Head office · Franchise" : "Awaiting forecast load"} />
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "-1rem 0 1rem" }}>

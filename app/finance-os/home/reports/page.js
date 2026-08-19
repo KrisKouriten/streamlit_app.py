@@ -5,6 +5,8 @@ import { listTemplates } from "../../../../lib/reporting/templates";
 import { listReports, getReportingHealth, getAttention } from "../../../../lib/reporting/reports";
 import { getUserDepartmentById, getReportPermissionsForDepartment } from "../../../../lib/governance";
 import { hasFullReportAccess, accessibleTemplateKeys, filterViewableReports } from "../../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../../lib/reporting/watermark";
+import ScreenWatermark from "../../../screen-watermark";
 import { PageHeader, Panel, Stat, StatRow, Table, Badge, EmptyState } from "../../ui";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +102,7 @@ export default async function ReportingCentre({ searchParams }) {
 
   return (
     <div style={{ padding: "1rem 0" }}>
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader
         crumb="Corporate Reporting Centre"
         title="Corporate Reporting Centre"

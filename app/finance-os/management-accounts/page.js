@@ -3,6 +3,9 @@ import { getSession } from "../../../lib/auth";
 import { resolveTab, TAB_LABEL, SCOPE_NOTE, PERIODS } from "../../../lib/ma-boardpack-view";
 import { applyPeriod } from "../../../lib/ma-export-rules";
 import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { PageHeader, RelatedRail, money } from "../ui";
 import PerspectivePanel from "../../perspective-panel";
 import McControls from "./mc-controls";
@@ -17,6 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function ManagementAccounts({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Management Accounts" />;
   const sp = await searchParams;
   const tab = ["store", "head_office", "franchise", "consolidated"].includes(sp?.tab) ? sp.tab : "store";
   const period = PERIODS.includes(sp?.period) ? sp.period : "current";
@@ -26,6 +30,7 @@ export default async function ManagementAccounts({ searchParams }) {
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Perform · Financial reporting" title="Management Accounts"
         right={data.loaded ? `${TAB_LABEL[tab]} · actuals` : "Awaiting Joiin actuals"} />
 

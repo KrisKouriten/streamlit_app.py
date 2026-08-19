@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
+import { canExport } from "../../../lib/reporting/report-access-rules";
+import { confidentialStamp } from "../../../lib/reporting/watermark";
+import Restricted from "../../restricted";
+import ScreenWatermark from "../../screen-watermark";
 import { getThreeStatement } from "../../../lib/threestatement";
 import { getConnectedEntities } from "../../../lib/finance-os";
 import { PageHeader, EntityScopeBanner } from "../ui";
@@ -17,12 +21,14 @@ export const dynamic = "force-dynamic";
 export default async function ThreeStatement({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canExport(session)) return <Restricted title="Three-Statement Model" />;
 
   const params = await searchParams;
   const [model, scope] = await Promise.all([getThreeStatement(params?.month || null), getConnectedEntities()]);
 
   return (
     <div className="fos-shell">
+      <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Perform" title="Three-statement model"
         right={model.ym ? `As at ${model.ym} · P&L · Balance Sheet · Cash Flow` : "Awaiting Joiin feed"} />
       <EntityScopeBanner scope={scope} asAt={model.ym || null} />
