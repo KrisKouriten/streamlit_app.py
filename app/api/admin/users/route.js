@@ -168,8 +168,11 @@ export async function POST(request) {
     }
 
     if (action === "remove-signoff") {
-      const { signoffId } = body;
-      if (!Number.isInteger(signoffId)) return NextResponse.json({ error: "Invalid sign-off id" }, { status: 400 });
+      // signoff_id is a bigint, which pg returns as a string, so the client sends
+      // it back as a string — coerce before validating (a bare Number.isInteger
+      // on the string always failed, hence "Invalid sign-off id" on every remove).
+      const signoffId = Number(body.signoffId);
+      if (!Number.isInteger(signoffId) || signoffId <= 0) return NextResponse.json({ error: "Invalid sign-off id" }, { status: 400 });
       await removeSignoff(signoffId);
       await audit({ actor: session, eventType: "dept.signoff.remove", objectType: "department_signoff", objectRef: String(signoffId) });
       return NextResponse.json({ ok: true });
