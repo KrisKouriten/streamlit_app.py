@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, invoiceTotals, invoicesReconcile } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
@@ -484,6 +484,53 @@ function PoDetail({ state, po, money }) {
           {routeLabel(d.challenge_return_route) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>On fix: {routeLabel(d.challenge_return_route)}</div>}
         </div>
       )}
+      <PoAuditTrail events={state.data?.auditTrail} />
+    </div>
+  );
+}
+
+// The full audit trail for a P.O — a read-only timeline of every governed event
+// (raised, self / line-manager / finance approvals, challenges, reissues, closes
+// and record updates), oldest first, with actor and timestamp. Drawn from
+// governance.audit_event via getPo, so it needs no separate load.
+const AUDIT_TONE = { accent: "var(--accent)", green: "var(--green)", red: "var(--red)", amber: "var(--amber)", muted: "var(--faint)" };
+const auditWhen = (v) => {
+  if (!v) return "—";
+  const dt = new Date(v);
+  return `${dt.toLocaleDateString("en-GB")} ${dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+};
+function PoAuditTrail({ events }) {
+  const dl = { fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 6 };
+  if (!Array.isArray(events)) return null;
+  if (!events.length) {
+    return (
+      <div style={{ marginTop: 16 }}>
+        <div style={dl}>Audit trail</div>
+        <div style={{ fontSize: 12, color: "var(--faint)" }}>No recorded events for this P.O yet.</div>
+      </div>
+    );
+  }
+  const items = events.map(describePoAuditEvent);
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={dl}>Audit trail</div>
+      <ol style={{ listStyle: "none", margin: 0, padding: 0, position: "relative" }}>
+        {items.map((e, i) => {
+          const colour = AUDIT_TONE[e.tone] || AUDIT_TONE.muted;
+          const last = i === items.length - 1;
+          return (
+            <li key={i} style={{ position: "relative", paddingLeft: 22, paddingBottom: last ? 0 : 14 }}>
+              {!last && <span aria-hidden style={{ position: "absolute", left: 5, top: 12, bottom: 0, width: 1, background: "var(--hairline)" }} />}
+              <span aria-hidden style={{ position: "absolute", left: 0, top: 3, width: 11, height: 11, borderRadius: "50%", background: colour, boxShadow: "0 0 0 3px var(--raise)" }} />
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>{e.label}</div>
+              {e.detail && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{e.detail}</div>}
+              <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>
+                {auditWhen(e.at)}{e.actor ? ` · ${e.actor}` : ""}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
