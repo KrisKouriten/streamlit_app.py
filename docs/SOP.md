@@ -631,7 +631,11 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
    details and committed £.
 
 The seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
-Logistics, Architecture & Build) are governed in `core.dim_department`. The finance
+Logistics, Architecture & Build) are governed in `core.dim_department`, alongside
+**C-Suite** (migration **106**). C-Suite is a governed department for **user
+assignment, department sign-off, PO policies and report access** — it appears
+everywhere departments are picked — but it deliberately has **no budget dashboard**
+of its own (see §5.17). The finance
 lifecycle (`finance_status` OPEN → CHALLENGED / CLOSED, plus invoice, approval, close
 and challenge stamps) is added by migration **052**. **Committed spend** on the
 department dashboard is **P.O-committed** (closed P.Os) — not GL actuals — and is
@@ -657,7 +661,9 @@ labelled as such.
 Each operating department has its **own dashboard** — the current screen renamed to
 **"{Department} Dashboard"** (Marketing, Finance, Merchandising, Operations, HR,
 Logistics, Architecture & Build), one nav entry each under **Dashboards**. It is one
-engine keyed by `?dept=`, so every department reads the same way. All of a
+engine keyed by `?dept=`, so every department reads the same way. **C-Suite** is a
+governed department (§5.16) but has **no** dashboard here — it carries no departmental
+budget, so it is excluded from the dashboard list by design. All of a
 department's P.O activity — requests **and** the Summary + Close outcomes — rolls up
 here from the department chosen when each P.O was raised:
 
