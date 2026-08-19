@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 /* Users & roles admin (ADMIN only — enforced again server-side). */
 
 const ROLES = ["ADMIN", "EXEC", "FINANCE", "HEAD", "OPS", "FRANCHISEE"];
-const DEPARTMENTS = ["Finance", "Marketing", "Merchandising", "Operations", "HR", "Logistics", "Architecture & Build"];
+const DEPARTMENTS = ["Finance", "Marketing", "Merchandising", "Operations", "HR", "Logistics", "Architecture & Build", "C-Suite"];
 const input = { height: 36, padding: "0 10px", border: "1px solid var(--line-strong)", borderRadius: 8, background: "var(--bg)", color: "var(--ink)", fontSize: 14 };
 const btn = { height: 36, padding: "0 14px", border: "none", borderRadius: 8, background: "var(--accent)", color: "#fff", fontSize: 13.5, cursor: "pointer" };
 const btnGhost = { ...btn, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--line-strong)" };
