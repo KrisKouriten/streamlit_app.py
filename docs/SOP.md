@@ -75,6 +75,7 @@ sign in, their role, their department), **Department sign-off**, and **Access**.
 | **ADMIN** | Everything, plus manage users, roles & entities. |
 | **FINANCE** | Run agents; approve task reviews; approve action closure; validate benefits; generate the weekly schedule; load/amend forecast inputs; manage entities. |
 | **EXEC** | Approve action closure; validate benefits. |
+| **HEAD** | Head of department — view and download governed information, packs and exports (the reporting-protection group, with Finance / Exec / Admin). See *Protecting reported data* below. |
 | **OPS** | Do and complete assigned work; raise actions. Cannot approve closure or validate benefits. |
 
 **Key permission rules:**
@@ -97,6 +98,31 @@ should see. Unticking a header hides the whole section; with the header ticked y
 can still hide individual sub-headers. Admins always see everything regardless.
 The controls in the table above gate *actions*; Access gates *visibility* per
 department, so the two work together.
+
+**Protecting reported data.** Governed financial information — management accounts
+(and its print view), board packs, the three-statement model, budget & forecast,
+cash flow, the forecast, departmental budgets and intercompany — is restricted to
+the **reporting-protection group: Finance, Exec, any department Head (the HEAD
+role) and Admin**. It is enforced three ways:
+
+- **Downloads are locked server-side.** Every export endpoint (Reporting Centre
+  packs, the board-pack Excel, forecast, saved reports and PO exports) checks the
+  group before producing a file — everyone else gets a 403 and the download
+  buttons are hidden. A URL alone can't bypass it. Existing per-department report
+  grants in the Reporting Centre still apply on top.
+- **Every export is watermarked.** Excel / PowerPoint / Word / PDF exports carry a
+  confidential stamp — *"Miniso UK — Confidential · Downloaded by \<name\> · \<email\>
+  · date/time"* — so a leaked file traces back to who took it.
+- **Viewing is gated and watermarked.** A user outside the group gets a
+  **Restricted** panel on a protected page *before any figures are fetched*; group
+  members see the page with a faint on-screen watermark of their name and email, so
+  a screenshot is traceable.
+
+Assign the **HEAD** role under **GOVERN → Users, Roles & Permissions** (needs
+migration `105_head_role.sql`); a change of role takes effect at the user's next
+sign-in. *Honest limit:* screenshots cannot be technically prevented in any
+browser — the control makes the data invisible to people outside the group and
+traceable if a permitted person leaks it.
 
 ---
 
