@@ -11,6 +11,7 @@ import {
   CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, isChallengeReturnRoute,
   challengeNoteRequired, challengeValidationError, isChallengeReason,
   validatePoInvoice, invoiceTotals, derivePaymentStatus, invoicesReconcile, invoiceSummaryRef,
+  describePoAuditEvent,
 } from "../lib/po-rules.js";
 
 const goodPo = {
@@ -413,4 +414,61 @@ test("invoiceSummaryRef summarises the invoice numbers", () => {
   assert.equal(invoiceSummaryRef([]), null);
   assert.equal(invoiceSummaryRef([{ invoice_number: "INV-1" }]), "INV-1");
   assert.equal(invoiceSummaryRef([{ invoice_number: "INV-1" }, { invoice_number: "INV-2" }, { invoice_number: "INV-3" }]), "INV-1 +2");
+});
+
+test("describePoAuditEvent labels the P.O lifecycle events", () => {
+  const raised = describePoAuditEvent({ event_type: "purchase_order.create", detail: { po_number: "PO-1042" }, actor_name: "Kris", occurred_at: "2026-07-01T09:00:00Z" });
+  assert.equal(raised.action, "create");
+  assert.equal(raised.label, "P.O raised");
+  assert.equal(raised.tone, "accent");
+  assert.equal(raised.detail, "Reference PO-1042");
+  assert.equal(raised.actor, "Kris");
+  assert.equal(raised.at, "2026-07-01T09:00:00Z");
+
+  assert.equal(describePoAuditEvent({ event_type: "purchase_order.self_approve" }).label, "Self-approved");
+  assert.equal(describePoAuditEvent({ event_type: "purchase_order.self_approve" }).tone, "green");
+  assert.equal(describePoAuditEvent({ event_type: "purchase_order.approve" }).label, "Approved");
+  assert.equal(describePoAuditEvent({ event_type: "purchase_order.close" }).label, "Closed by Finance");
+});
+
+test("describePoAuditEvent names the sign-off route", () => {
+  const mgr = describePoAuditEvent({ event_type: "purchase_order.submit_for_signoff", detail: { route: "LINE_MANAGER" } });
+  assert.equal(mgr.label, "Sent for sign-off");
+  assert.equal(mgr.detail, "Routed to line manager");
+  const dept = describePoAuditEvent({ event_type: "purchase_order.submit_for_signoff", detail: { route: "DEPT_SIGNOFF" } });
+  assert.equal(dept.detail, "Routed to department sign-off");
+});
+
+test("describePoAuditEvent describes a challenge with its reasons", () => {
+  const ch = describePoAuditEvent({ event_type: "purchase_order.challenge", detail: { reasons: ["INVOICE_VALUE", "OTHER"] } });
+  assert.equal(ch.label, "Challenged by Finance");
+  assert.equal(ch.tone, "red");
+  assert.match(ch.detail, /Invoice value/);
+  assert.match(ch.detail, /Other/);
+});
+
+test("describePoAuditEvent marks a reissue after challenge", () => {
+  const re = describePoAuditEvent({ event_type: "purchase_order.resubmit_challenge", detail: { route: "TO_FINANCE" } });
+  assert.equal(re.label, "Reissued after challenge");
+  assert.equal(re.tone, "accent");
+});
+
+test("describePoAuditEvent lists updated fields in business terms", () => {
+  const up = describePoAuditEvent({ event_type: "purchase_order.update", detail: { fields: ["payment_value", "payment_date", "recharge"] } });
+  assert.equal(up.label, "Record updated");
+  assert.equal(up.detail, "Changed value, due date, recharge allocation");
+});
+
+test("describePoAuditEvent falls back to the actor email and an unknown action", () => {
+  const e = describePoAuditEvent({ event_type: "purchase_order.mystery_thing", actor_email: "a@b.com" });
+  assert.equal(e.label, "mystery thing");
+  assert.equal(e.actor, "a@b.com");
+  assert.equal(e.tone, "muted");
+});
+
+test("describePoAuditEvent overrides show the route change and reason", () => {
+  const o = describePoAuditEvent({ event_type: "purchase_order.override_route", detail: { original: "LINE_MANAGER", revised: "SELF_APPROVED", reason: "under limit" } });
+  assert.equal(o.label, "Approval route overridden");
+  assert.match(o.detail, /line manager → self-approved/);
+  assert.match(o.detail, /under limit/);
 });
