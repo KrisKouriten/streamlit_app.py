@@ -65,6 +65,17 @@ const EMPTY = {
   marketing_budget_category: "", marketing_campaign: "", business_project_id: "", invoice_entity_id: "",
 };
 
+// Status filters for the created-P.Os list (Draft / Open / Challenged / Closed,
+// plus All). Uses displayStatus + the finance lifecycle, same basis as the P.O
+// Summary + Close filters so the two screens agree.
+const REQUEST_FILTERS = [
+  { key: "ALL", label: "All", test: () => true },
+  { key: "DRAFT", label: "Draft", test: (p) => p.status === "DRAFT" },
+  { key: "OPEN", label: "Open", test: (p) => displayStatus(p).code === "OPEN" },
+  { key: "CHALLENGED", label: "Challenged", test: (p) => p.finance_status === "CHALLENGED" },
+  { key: "CLOSED", label: "Closed", test: (p) => p.finance_status === "CLOSED" },
+];
+
 export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [] }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
@@ -75,6 +86,15 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const [rowErr, setRowErr] = useState({}); // per-PO submit errors
   const [dueTouched, setDueTouched] = useState(false); // has the user hand-set the due date?
   const [editing, setEditing] = useState(null);        // { poId, po } when editing an existing P.O
+  const [listFilter, setListFilter] = useState("ALL");  // created-P.Os status filter
+  const [listDept, setListDept] = useState("");          // created-P.Os department filter
+  const listCounts = useMemo(() => {
+    const c = {}; for (const flt of REQUEST_FILTERS) c[flt.key] = initialPos.filter(flt.test).length; return c;
+  }, [initialPos]);
+  const visiblePos = useMemo(() => {
+    const flt = REQUEST_FILTERS.find((x) => x.key === listFilter) || REQUEST_FILTERS[0];
+    return initialPos.filter((p) => flt.test(p) && (!listDept || p.department === listDept));
+  }, [initialPos, listFilter, listDept]);
   const editingChallenged = !!editing && isChallenged(editing.po);
   const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
 
@@ -436,13 +456,38 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         {!initialPos.length ? (
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No purchase orders yet.</div>
         ) : (
+          <>
+          {/* Filters — by status (Draft / Open / Challenged / Closed) and department */}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
+              {REQUEST_FILTERS.map((flt) => {
+                const on = flt.key === listFilter;
+                return (
+                  <button key={flt.key} onClick={() => setListFilter(flt.key)} style={{
+                    fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 12px", borderRadius: 7, cursor: "pointer",
+                    background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+                    color: on ? "var(--ink)" : "var(--muted)",
+                  }}>{flt.label} <span style={{ color: "var(--faint)", fontWeight: 500 }}>{listCounts[flt.key]}</span></button>
+                );
+              })}
+            </div>
+            {departments.length > 0 && (
+              <select style={{ ...inputSt, minWidth: 0 }} value={listDept} onChange={(e) => setListDept(e.target.value)}>
+                <option value="">All departments</option>
+                {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
               <thead><tr>{["P.O number", "Supplier", "Submitted by", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
-                {initialPos.map((p) => {
+                {!visiblePos.length && (
+                  <tr><td colSpan={9} style={{ padding: "10px", fontSize: 13, color: "var(--faint)" }}>No purchase orders match these filters.</td></tr>
+                )}
+                {visiblePos.map((p) => {
                   const del = canDeletePo(p, { isAdmin });
                   const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
                   return (
@@ -492,6 +537,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
           A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose).
