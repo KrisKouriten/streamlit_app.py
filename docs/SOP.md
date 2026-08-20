@@ -608,12 +608,15 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 1. Every signed-off P.O lands on Finance's review desk, filterable by **Needs Finance /
    Open / Challenged / Closed / All** and by department. A **⇄ Recharge** flag marks any
    P.O set up to be recharged (Head-Office-only or split across stores). Each row shows
-   an **Invoice due** date next to the invoice number — the P.O's due date (P.O date +
-   payment terms) — so Finance can see when each invoice/payment falls due at a glance.
-   Expanding a P.O (▸) shows its full detail, including the **entity it will be invoiced
-   to** (§5.16 A).
-2. Finance records the **invoice number** and **invoice net amount** against the P.O
-   (*Save invoice*), then either:
+   an **Invoice due** date next to the invoice number — the **actual due date** Finance
+   sets against the invoice (see point 2; the earliest where a P.O has several), falling
+   back to the P.O's planned due date (P.O date + payment terms) until one is entered —
+   so Finance can see when each invoice/payment falls due at a glance. Expanding a P.O
+   (▸) shows its full detail, including the **entity it will be invoiced to** (§5.16 A).
+2. Finance records one or more invoices against the P.O — each with its **invoice
+   number**, **net amount**, an **actual due date** (editable — set it when adding the
+   invoice or change it inline afterwards; migration **109**) and a paid toggle — then
+   either:
    - **Close** it — reported as **committed spend** on the Departmental Budget Dashboard
      (using the invoice net where entered, else the P.O net value); **and, if the P.O is
      a recharge**, its allocation is **auto-posted to Intercompany → Inventory &
