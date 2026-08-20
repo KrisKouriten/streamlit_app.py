@@ -220,7 +220,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                 <th style={{ padding: "8px 8px", borderBottom: "1px solid var(--line)" }}>
                   <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} />
                 </th>
-                {["P.O number", "Dept", "Supplier", "Net value", "Status", "Payment", "Invoice no", "Invoice net (£)", "Actions"].map((h) => (
+                {["P.O number", "Dept", "Supplier", "Net value", "Status", "Payment", "Invoice no", "Invoice due", "Invoice net (£)", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -281,6 +281,9 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                             </button>
                           ) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
                         </td>
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                          {p.payment_date ? <span style={{ fontSize: 12.5 }}>{ukDate(p.payment_date)}</span> : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
+                        </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", textAlign: "right" }}>{p.invoice_amount != null ? money(p.invoice_amount, p.currency) : "—"}</td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {!signed ? (
@@ -298,14 +301,14 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                       </tr>
                       {detailFor === p.po_id && (
                         <tr>
-                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <PoDetail state={detail[p.po_id]} po={p} money={money} />
                           </td>
                         </tr>
                       )}
                       {invoicesFor === p.po_id && (
                         <tr>
-                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <InvoicesPanel
                               p={p} state={invCache[p.po_id]} nf={invNew[p.po_id] || { number: "", amount: "", paid: false }}
                               setField={(k, v) => setInvNewField(p.po_id, k, v)} onAdd={() => addInvoice(p)}
@@ -317,7 +320,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                       )}
                       {challengeFor === p.po_id && (
                         <tr>
-                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Challenge P.O {p.xero_po_number}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 8, marginBottom: 10 }}>
                               {CHALLENGE_REASONS.map((r) => (
