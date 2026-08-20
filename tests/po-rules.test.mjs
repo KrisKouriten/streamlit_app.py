@@ -18,6 +18,7 @@ const goodPo = {
   po_date: "2026-07-01", supplier: "Acme Media Ltd", currency: "GBP",
   payment_value: 12000, vat_amount: 2400, po_category: "Marketing",
   xero_po_number: "PO-1042", department: "Marketing", is_marketing: false,
+  invoice_entity_id: 1,
 };
 
 test("validatePo happy path", () => {
@@ -32,6 +33,8 @@ test("validatePo catches each missing/!bad field", () => {
   assert.match(validatePo({ ...goodPo, fulfilment_days: -3 }), /days/);
   assert.match(validatePo({ ...goodPo, po_category: "" }), /category/);
   assert.match(validatePo({ ...goodPo, department: "" }), /department/);
+  assert.match(validatePo({ ...goodPo, invoice_entity_id: "" }), /entity to be invoiced/);
+  assert.match(validatePo({ ...goodPo, invoice_entity_id: null }), /entity to be invoiced/);
 });
 
 test("validatePo no longer requires a P.O number (the platform mints it)", () => {

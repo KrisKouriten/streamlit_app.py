@@ -62,10 +62,10 @@ const EMPTY = {
   payment_value: "", po_category: "",
   fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
-  marketing_budget_category: "", marketing_campaign: "", business_project_id: "",
+  marketing_budget_category: "", marketing_campaign: "", business_project_id: "", invoice_entity_id: "",
 };
 
-export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [] }) {
+export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [] }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -192,6 +192,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         recharge_enabled: !!po.recharge_enabled, recharge_ho_only: !!po.recharge_ho_only,
         marketing_budget_category: po.marketing_budget_category || "", marketing_campaign: po.marketing_campaign || "",
         business_project_id: po.business_project_id != null ? String(po.business_project_id) : "",
+        invoice_entity_id: po.invoice_entity_id != null ? String(po.invoice_entity_id) : "",
       });
       setRecharge(po.recharge_ho_only ? [] : (j.recharge || []).map((r) => ({ store_code: r.store_code, store_name: r.store_name, pct: Number(r.pct) })));
       setDueTouched(true);
@@ -221,6 +222,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         recharge: f.recharge_enabled && !f.recharge_ho_only ? recharge : [],
         marketing_budget_category: f.marketing_budget_category || null, marketing_campaign: f.marketing_campaign || null,
         business_project_id: f.business_project_id || null,
+        invoice_entity_id: f.invoice_entity_id || null,
       };
       const res = await fetch(`/api/purchase-orders/${editing.poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "update", patch }) });
       const j = await res.json();
@@ -295,6 +297,13 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
               <option value="">— choose —</option>
               {departments.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
+          </label>
+          <label style={field}><span style={labelSt}>Entity to be invoiced *</span>
+            <select style={inputSt} value={f.invoice_entity_id} onChange={set("invoice_entity_id")}>
+              <option value="">— choose —</option>
+              {entities.map((e) => <option key={e.entity_id} value={e.entity_id}>{e.entity_name}</option>)}
+            </select>
+            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{entities.length ? "The legal entity this P.O will be invoiced to." : "No entities set up yet (Finance Data — Entities)."}</span>
           </label>
           <label style={field}><span style={labelSt}>Business project</span>
             <select style={inputSt} value={f.business_project_id} onChange={set("business_project_id")}>

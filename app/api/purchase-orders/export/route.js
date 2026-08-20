@@ -30,6 +30,7 @@ export async function GET(request) {
     const base = {
       "P.O number": poRef(p), "P.O date": p.po_date ? String(p.po_date).slice(0, 10) : "",
       Supplier: p.supplier, Department: p.department, Category: p.po_category,
+      "Invoice entity": p.invoice_entity_name || "",
       "Net value": Number(p.payment_value) || 0, Currency: p.currency,
       Status: st.label,
       Payment: paymentStatusOf(p).label, "Paid date": p.paid_date ? String(p.paid_date).slice(0, 10) : "",
