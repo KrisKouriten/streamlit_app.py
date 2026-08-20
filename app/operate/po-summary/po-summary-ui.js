@@ -450,6 +450,7 @@ function PoDetail({ state, po, money }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px 20px" }}>
         <Item k="P.O date">{ukDate(d.po_date)}</Item>
         <Item k="Category">{d.po_category}</Item>
+        <Item k="Invoice to entity">{d.invoice_entity_name}</Item>
         <Item k="Submitted by">{d.created_by ? String(d.created_by).split("@")[0] : "—"}</Item>
         <Item k="Net value">{money(d.payment_value, d.currency)}</Item>
         <Item k="Payment terms">{d.payment_terms}</Item>

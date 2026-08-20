@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, isAdmin } from "../../../lib/auth";
 import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
+import { listEntitiesForPicker } from "../../../lib/intercompany";
 import { getBusinessProjects } from "../../../lib/business-projects";
 import { listSuppliers } from "../../../lib/suppliers";
 import { getStoreList } from "../../../lib/store-sales";
@@ -22,7 +23,7 @@ export default async function PurchaseOrderRequests() {
   const admin = isAdmin(session);
   const email = (session.email || "").toLowerCase();
 
-  const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit, projects, supplierList] = await Promise.all([
+  const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit, projects, supplierList, entities] = await Promise.all([
     listPos({ limit: 100 }),
     getDepartments(),
     getStoreList().catch(() => []),
@@ -31,6 +32,7 @@ export default async function PurchaseOrderRequests() {
     getPoSelfApproveLimit().catch(() => 0),
     getBusinessProjects().catch(() => ({ projects: [] })),
     listSuppliers({ activeOnly: true }).catch(() => ({ suppliers: [] })),
+    listEntitiesForPicker().catch(() => []),
   ]);
   // Live business projects to allocate P.O spend against (exclude finished ones).
   const businessProjects = (projects.projects || [])
@@ -64,6 +66,7 @@ export default async function PurchaseOrderRequests() {
           businessProjects={businessProjects}
           selfApproveLimit={selfApproveLimit}
           supplierNames={(supplierList.suppliers || []).map((s) => s.name)}
+          entities={entities.map((e) => ({ entity_id: e.entity_id, entity_name: e.entity_name }))}
         />
       )}
     </div>
