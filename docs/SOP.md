@@ -568,9 +568,12 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 **A. Purchase Order Requests — PLAN → HO** (`/operate/po-tracker`)
 
 1. Record the P.O — date, supplier, payment terms & date, currency, **net value** (£),
-   category, **fulfilment start date**, **fulfilment period in days**, and the
+   category, **fulfilment start date**, **fulfilment period in days**, the
    **department** (the governed departments assignable per user in GOVERN → Users &
-   Roles). The **P.O number is generated automatically** on save — a unique, sequential
+   Roles), and the **entity to be invoiced** — a **required** dropdown of the governed
+   legal entities (`core.dim_entity`, migration **107**), so it is clear from the outset
+   which entity the P.O will be billed to (surfaced to Finance in B and the export). The
+   **P.O number is generated automatically** on save — a unique, sequential
    `PO-####` minted by the platform (migration 062: `finance.po_number_seq`, unique
    index). A number is never reused: the sequence never recycles, so even a deleted
    P.O's number is retired. (The old *Xero P.O number* free-text field is removed; legacy
@@ -604,7 +607,11 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 
 1. Every signed-off P.O lands on Finance's review desk, filterable by **Needs Finance /
    Open / Challenged / Closed / All** and by department. A **⇄ Recharge** flag marks any
-   P.O set up to be recharged (Head-Office-only or split across stores).
+   P.O set up to be recharged (Head-Office-only or split across stores). Each row shows
+   an **Invoice due** date next to the invoice number — the P.O's due date (P.O date +
+   payment terms) — so Finance can see when each invoice/payment falls due at a glance.
+   Expanding a P.O (▸) shows its full detail, including the **entity it will be invoiced
+   to** (§5.16 A).
 2. Finance records the **invoice number** and **invoice net amount** against the P.O
    (*Save invoice*), then either:
    - **Close** it — reported as **committed spend** on the Departmental Budget Dashboard
@@ -628,7 +635,8 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
 4. **Excel download** — tick individual P.Os and **Download selected**, or **Download
    all**. The workbook has **one row per store allocation**, so every store and its
    value to invoice/recharge is listed, alongside the P.O header, status, invoice
-   details and committed £.
+   details (including the **invoice due date** and the **entity to be invoiced**) and
+   committed £.
 
 The seven operating departments (Finance, Marketing, Merchandising, Operations, HR,
 Logistics, Architecture & Build) are governed in `core.dim_department`, alongside
