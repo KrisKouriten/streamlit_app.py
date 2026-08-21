@@ -598,7 +598,9 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
      (`po_self_approve_limit`, migration 062).
 5. **Status** is shown against every P.O: **Draft → Awaiting sign-off → Open** (signed
    off, with Finance) → **Challenged** or **Closed**. A challenged P.O shows its
-   **reason(s)** in red here until Finance resolves it.
+   **reason(s)** in red here until Finance resolves it. The **created-P.Os list** at the
+   top can be filtered — by **status** (All / Draft / Open / Challenged / Closed) and by
+   **department** — so a busy department can focus on just the P.Os that need attention.
 6. **Deletion:** before sign-off, the requester (or an admin) can delete a P.O; **once
    signed off, only an admin can delete it** — everyone else sees a locked, admin-only
    control.
