@@ -930,11 +930,16 @@ mapping).
 - **Connected (live) feeds** — link straight to their uploader:
   **Financial Statements Upload & Refresh** (§6.2/§6.8), **Management Accounts —
   Actuals** (§6.7; current-year and prior-year workbooks uploaded separately, by
-  month), and **Budget & Forecast** (§6.4). Other in-app inputs (Forecast, SKU,
-  Intercompany, Procurement) are linked too.
+  month), **Budget & Forecast** (§6.4), and the **Bank trade facility (HSBC)** —
+  the HSBC trade-facility extract as a **CSV** (replace-mode; one row per drawing),
+  with a template download and the count of drawings loaded. It uploads here **or**
+  on the Treasury desk's facility tab (both feed the same register); the facility
+  **limit £** is set separately on Operate → Suppliers & Credit. Other in-app inputs
+  (Forecast, SKU, Intercompany, Procurement) are linked too.
 - **Planned feeds** — shown honestly as *awaiting format* until the layout is pinned:
-  **Sales data** (self-serve store-sales uploader), **Inventory**, **Treasury**
-  (bank-facility / forward-cash feed) and **Fixed & Variable cost tagging**. The
+  **Sales data** (self-serve store-sales uploader), **Inventory**, **Treasury —
+  forward cash & balances** (the bank trade facility itself is now live above) and
+  **Fixed & Variable cost tagging**. The
   cost split will benchmark the **Management Accounts Close** analysis — variances
   split fixed vs variable, feeding the AI accrual recommendations (§5.6).
 
