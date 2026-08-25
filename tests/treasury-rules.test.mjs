@@ -55,6 +55,24 @@ test("parseFacilityCsv requires a reference column and flags duplicates", () => 
   assert.ok(FACILITY_UPLOAD_COLUMNS.includes("reference"));
 });
 
+test("parseFacilityCsv ingests the raw HSBC export (its headers, DD-Mon-YY dates, End footer)", () => {
+  const csv = [
+    "Reference number,Beneficiary,Customer reference,Payment currency,Loan amount in payment currency,Loan currency,Outstanding amount,Status,Extension / settlement,Product type,Loan start date,Due date,Loan period (in days),Payment amount,Facility payment,Payment Month,Cost Driver",
+    "LAIUK1091359,,LC93 08.07.26 3/3,USD,\"196,313.22\",USD,\"196,313.22\",Disbursed,-,Post-shipment buyer loan,24-Aug-26,22-Feb-27,182,\"196,313.22\",\"£146,502\",28/02/2027,Miniso LC's",
+    "************End************,,,,,,,,,,,,,,,,",
+  ].join("\n");
+  const { rows, errors } = parseFacilityCsv(csv);
+  assert.equal(errors.length, 0);            // no header/date errors, footer skipped silently
+  assert.equal(rows.length, 1);              // the End row is not a drawing
+  const r = rows[0];
+  assert.equal(r.reference, "LAIUK1091359"); // "Reference number" → reference
+  assert.equal(r.loan_amount, 196313.22);    // "Loan amount in payment currency"
+  assert.equal(r.loan_period_days, 182);     // "Loan period (in days)"
+  assert.equal(r.facility_payment_gbp, 146502); // "Facility payment", £ + comma stripped
+  assert.equal(r.loan_start_date, "2026-08-24"); // 24-Aug-26 → ISO (20YY)
+  assert.equal(r.due_date, "2027-02-22");        // 22-Feb-27 → ISO
+});
+
 test("reconcileDcFacility matches LC refs to facility drawings, per DC", () => {
   const dcs = [
     { dc_id: 1, purchase_id: 10, dc_reference: "DC UK1233788", dc_value: 200000, currency: "USD", purchase_ref: "LC91" },
