@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { getLoadedActualYears } from "../../../lib/management-accounts";
+import { getTradeFacility } from "../../../lib/treasury";
 import { PageHeader, Panel, Badge, EmptyState } from "../../finance-os/ui";
-import { InlineUpload } from "./uploaders";
+import { InlineUpload, FacilityCsvUpload } from "./uploaders";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,14 @@ const LIVE = [
     template: { name: "cost-model-simple-template.csv", href: "Store,Nominal,Behaviour,Monthly Amount,% of Revenue\nCamden,ST: Rent,FIXED,12000,\nCamden,ST: Rates,FIXED,3500,\nCamden,ST: Cost of Goods Sold,VARIABLE,,40\nCamden,ST: Card Fees,VARIABLE,,1.5\n" },
     fullHref: "/operate/management-close", fullLabel: "Open the accrual review ↗",
   },
+  {
+    key: "facility",
+    title: "Bank trade facility (HSBC)",
+    drives: "Treasury desk (facility position & settlement calendar), the department dashboards' HSBC facility headroom and the Cash / Treasury reporting perspective.",
+    detail: "Upload the HSBC trade-facility extract as a CSV — one row per drawing (TradePay & post-shipment buyer loans). Replace-mode: each upload swaps the whole facility register for the file's contents. Download the template to line up your columns first. (Set the facility limit £ separately on Operate → Suppliers & Credit.)",
+    facilityUpload: true,
+    fullHref: "/finance-os/treasury", fullLabel: "Open the Treasury desk ↗",
+  },
 ];
 
 const AWAITING = [
@@ -70,10 +79,10 @@ const AWAITING = [
     detail: "Awaiting the stock feed / workbook format.",
   },
   {
-    key: "treasury",
-    title: "Treasury",
+    key: "treasury-forward",
+    title: "Treasury — forward cash & balances",
     drives: "Treasury dashboard & the Cash / Treasury report perspective.",
-    detail: "Awaiting a bank-facility / forward-cash feed (balances, facility limits, drawn, headroom, forward flows).",
+    detail: "The bank trade facility is now live above. Still awaiting a forward-cash / balances feed (bank balances, forward flows).",
   },
 ];
 
@@ -91,6 +100,8 @@ export default async function DataUploads() {
   if (!session) redirect("/login");
   const canUpload = hasRole(session, "ADMIN", "FINANCE");
   const actualYears = await getLoadedActualYears();
+  const facility = await getTradeFacility().catch(() => ({ rows: [] }));
+  const facilityRows = (facility.rows || []).length;
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
@@ -121,9 +132,15 @@ export default async function DataUploads() {
                   )) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>none yet</span>}
                 </div>
               )}
+              {f.key === "facility" && (
+                <div style={{ fontSize: 11.5, color: "var(--faint)" }}>
+                  <strong style={{ color: "var(--muted)" }}>Loaded:</strong> {facilityRows ? `${facilityRows.toLocaleString("en-GB")} drawing${facilityRows === 1 ? "" : "s"}` : "none yet"}
+                </div>
+              )}
               {canUpload ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                  {f.uploads.map((u, i) => (
+                  {f.facilityUpload && <FacilityCsvUpload rowCount={facilityRows} />}
+                  {(f.uploads || []).map((u, i) => (
                     <InlineUpload key={i} endpoint={u.endpoint} action={u.action} fileField={u.fileField} label={u.label} />
                   ))}
                   {f.template && (
