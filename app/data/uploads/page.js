@@ -65,7 +65,7 @@ const LIVE = [
     key: "facility",
     title: "Bank trade facility (HSBC)",
     drives: "Treasury desk (facility position & settlement calendar), the department dashboards' HSBC facility headroom and the Cash / Treasury reporting perspective.",
-    detail: "Upload the HSBC trade-facility extract as a CSV — one row per drawing (TradePay & post-shipment buyer loans). Replace-mode: each upload swaps the whole facility register for the file's contents. Download the template to line up your columns first. (Set the facility limit £ separately on Operate → Suppliers & Credit.)",
+    detail: "Upload the HSBC trade-facility extract as a CSV — one row per drawing (TradePay & post-shipment buyer loans). The raw HSBC export loads as-is: its own headers, DD-Mon-YY dates and the ‘End’ footer row are all handled. Replace-mode: each upload swaps the whole facility register for the file's contents. (Set the facility limit £ separately on Operate → Suppliers & Credit.)",
     facilityUpload: true,
     fullHref: "/finance-os/treasury", fullLabel: "Open the Treasury desk ↗",
   },
