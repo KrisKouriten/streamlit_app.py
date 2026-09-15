@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.4 · 24/07/2026 · Owner: Finance (Miniso UK)**
+**Version 1.5 · 15/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -572,7 +572,10 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
    **department** (the governed departments assignable per user in GOVERN → Users &
    Roles), and the **entity to be invoiced** — a **required** dropdown of the governed
    legal entities (`core.dim_entity`, migration **107**), so it is clear from the outset
-   which entity the P.O will be billed to (surfaced to Finance in B and the export). The
+   which entity the P.O will be billed to (surfaced to Finance in B and the export). For
+   central / **Head Office** spend the entity to pick is **Miniso UK — Limited** — the
+   field hints this on screen, as there is no separate "Head Office" entity (the list
+   holds legal entities). The
    **P.O number is generated automatically** on save — a unique, sequential
    `PO-####` minted by the platform (migration 062: `finance.po_number_seq`, unique
    index). A number is never reused: the sequence never recycles, so even a deleted
@@ -603,7 +606,10 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
    **department** — so a busy department can focus on just the P.Os that need attention.
 6. **Deletion:** before sign-off, the requester (or an admin) can delete a P.O; **once
    signed off, only an admin can delete it** — everyone else sees a locked, admin-only
-   control.
+   control. The **exception is a challenged P.O**: Finance has sent it back to the
+   submitter, so its **own submitter can delete it** (as well as *Edit & resubmit* it),
+   without needing an admin to withdraw it. Closed and non-challenged signed-off P.Os
+   stay admin-only.
 
 **B. P.O Summary + Close — OPERATE** (`/operate/po-summary`, Finance/Admin only)
 
@@ -617,7 +623,11 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
    (▸) shows its full detail, including the **entity it will be invoiced to** (§5.16 A).
 2. Finance records one or more invoices against the P.O — each with its **invoice
    number**, **net amount**, an **actual due date** (editable — set it when adding the
-   invoice or change it inline afterwards; migration **109**) and a paid toggle — then
+   invoice or change it inline afterwards; migration **109**) and a **processing status**:
+   a per-invoice workflow **Received → Processing → Reviewing → Paid** (migration **111**)
+   that shows where each invoice sits in the pipeline. Moving an invoice to **Paid** marks
+   it paid (stamping the paid date), which feeds the P.O's payment status in point 3 — so
+   the per-invoice workflow and the P.O-level payment rollup stay in step. Finance then
    either:
    - **Close** it — reported as **committed spend** on the Departmental Budget Dashboard
      (using the invoice net where entered, else the P.O net value); **and, if the P.O is
@@ -632,9 +642,11 @@ them under **Operate**. Both read the same governed record (`finance.purchase_or
      (requires further questions), **Spend vs budget** (requires further questions) —
      with an optional note. A challenge shows **under challenge** on the dashboard and
      the requests screen until Finance **Re-opens** it.
-3. **Payment status.** Against each signed-off P.O, Finance sets whether the supplier
-   has been paid — **Unpaid → Part-paid → Paid** (a **paid date** is stamped when marked
-   Paid). This is separate from the finance lifecycle (Open/Challenged/Closed) and is
+3. **Payment status.** Each signed-off P.O carries a payment status — **Unpaid →
+   Part-paid → Paid** — that **rolls up from its invoices' processing status** (point 2):
+   it is **Part-paid** until every invoice reaches **Paid**, then **Paid** (a **paid
+   date** is stamped). This is per-P.O and distinct from the per-invoice workflow above,
+   and separate again from the finance lifecycle (Open/Challenged/Closed); it is
    surfaced to the raising department on its dashboard **P.O register** so departments can
    see the payment state of every P.O (migration 062: `payment_status`, `paid_date`).
 4. **Excel download** — tick individual P.Os and **Download selected**, or **Download
@@ -658,7 +670,9 @@ labelled as such.
 
 - **Due date** — the old "Payment date" field is now **Due date**, auto-computed as
   **P.O date + payment-term days** (parsed from the payment-terms text, e.g. "30 days").
-  It stays editable — set it by hand and the auto-calc steps aside.
+  It stays editable — set it by hand and the auto-calc steps aside. The field notes that
+  this is a **best-guess** at raise-time: the invoice's **actual due date** is set later,
+  per invoice, on P.O Summary + Close (B) once the invoice arrives.
 - **Typeable dates** — all P.O date fields are DD/MM/YYYY text boxes you can freely
   type, backspace and correct anywhere, with a calendar button for pointer entry
   (replacing the segmented native picker where a mis-typed digit couldn't be deleted).
@@ -680,10 +694,12 @@ budget, so it is excluded from the dashboard list by design. All of a
 department's P.O activity — requests **and** the Summary + Close outcomes — rolls up
 here from the department chosen when each P.O was raised:
 
-- **Headline tiles** — budget (proposed & target); **YTD committed spend** (total £ of
-  closed P.Os, count beneath); under challenge; **open purchase orders** (total £ of open
-  P.Os, count beneath); **budget remaining** — proposed **less committed spend and open
-  P.Os** (both in-flight commitments and closed spend are netted off).
+- **Headline tiles** — budget (proposed & target); **YTD committed spend** (closed P.Os
+  **plus card / pre-approved spend** logged against the budget); a separate **Card /
+  pre-approved** tile breaks out that card spend; under challenge; **open purchase
+  orders** (total £ of open P.Os, count beneath); **budget remaining** — proposed **less
+  committed spend and open P.Os** (both in-flight commitments and closed/card spend are
+  netted off).
 - **Awaiting sign-off** — the budget holder's action queue: P.Os pending
   department-head sign-off, with inline **Approve / Reject** for that department's
   sign-off approvers (or an admin); read-only for everyone else.
@@ -730,13 +746,27 @@ or it moves ≥10% vs prior year; material lines **require commentary** (busines
 
 **Approval workflow** — five stages: **Draft → Finance Review → Department Approval →
 SLT Approval → Locked**, and any review stage can **return to Draft** with a note.
-Each transition is recorded on the budget's timeline. Who runs each step:
-- *Submit for Finance review* — the department owner (or Admin/Finance).
+Each transition is recorded on the budget's timeline. From **Draft** the department's own
+team can take **either** route out: the usual *Submit for Finance review*, **or** *Submit
+to department head* — sending it **straight to Department Approval**, skipping Finance
+Review, so preparers can hand a completed budget/forecast directly to their department
+head for sign-off. From Department Approval the chain continues as normal (→ SLT Approval
+→ Locked). Who runs each step:
+- *Submit for Finance review* — the department's own team (or Admin/Finance).
+- *Submit to department head* — the department's own team (or Admin/Finance); goes
+  **straight to Department Approval**, skipping Finance Review.
 - *Finance Review* — Admin/Finance.
 - *Department Approval* — the department's **sign-off approvers** (GOVERN → Users,
   Roles & Permissions → Department sign-off), or an admin.
 - *SLT Approval & lock* — an admin.
 - *Reopen* a locked budget — Admin/Finance.
+
+**Who prepares a Draft.** A Draft is editable by the department's **own users** (any user
+whose assigned department matches the budget's), plus Admin/Finance — so a department's
+team (e.g. Marketing's Leanne & Rida) can build up the budget/forecast, then submit it to
+their department head. *Sign-off* is separate: only the department's listed sign-off
+approvers (e.g. Marketing's Hannah) can approve at Department Approval, set in GOVERN →
+Users, Roles & Permissions → Department sign-off.
 
 Only a **Draft** is editable; later stages are read-only until returned or reopened.
 The top-down **target** is set by Finance/Admin. Budgets are governed data
@@ -793,6 +823,17 @@ line under the **Other** category: a used-% bar with budget · spent · remainin
 shading green → amber → red as it approaches and then exceeds the set-aside. If there
 is no Contingency line the card falls back to the whole Other category and prompts you
 to add one (`finance.misc_spend`, migration 103).
+
+**Card / Pre-approved Spend (PLAN — HO).** Spend already made on a **company card**, or
+otherwise **pre-approved**, that doesn't go through the P.O + sign-off flow is logged on
+**Card / Pre-approved Spend** (`/plan/card-spend`) — **supplier, amount (£), description,
+department, budget link and date**; any signed-in user records and edits their own
+department's entries (GBP only). Unlike Miscellaneous Spend it reports as **committed
+spend**: each entry rolls into the department's **YTD committed spend** on the Department
+Dashboard (§5.17) — the same bucket as closed P.Os — **and** shows as its own **Card /
+pre-approved** tile, so it's transparent. There is **no P.O number, no sign-off and no
+invoice/payment tracking** — it's a spend record, not a workflow (`finance.card_spend`,
+migration 112).
 
 *Coming next:* AI suggestions (suggested phasing from history, missing-cost warnings),
 scenario generation, and driver-based planning.
