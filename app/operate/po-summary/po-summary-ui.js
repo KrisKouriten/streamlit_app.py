@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 import DateField from "../../finance-os/date-field";
 
@@ -148,7 +148,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
     if (invoicesFor === p.po_id) { setInvoicesFor(null); return; }
     setChallengeFor(null); setDetailFor(null);
     setInvoicesFor(p.po_id);
-    if (!invNew[p.po_id]) setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", paid: false, due_date: "" } }));
+    if (!invNew[p.po_id]) setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", invoice_status: "RECEIVED", due_date: "" } }));
     if (!invCache[p.po_id]?.invoices) loadInvoices(p.po_id);
   }
   // Invoice ops POST then refresh the row + reload the invoice list.
@@ -167,10 +167,10 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
   const setInvNewField = (poId, k, v) => setInvNew((s) => ({ ...s, [poId]: { ...(s[poId] || {}), [k]: v } }));
   async function addInvoice(p) {
     const f = invNew[p.po_id] || {};
-    await invOp(p.po_id, { op: "add-invoice", invoice: { invoice_number: f.number, invoice_amount: f.amount, paid: !!f.paid, due_date: f.due_date || null } }, "Invoice added.");
-    setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", paid: false, due_date: "" } }));
+    await invOp(p.po_id, { op: "add-invoice", invoice: { invoice_number: f.number, invoice_amount: f.amount, invoice_status: f.invoice_status || "RECEIVED", due_date: f.due_date || null } }, "Invoice added.");
+    setInvNew((s) => ({ ...s, [p.po_id]: { number: "", amount: "", invoice_status: "RECEIVED", due_date: "" } }));
   }
-  const toggleInvoicePaid = (poId, i) => invOp(poId, { op: "update-invoice", invoice_id: i.invoice_id, patch: { paid: !i.paid } }, i.paid ? "Marked unpaid." : "Marked paid.");
+  const setInvoiceStatus = (poId, i, code) => invOp(poId, { op: "update-invoice", invoice_id: i.invoice_id, patch: { invoice_status: code } }, `Invoice marked ${(invoiceStatusOf({ invoice_status: code }).label || "").toLowerCase()}.`);
   const setInvoiceDue = (poId, i, iso) => invOp(poId, { op: "update-invoice", invoice_id: i.invoice_id, patch: { due_date: iso || null } }, "Invoice due date updated.");
   const removeInvoice = (poId, i) => { if (window.confirm(`Delete invoice ${i.invoice_number || ""}?`)) invOp(poId, { op: "delete-invoice", invoice_id: i.invoice_id }, "Invoice removed."); };
 
@@ -314,9 +314,9 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                         <tr>
                           <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <InvoicesPanel
-                              p={p} state={invCache[p.po_id]} nf={invNew[p.po_id] || { number: "", amount: "", paid: false, due_date: "" }}
+                              p={p} state={invCache[p.po_id]} nf={invNew[p.po_id] || { number: "", amount: "", invoice_status: "RECEIVED", due_date: "" }}
                               setField={(k, v) => setInvNewField(p.po_id, k, v)} onAdd={() => addInvoice(p)}
-                              onTogglePaid={(i) => toggleInvoicePaid(p.po_id, i)} onRemove={(i) => removeInvoice(p.po_id, i)} onSetDue={(i, iso) => setInvoiceDue(p.po_id, i, iso)}
+                              onSetStatus={(i, code) => setInvoiceStatus(p.po_id, i, code)} onRemove={(i) => removeInvoice(p.po_id, i)} onSetDue={(i, iso) => setInvoiceDue(p.po_id, i, iso)}
                               busy={busy === p.po_id} money={money} inputSt={inputSt} btn={btn} ghost={ghost}
                             />
                           </td>
@@ -363,7 +363,7 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          Click a <strong>P.O number</strong> (▸) to expand it and see its full details. Click the <strong>Invoice no</strong> cell to add one or more invoices to a P.O — each with its own paid state, so the Payment status rolls up to <em>Part-paid</em> until all are paid. Then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
+          Click a <strong>P.O number</strong> (▸) to expand it and see its full details. Click the <strong>Invoice no</strong> cell to add one or more invoices to a P.O — each moves through its own status (<em>Received → Processing → Reviewing → Paid</em>), and the P.O&rsquo;s Payment status rolls up to <em>Part-paid</em> until every invoice reaches Paid. Then <strong>Close</strong> it (reported as committed spend on the Departmental Budget Dashboard) or <strong>Challenge</strong> it — pick the reason(s) (or &ldquo;Other&rdquo; with a note) and choose whether the fix comes back to Finance or goes back for department sign-off. A challenged P.O shows &ldquo;under challenge&rdquo; on the dashboard and Purchase Order Requests, where the submitter can edit and resubmit it. Downloads include a row per store allocation so every store&rsquo;s value to invoice or recharge is listed.
         </div>
       </div>
     </div>
@@ -377,7 +377,7 @@ function FragmentRow({ children }) {
 
 // The invoices panel — list each invoice against a P.O with its paid toggle, add
 // a new one, and see the invoiced total reconcile against the P.O value.
-function InvoicesPanel({ p, state, nf, setField, onAdd, onTogglePaid, onRemove, onSetDue, busy, money, inputSt, btn, ghost }) {
+function InvoicesPanel({ p, state, nf, setField, onAdd, onSetStatus, onRemove, onSetDue, busy, money, inputSt, btn, ghost }) {
   const invoices = state?.invoices || [];
   const t = invoiceTotals(invoices);
   const reconciles = invoicesReconcile(invoices, p.payment_value);
@@ -392,7 +392,7 @@ function InvoicesPanel({ p, state, nf, setField, onAdd, onTogglePaid, onRemove, 
       {state?.error && <div style={{ fontSize: 12.5, color: "var(--red)" }}>{state.error}</div>}
       {!state?.loading && (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, maxWidth: 820 }}>
-          <thead><tr>{["Invoice no", "Amount", "Due date", "Paid", ""].map((h, i) => (
+          <thead><tr>{["Invoice no", "Amount", "Due date", "Status", ""].map((h, i) => (
             <th key={h} style={{ textAlign: i === 1 ? "right" : "left", padding: "4px 8px", ...lbl, borderBottom: "1px solid var(--line)" }}>{h}</th>
           ))}</tr></thead>
           <tbody>
@@ -406,10 +406,16 @@ function InvoicesPanel({ p, state, nf, setField, onAdd, onTogglePaid, onRemove, 
                     : <DateField value={iso(i.due_date)} onChange={(v) => onSetDue(i, v)} disabled={busy} inputStyle={{ width: 150 }} />}
                 </td>
                 <td style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)" }}>
-                  <label style={{ display: "inline-flex", gap: 6, alignItems: "center", cursor: closed ? "default" : "pointer" }}>
-                    <input type="checkbox" checked={!!i.paid} disabled={busy || closed} onChange={() => onTogglePaid(i)} />
-                    <span style={{ color: i.paid ? "var(--green)" : "var(--muted)" }}>{i.paid ? `Paid${i.paid_date ? ` · ${new Date(i.paid_date).toLocaleDateString("en-GB")}` : ""}` : "Unpaid"}</span>
-                  </label>
+                  {closed ? (
+                    <span style={{ color: i.paid ? "var(--green)" : "var(--muted)" }}>{invoiceStatusOf(i).label}{i.paid && i.paid_date ? ` · ${new Date(i.paid_date).toLocaleDateString("en-GB")}` : ""}</span>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <select style={{ ...inputSt, width: 130 }} value={invoiceStatusOf(i).code} disabled={busy} onChange={(e) => onSetStatus(i, e.target.value)}>
+                        {INVOICE_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                      </select>
+                      {i.paid && i.paid_date && <span style={{ fontSize: 10, color: "var(--faint)" }}>Paid · {new Date(i.paid_date).toLocaleDateString("en-GB")}</span>}
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: "5px 8px", borderBottom: "1px solid var(--hairline)", textAlign: "right" }}>
                   {!closed && <button style={{ ...ghost, color: "var(--red)", padding: "3px 8px" }} disabled={busy} onClick={() => onRemove(i)}>Delete</button>}
@@ -432,7 +438,11 @@ function InvoicesPanel({ p, state, nf, setField, onAdd, onTogglePaid, onRemove, 
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Invoice no</span><input style={{ ...inputSt, width: 150 }} value={nf.number} onChange={(e) => setField("number", e.target.value)} placeholder="e.g. INV-1042" /></label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Amount (£)</span><input style={{ ...inputSt, width: 120, textAlign: "right" }} className="fos-num" value={nf.amount} onChange={(e) => setField("amount", e.target.value)} placeholder="0.00" /></label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Due date</span><DateField value={nf.due_date || ""} onChange={(v) => setField("due_date", v)} inputStyle={{ width: 150 }} /></label>
-          <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12.5, paddingBottom: 8 }}><input type="checkbox" checked={!!nf.paid} onChange={(e) => setField("paid", e.target.checked)} /> Paid</label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span style={lbl}>Status</span>
+            <select style={{ ...inputSt, width: 130 }} value={nf.invoice_status || "RECEIVED"} onChange={(e) => setField("invoice_status", e.target.value)}>
+              {INVOICE_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+            </select>
+          </label>
           <button style={{ ...btn("var(--accent)"), padding: "7px 14px" }} disabled={busy || !canAdd} onClick={onAdd}>Add invoice</button>
         </div>
       )}

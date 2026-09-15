@@ -11,6 +11,7 @@ import {
   CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, isChallengeReturnRoute,
   challengeNoteRequired, challengeValidationError, isChallengeReason,
   validatePoInvoice, invoiceTotals, derivePaymentStatus, invoicesReconcile, invoiceSummaryRef,
+  INVOICE_STATUSES, isInvoiceStatus, invoiceStatusOf,
   describePoAuditEvent,
 } from "../lib/po-rules.js";
 
@@ -411,6 +412,27 @@ test("invoicesReconcile checks the invoiced total against the P.O value", () => 
   assert.equal(invoicesReconcile(inv, 1650), true);
   assert.equal(invoicesReconcile(inv, 1650.005), true);   // within 1p
   assert.equal(invoicesReconcile(inv, 1700), false);
+});
+
+test("INVOICE_STATUSES is the Received → Processing → Reviewing → Paid workflow", () => {
+  assert.deepEqual(INVOICE_STATUSES.map((s) => s.code), ["RECEIVED", "PROCESSING", "REVIEWING", "PAID"]);
+  assert.deepEqual(INVOICE_STATUSES.map((s) => s.label), ["Received", "Processing", "Reviewing", "Paid"]);
+});
+
+test("isInvoiceStatus validates a status code", () => {
+  assert.ok(isInvoiceStatus("RECEIVED"));
+  assert.ok(isInvoiceStatus("PAID"));
+  assert.ok(!isInvoiceStatus("UNPAID"));   // that's a payment status, not a workflow one
+  assert.ok(!isInvoiceStatus(""));
+  assert.ok(!isInvoiceStatus(null));
+});
+
+test("invoiceStatusOf reads the row's status and defaults to Received", () => {
+  assert.equal(invoiceStatusOf({ invoice_status: "REVIEWING" }).label, "Reviewing");
+  assert.equal(invoiceStatusOf({ invoice_status: "PAID" }).tone, "green");
+  // Unset or unknown → Received (matches the column default).
+  assert.equal(invoiceStatusOf({}).code, "RECEIVED");
+  assert.equal(invoiceStatusOf({ invoice_status: "BOGUS" }).code, "RECEIVED");
 });
 
 test("invoiceSummaryRef summarises the invoice numbers", () => {
