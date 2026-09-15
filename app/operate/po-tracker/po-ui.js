@@ -144,6 +144,10 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const outcome = invoiceOutcome({ isMarketing: f.is_marketing, marketingLevy: f.marketing_levy, rechargeEnabled: f.recharge_enabled });
 
   const selected = useMemo(() => new Set(recharge.map((r) => r.store_code)), [recharge]);
+  // Stores alphabetical (feedback: easier to find & select) — used for the picker
+  // and Select-all.
+  const sortedStores = useMemo(() => [...stores].sort((a, b) =>
+    String(a.store_name || a.store_code || "").localeCompare(String(b.store_name || b.store_code || ""), "en-GB")), [stores]);
 
   function toggleStore(s, on) {
     setRecharge((cur) => on
@@ -151,7 +155,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
       : cur.filter((r) => r.store_code !== s.store_code));
   }
   function toggleAll(on) {
-    setRecharge(on ? stores.map((s) => ({ store_code: s.store_code, store_name: s.store_name, pct: 0 })) : []);
+    setRecharge(on ? sortedStores.map((s) => ({ store_code: s.store_code, store_name: s.store_name, pct: 0 })) : []);
   }
   function setPct(code, v) {
     setRecharge((cur) => cur.map((r) => (r.store_code === code ? { ...r, pct: v === "" ? "" : Number(v) } : r)));
@@ -464,7 +468,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 6, maxHeight: 260, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 10 }}>
-                {stores.map((s) => {
+                {sortedStores.map((s) => {
                   const on = selected.has(s.store_code);
                   const line = recharge.find((r) => r.store_code === s.store_code);
                   return (
