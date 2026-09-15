@@ -120,7 +120,9 @@ export async function POST(request, { params }) {
       case "delete": {
         const loaded = await getPo(id);
         if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
-        const gate = canDeletePo(loaded.po, { isAdmin: isAdmin(session) });
+        const me = (session.email || session.name || "").toLowerCase();
+        const isOwner = (loaded.po.created_by || "").toLowerCase() === me;
+        const gate = canDeletePo(loaded.po, { isAdmin: isAdmin(session), isOwner });
         if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
         return NextResponse.json(await deletePo(id, session));
       }
