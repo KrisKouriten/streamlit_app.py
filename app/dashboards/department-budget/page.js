@@ -88,10 +88,15 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
   const canApprove = isAdmin(session) || approverEmails.includes((session.email || "").toLowerCase());
 
   const s = d.summary;
-  const committed = d.pos?.ytdCommitted || 0;
+  const poCommitted = d.pos?.ytdCommitted || 0;
+  const cardCommitted = d.cardSpend?.total || 0;
+  const cardCount = d.cardSpend?.count || 0;
+  // Committed spend = finance-closed P.Os + card/pre-approved spend logged against
+  // this budget.
+  const committed = Math.round((poCommitted + cardCommitted) * 100) / 100;
   const openValue = d.pos?.openValue || 0;
   const proposed = s?.proposed || 0;
-  // Budget remaining is net of both committed spend (closed P.Os) and open
+  // Budget remaining is net of committed spend (closed P.Os + card spend) and open
   // purchase-order commitments still in flight.
   const budgetLeft = d.hasBudget ? proposed - committed - openValue : null;
   const maxCat = Math.max(1, ...(d.categories || []).map((c) => Math.abs(c.subtotal)));
@@ -110,7 +115,8 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <StatRow>
             <Stat label="Budget (proposed)" value={d.hasBudget ? money(proposed, { compact: true }) : "—"}
               sub={d.hasBudget ? (s.target != null ? `target ${money(s.target, { compact: true })}` : "no target set") : "no budget for this year"} />
-            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed PO${(d.pos?.closedCount || 0) === 1 ? "" : "s"}, this year`} />
+            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed PO${(d.pos?.closedCount || 0) === 1 ? "" : "s"}${cardCount ? ` + ${cardCount} card item${cardCount === 1 ? "" : "s"}` : ""}, this year`} />
+            <Stat label="Card / pre-approved" value={money(cardCommitted, { compact: true })} sub={cardCount ? `${cardCount} item${cardCount === 1 ? "" : "s"} logged` : "none logged"} />
             <Stat label="Under challenge" value={String(d.pos?.challengedCount || 0)}
               sub={d.pos?.challengedCount ? `${money(d.pos.challengedValue || 0, { compact: true })} in query` : "none"}
               tone={d.pos?.challengedCount ? "red" : undefined} />
@@ -122,7 +128,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           </StatRow>
 
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
-            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded. <strong>Budget remaining</strong> is the proposed budget less committed spend <em>and</em> open purchase orders still in flight. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
+            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded — <em>plus</em> <strong>card / pre-approved spend</strong> logged against this budget (shown separately too). <strong>Budget remaining</strong> is the proposed budget less committed spend <em>and</em> open purchase orders still in flight. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
           </div>
 
           {/* Awaiting sign-off — the budget-holder's action queue */}
