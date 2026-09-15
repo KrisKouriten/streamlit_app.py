@@ -249,6 +249,39 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
     setEditing(null); setF(EMPTY); setRecharge([]); setDueTouched(false); setError(null); setMsg(null);
   }
 
+  // Duplicate an existing P.O into the form as a NEW draft (all its details
+  // pre-filled) — the requester tweaks what's changed (e.g. dates each month)
+  // and saves it as a fresh P.O. Unlike Edit, this does not set `editing`, so
+  // saving creates a new P.O with its own number.
+  async function duplicatePo(p) {
+    setError(null); setMsg(null); setEditing(null);
+    try {
+      const res = await fetch(`/api/purchase-orders/${p.po_id}`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Could not load the P.O");
+      const po = j.po || p;
+      const iso = (v) => (v ? String(v).slice(0, 10) : "");
+      setF({
+        po_date: iso(po.po_date), supplier: po.supplier || "", payment_terms: po.payment_terms || "",
+        payment_date: iso(po.payment_date), currency: po.currency || "GBP",
+        payment_value: po.payment_value != null ? String(po.payment_value) : "",
+        po_category: po.po_category || "",
+        fulfilment_start_date: iso(po.fulfilment_start_date), fulfilment_days: po.fulfilment_days != null ? String(po.fulfilment_days) : "",
+        department: po.department || "", notes: po.notes || "",
+        is_marketing: !!po.is_marketing, marketing_levy: po.is_marketing ? (po.marketing_levy ?? null) : null,
+        recharge_enabled: !!po.recharge_enabled, recharge_ho_only: !!po.recharge_ho_only,
+        marketing_budget_category: po.marketing_budget_category || "", marketing_campaign: po.marketing_campaign || "",
+        business_project_id: po.business_project_id != null ? String(po.business_project_id) : "",
+        invoice_entity_id: po.invoice_entity_id != null ? String(po.invoice_entity_id) : "",
+        description: po.description || "",
+      });
+      setRecharge(po.recharge_ho_only ? [] : (j.recharge || []).map((r) => ({ store_code: r.store_code, store_name: r.store_name, pct: Number(r.pct) })));
+      setDueTouched(true);
+      setMsg(`Duplicated ${poRef(po)} — check the details (dates especially), then create it as a new P.O.`);
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { setRowErr((s) => ({ ...s, [p.po_id]: e.message })); }
+  }
+
   // Save edits to an existing P.O, then (optionally) put it back into the flow —
   // "submit" for a draft/rejected P.O, "resubmit-challenge" for a challenged one.
   async function saveEdit(sendOn) {
@@ -551,6 +584,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                         {canEditPo(p) && editing?.poId !== p.po_id && (
                           <button style={isChallenged(p) ? btn("var(--red)") : ghost} onClick={() => beginEdit(p)}>{isChallenged(p) ? "Edit & resubmit" : "Edit"}</button>
                         )}
+                        <button style={ghost} onClick={() => duplicatePo(p)} title="Copy this P.O's details into a new one">Duplicate</button>
                         {(p.status === "DRAFT" || p.status === "REJECTED") && <button style={ghost} onClick={() => poOp(p.po_id, "submit")}>Submit for sign-off</button>}
                         {p.status === "PENDING_SIGNOFF" && canApprove(p) && (
                           <>
