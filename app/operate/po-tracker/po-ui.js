@@ -413,11 +413,15 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                 </select>
               </label>
               <label style={field}><span style={labelSt}>Campaign / initiative</span>
-                <input style={inputSt} list="mk-campaigns" placeholder="e.g. Star Wars, Toy Story 5" value={f.marketing_campaign} onChange={set("marketing_campaign")} />
-                <datalist id="mk-campaigns">
-                  {marketingCampaigns.map((c) => <option key={c} value={c} />)}
-                </datalist>
-                <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{marketingCampaigns.length ? "Pick a live campaign from the Marketing budget, or type a new one." : "Type the campaign name (no budget campaigns set up yet)."}</span>
+                {marketingCampaigns.length > 0 && (
+                  <select style={inputSt} value={marketingCampaigns.includes(f.marketing_campaign) ? f.marketing_campaign : ""}
+                    onChange={(e) => setF((s) => ({ ...s, marketing_campaign: e.target.value }))}>
+                    <option value="">— pick an existing campaign —</option>
+                    {marketingCampaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+                <input style={inputSt} placeholder={marketingCampaigns.length ? "…or type a new one" : "e.g. Star Wars, Toy Story 5"} value={f.marketing_campaign} onChange={set("marketing_campaign")} />
+                <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{marketingCampaigns.length ? "Pick a live campaign from the dropdown, or type a new one." : "Type the campaign name (no budget campaigns set up yet)."}</span>
               </label>
             </div>
           </div>
