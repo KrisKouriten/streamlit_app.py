@@ -22,7 +22,9 @@ const ccyMoney = (v, ccy) => (isForeignCurrency(ccy) ? `${CCY_SYMBOL[ccy] || ""}
 const VAL_TONE = { WITHIN_OTB: "green", OTB_WARNING: "amber", EXCEEDS_OTB: "red", NO_APPROVED_OTB: "muted", APPROVED_EXCEPTION: "accent" };
 const REQ_ACTIONS = {
   DRAFT: [["submit", "Submit"]],
-  MERCH_REVIEW: [["validate", "Validate"], ["reject", "Reject"]],
+  // MERCH_REVIEW is the head-of-department sign-off (the Merchandising Department
+  // sign-off approver, e.g. Becky). On approval it goes straight to Finance.
+  MERCH_REVIEW: [["hod_approve", "Approve (sign-off)"], ["reject", "Reject"]],
   OTB_VALIDATED: [["finance", "To finance"], ["reject", "Reject"]],
   FINANCE_REVIEW: [["approve", "Approve"], ["reject", "Reject"]],
   APPROVED: [["order", "Mark ordered"]],
@@ -81,7 +83,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
       {isFx ? (
         <FxPanel rates={fxRates} isFinance={roles.isFinance} onErr={setErr} onDone={() => router.refresh()} />
       ) : isMerch ? (
-        <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} suppliers={suppliers} />
+        <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} isMerchApprover={!!roles.isMerchApprover} suppliers={suppliers} />
       ) : (
       <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
@@ -526,7 +528,7 @@ function Upload({ onDone }) {
    it is validated live against the approved Open-to-Buy before it becomes a
    commitment, then moves through merch → OTB → finance review and can generate a
    formal P.O without rekeying. */
-function MerchRequests({ otbVersions = [], activeVersionId = null, requests = [], channelOpts = [], canManage, suppliers = [] }) {
+function MerchRequests({ otbVersions = [], activeVersionId = null, requests = [], channelOpts = [], canManage, isMerchApprover = false, suppliers = [] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -646,6 +648,10 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
             {!requests.length ? <tr><td style={{ padding: "12px 14px", color: "var(--faint)" }} colSpan={7}>No requests for this version yet.</td></tr> :
               requests.map((r) => {
                 const acts = REQ_ACTIONS[r.request_status] || [];
+                // The MERCH_REVIEW sign-off is the head of department's (Becky);
+                // every other stage is Finance/Ops. Only show the buttons the
+                // viewer can actually run so no one clicks into a 403.
+                const canActHere = r.request_status === "MERCH_REVIEW" ? isMerchApprover : canManage;
                 return (
                   <tr key={r.purchase_id}>
                     <Td>{r.channel_code}</Td>
@@ -656,7 +662,7 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
                     <Td>{r.validation_status ? <Badge tone={VAL_TONE[r.validation_status] || "muted"}>{r.validation_status.replace(/_/g, " ")}</Badge> : "—"}</Td>
                     <Td>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                        {canManage && acts.map(([action, label]) => (
+                        {canActHere && acts.map(([action, label]) => (
                           <button key={action} style={action === "reject" ? { ...ghost, color: "var(--red)" } : ghost} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "transition", action })}>{label}</button>
                         ))}
                         {canManage && r.validation_status === "EXCEEDS_OTB" && (
@@ -665,7 +671,7 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
                         {canManage && r.request_status === "APPROVED" && (
                           <button style={btn("var(--green)")} disabled={busy} onClick={() => reqOp(r.purchase_id, { op: "generate-po" })}>Generate P.O</button>
                         )}
-                        {!canManage && !acts.length && <span style={{ color: "var(--faint)", fontSize: 12 }}>—</span>}
+                        {!canActHere && !acts.length && <span style={{ color: "var(--faint)", fontSize: 12 }}>—</span>}
                       </div>
                     </Td>
                   </tr>

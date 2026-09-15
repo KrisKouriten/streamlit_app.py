@@ -4,6 +4,7 @@ import { getProcurement } from "../../../lib/procurement";
 import { getFxRates } from "../../../lib/fx";
 import { listOtbVersions } from "../../../lib/otb";
 import { listMerchRequests } from "../../../lib/otb-procurement";
+import { getApproverEmails } from "../../../lib/dept-budget";
 import { listSuppliers } from "../../../lib/suppliers";
 import { OTB_CHANNELS, CHANNEL_LABEL } from "../../../lib/otb-rules";
 import { PageHeader } from "../../finance-os/ui";
@@ -21,7 +22,13 @@ export default async function Procurement({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
   const canManage = hasRole(session, "ADMIN", "FINANCE", "OPS");
-  const roles = { canManage, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin: hasRole(session, "ADMIN") };
+  // The procurement head-of-department sign-off is the Merchandising Department
+  // sign-off approver (e.g. Becky), or an admin — they can act on a request at the
+  // MERCH_REVIEW stage even without a management role.
+  const isAdmin = hasRole(session, "ADMIN");
+  const merchApprovers = (await getApproverEmails("Merchandising").catch(() => [])).map((e) => (e || "").toLowerCase());
+  const isMerchApprover = isAdmin || merchApprovers.includes((session.email || "").toLowerCase());
+  const roles = { canManage, isMerchApprover, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin };
   const sp = (await searchParams) || {};
   const [pr, otbVersions, fxRates, supplierList] = await Promise.all([
     getProcurement(),
