@@ -86,6 +86,8 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const [rowErr, setRowErr] = useState({}); // per-PO submit errors
   const [dueTouched, setDueTouched] = useState(false); // has the user hand-set the due date?
   const [editing, setEditing] = useState(null);        // { poId, po } when editing an existing P.O
+  const [viewFor, setViewFor] = useState(null);        // po_id whose read-only detail is open
+  const [viewCache, setViewCache] = useState({});      // po_id -> { loading, data, error }
   const [listFilter, setListFilter] = useState("ALL");  // created-P.Os status filter
   const [listDept, setListDept] = useState("");          // created-P.Os department filter
   const [listSearch, setListSearch] = useState("");      // created-P.Os text search
@@ -100,6 +102,24 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   }, [initialPos, listFilter, listDept, listSearch]);
   const editingChallenged = !!editing && isChallenged(editing.po);
   const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
+
+  // Read-only "view" of any P.O (whatever its status) — lazy-loaded full detail
+  // so a department can click into a P.O to see everything, not only drafts.
+  async function toggleView(p) {
+    if (viewFor === p.po_id) { setViewFor(null); return; }
+    setViewFor(p.po_id);
+    if (!viewCache[p.po_id]) {
+      setViewCache((s) => ({ ...s, [p.po_id]: { loading: true } }));
+      try {
+        const res = await fetch(`/api/purchase-orders/${p.po_id}`);
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || "Could not load details");
+        setViewCache((s) => ({ ...s, [p.po_id]: { loading: false, data: j } }));
+      } catch (e) {
+        setViewCache((s) => ({ ...s, [p.po_id]: { loading: false, error: e.message } }));
+      }
+    }
+  }
 
   const approverSet = useMemo(() => new Set((approverDepts || []).map((d) => (d || "").toLowerCase())), [approverDepts]);
   const canApprove = (po) => isAdmin || approverSet.has((po.department || "").toLowerCase());
@@ -503,8 +523,16 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                   const del = canDeletePo(p, { isAdmin });
                   const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
                   return (
-                  <tr key={p.po_id}>
-                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{poRef(p)}{p.self_approved ? <span title="Self-approved (within the self-approval limit)" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>· self</span> : null}</td>
+                  <FragmentRow key={p.po_id}>
+                  <tr>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>
+                      <button onClick={() => toggleView(p)} title="View P.O details" aria-expanded={viewFor === p.po_id}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: viewFor === p.po_id ? "var(--accent)" : "var(--ink)", font: "inherit", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "underline", textDecorationColor: "var(--line-strong)", textUnderlineOffset: 3 }}>
+                        <span style={{ display: "inline-block", transform: viewFor === p.po_id ? "rotate(90deg)" : "none", transition: "transform .15s", color: "var(--accent)" }}>▸</span>
+                        {poRef(p)}
+                      </button>
+                      {p.self_approved ? <span title="Self-approved (within the self-approval limit)" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>· self</span> : null}
+                    </td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", maxWidth: 240 }}>{p.description ? <span title={p.description} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.description}</span> : <span style={{ color: "var(--faint)" }}>—</span>}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(p.created_by)}</td>
@@ -545,6 +573,14 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                       {rowErr[p.po_id] && <div style={{ color: "var(--red)", fontSize: 11.5, marginTop: 4 }}>{rowErr[p.po_id]}</div>}
                     </td>
                   </tr>
+                  {viewFor === p.po_id && (
+                    <tr>
+                      <td colSpan={10} style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                        <PoViewDetail state={viewCache[p.po_id]} po={p} money={money} />
+                      </td>
+                    </tr>
+                  )}
+                  </FragmentRow>
                   );
                 })}
               </tbody>
@@ -556,6 +592,70 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose).
         </div>
       </div>
+    </div>
+  );
+}
+
+// A keyed group of table rows (the P.O row + its optional read-only detail).
+function FragmentRow({ children }) { return <>{children}</>; }
+
+// Read-only detail for any P.O, shown when its number is clicked on the requests
+// list — so departments can see everything about a P.O regardless of status
+// (previously only editable drafts could be opened). Lazy-loaded via getPo.
+function PoViewDetail({ state, po, money }) {
+  if (!state || state.loading) return <div style={{ fontSize: 12.5, color: "var(--faint)" }}>Loading details…</div>;
+  if (state.error) return <div style={{ fontSize: 12.5, color: "var(--red)" }}>{state.error}</div>;
+  const d = state.data?.po || po;
+  const recharge = state.data?.recharge || [];
+  const dl = { fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 2 };
+  const dv = { fontSize: 13, color: "var(--ink)" };
+  const D = (v) => (v ? new Date(v).toLocaleDateString("en-GB") : "—");
+  const Item = ({ k, children }) => (<div><div style={dl}>{k}</div><div style={dv}>{children ?? "—"}</div></div>);
+  const reasons = challengeReasonLabels(d.challenge_reasons);
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px 20px" }}>
+        <Item k="Description">{d.description}</Item>
+        <Item k="P.O date">{D(d.po_date)}</Item>
+        <Item k="Category">{d.po_category}</Item>
+        <Item k="Department">{d.department}</Item>
+        <Item k="Submitted by">{d.created_by ? String(d.created_by).split("@")[0] : "—"}</Item>
+        <Item k="Net value">{money(d.payment_value, d.currency)}</Item>
+        <Item k="Payment terms">{d.payment_terms}</Item>
+        <Item k="Due date">{D(d.payment_date)}</Item>
+        <Item k="Entity to be invoiced">{d.invoice_entity_name}</Item>
+        <Item k="Fulfilment start">{D(d.fulfilment_start_date)}</Item>
+        <Item k="Fulfilment days">{d.fulfilment_days ?? "—"}</Item>
+        <Item k="Invoice no">{d.invoice_number}</Item>
+        <Item k="Invoice net">{d.invoice_amount != null ? money(d.invoice_amount, d.currency) : "—"}</Item>
+        {d.is_marketing && <Item k="Marketing">{d.marketing_levy ? "Levy — allocate, no invoice" : "Non-levy — finance to invoice"}</Item>}
+        {d.marketing_budget_category && <Item k="Budget link">{d.marketing_budget_category}</Item>}
+        {d.marketing_campaign && <Item k="Campaign">{d.marketing_campaign}</Item>}
+      </div>
+      {d.notes && (
+        <div style={{ marginTop: 12 }}>
+          <div style={dl}>Notes</div>
+          <div style={{ fontSize: 13, color: "var(--ink)", whiteSpace: "pre-wrap" }}>{d.notes}</div>
+        </div>
+      )}
+      {recharge.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={dl}>Recharge allocation</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+            {recharge.map((r) => (
+              <span key={r.recharge_id ?? `${r.store_code}-${r.store_name}`} style={{ fontSize: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px" }}>
+                {r.store_name || r.store_code} · {Number(r.pct)}%{r.amount != null ? ` · ${money(r.amount, d.currency)}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {d.finance_status === "CHALLENGED" && reasons.length > 0 && (
+        <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "var(--red-bg)", border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--red)" }}>Under challenge — {reasons.join(" · ")}</div>
+          {d.challenge_note && <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 4 }}>{d.challenge_note}</div>}
+        </div>
+      )}
     </div>
   );
 }
