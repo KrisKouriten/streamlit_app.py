@@ -1,13 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MISC_CATEGORIES, isMiscCategory, validateMiscSpend, miscTotals } from "../lib/misc-spend-rules.js";
+import { MISC_CATEGORIES, MISC_CATEGORY_GROUPS, isMiscCategory, validateMiscSpend, miscTotals } from "../lib/misc-spend-rules.js";
 
-test("MISC_CATEGORIES holds the eight fixed categories", () => {
-  assert.equal(MISC_CATEGORIES.length, 8);
+test("MISC_CATEGORIES holds the fixed general + marketing categories", () => {
+  assert.equal(MISC_CATEGORIES.length, 12);
   assert.ok(isMiscCategory("Travel & Mileage"));
   assert.ok(isMiscCategory("Petty Cash"));
+  // Marketing sub-categories are valid too.
+  assert.ok(isMiscCategory("UGC Product"));
+  assert.ok(isMiscCategory("Marketing Goodwill"));
+  assert.ok(isMiscCategory("Product Sendouts (Postage/Packing)"));
+  assert.ok(isMiscCategory("Marketing Props"));
   assert.ok(!isMiscCategory("Marketing"));
   assert.ok(!isMiscCategory(""));
+});
+
+test("MISC_CATEGORY_GROUPS splits general and marketing, and covers the flat list", () => {
+  assert.deepEqual(MISC_CATEGORY_GROUPS.map((g) => g.label), ["General", "Marketing"]);
+  // Every grouped category is in the flat list, and vice versa (no duplicates, no orphans).
+  const grouped = MISC_CATEGORY_GROUPS.flatMap((g) => g.categories);
+  assert.deepEqual(grouped, MISC_CATEGORIES);
+  assert.equal(new Set(grouped).size, grouped.length);
 });
 
 test("validateMiscSpend needs a category, a positive amount and a budget", () => {
