@@ -83,6 +83,8 @@ test("validateBudget requires a Business Project for a project budget", () => {
 
 test("state machine: the full chain's legal transitions pass; DRAFT is the only editable state", () => {
   assert.equal(budgetTransitionError("submit_to_finance", "DRAFT"), null);
+  assert.equal(budgetTransitionError("submit_to_dept", "DRAFT"), null);
+  assert.equal(budgetTransitionError("submit_to_dept", "FINANCE_REVIEW") !== null, true);  // only from DRAFT
   assert.equal(budgetTransitionError("finance_pass", "FINANCE_REVIEW"), null);
   assert.equal(budgetTransitionError("dept_approve", "DEPT_APPROVAL"), null);
   assert.equal(budgetTransitionError("slt_approve", "SLT_APPROVAL"), null);
@@ -97,8 +99,10 @@ test("state machine: the full chain's legal transitions pass; DRAFT is the only 
 });
 
 test("availableTransitions lists exactly what's runnable from a stage", () => {
-  const draft = availableTransitions("DRAFT").map((t) => t.action);
-  assert.deepEqual(draft, ["submit_to_finance"]);
+  const draft = availableTransitions("DRAFT").map((t) => t.action).sort();
+  assert.deepEqual(draft, ["submit_to_dept", "submit_to_finance"]);
+  // From DRAFT the preparers can go to Finance review or straight to the dept head.
+  assert.equal(availableTransitions("DRAFT").find((t) => t.action === "submit_to_dept").to, "DEPT_APPROVAL");
   const fin = availableTransitions("FINANCE_REVIEW").map((t) => t.action).sort();
   assert.deepEqual(fin, ["finance_pass", "finance_return"]);
   assert.deepEqual(availableTransitions("SLT_APPROVAL").map((t) => t.action).sort(), ["slt_approve", "slt_return"]);

@@ -610,7 +610,7 @@ function ReviewSubmit({ status, issues, summary, allowed, approvers, dirty, busy
             const returning = t.to === "DRAFT";
             const primary = !returning;
             return (
-              <button key={t.action} disabled={busy || (dirty && t.action === "submit_to_finance")}
+              <button key={t.action} disabled={busy || (dirty && (t.action === "submit_to_finance" || t.action === "submit_to_dept"))}
                 onClick={() => onTransition(t.action, returning)}
                 style={primary ? btn(t.action === "slt_approve" ? "var(--green)" : "var(--accent)") : ghost}>{t.label}</button>
             );
