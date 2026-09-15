@@ -62,7 +62,7 @@ const EMPTY = {
   payment_value: "", po_category: "",
   fulfilment_start_date: "", fulfilment_days: "", department: "", notes: "",
   is_marketing: false, marketing_levy: null, recharge_enabled: false, recharge_ho_only: false,
-  marketing_budget_category: "", marketing_campaign: "", business_project_id: "", invoice_entity_id: "",
+  marketing_budget_category: "", marketing_campaign: "", business_project_id: "", invoice_entity_id: "", description: "",
 };
 
 // Status filters for the created-P.Os list (Draft / Open / Challenged / Closed,
@@ -213,6 +213,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         marketing_budget_category: po.marketing_budget_category || "", marketing_campaign: po.marketing_campaign || "",
         business_project_id: po.business_project_id != null ? String(po.business_project_id) : "",
         invoice_entity_id: po.invoice_entity_id != null ? String(po.invoice_entity_id) : "",
+        description: po.description || "",
       });
       setRecharge(po.recharge_ho_only ? [] : (j.recharge || []).map((r) => ({ store_code: r.store_code, store_name: r.store_name, pct: Number(r.pct) })));
       setDueTouched(true);
@@ -243,6 +244,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
         marketing_budget_category: f.marketing_budget_category || null, marketing_campaign: f.marketing_campaign || null,
         business_project_id: f.business_project_id || null,
         invoice_entity_id: f.invoice_entity_id || null,
+        description: f.description || null,
       };
       const res = await fetch(`/api/purchase-orders/${editing.poId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "update", patch }) });
       const j = await res.json();
@@ -297,6 +299,10 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
             {returnRouteLabel(editing.po.challenge_return_route) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>On resubmit: {returnRouteLabel(editing.po.challenge_return_route)}</div>}
           </div>
         )}
+
+        <label style={{ ...field, marginBottom: 14 }}><span style={labelSt}>Description</span>
+          <input style={inputSt} maxLength={300} placeholder="What is this P.O for? — shows on the list, e.g. “October UGC content”" value={f.description} onChange={set("description")} />
+        </label>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
           <label style={field}><span style={labelSt}>Date *</span><DateField value={f.po_date} onChange={setDate("po_date")} /></label>
@@ -480,12 +486,12 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
-              <thead><tr>{["P.O number", "Supplier", "Submitted by", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
+              <thead><tr>{["P.O number", "Description", "Supplier", "Submitted by", "Dept", "Category", "Value", "Recharge", "Status", ""].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}</tr></thead>
               <tbody>
                 {!visiblePos.length && (
-                  <tr><td colSpan={9} style={{ padding: "10px", fontSize: 13, color: "var(--faint)" }}>No purchase orders match these filters.</td></tr>
+                  <tr><td colSpan={10} style={{ padding: "10px", fontSize: 13, color: "var(--faint)" }}>No purchase orders match these filters.</td></tr>
                 )}
                 {visiblePos.map((p) => {
                   const del = canDeletePo(p, { isAdmin });
@@ -493,6 +499,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                   return (
                   <tr key={p.po_id}>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{poRef(p)}{p.self_approved ? <span title="Self-approved (within the self-approval limit)" style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>· self</span> : null}</td>
+                    <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", maxWidth: 240 }}>{p.description ? <span title={p.description} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.description}</span> : <span style={{ color: "var(--faint)" }}>—</span>}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.supplier}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(p.created_by)}</td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>{p.department}</td>
