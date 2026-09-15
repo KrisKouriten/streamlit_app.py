@@ -561,7 +561,8 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                   <tr><td colSpan={10} style={{ padding: "10px", fontSize: 13, color: "var(--faint)" }}>No purchase orders match these filters.</td></tr>
                 )}
                 {visiblePos.map((p) => {
-                  const del = canDeletePo(p, { isAdmin });
+                  const isOwner = (me || "").toLowerCase() === (p.created_by || "").toLowerCase();
+                  const del = canDeletePo(p, { isAdmin, isOwner });
                   const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
                   return (
                   <FragmentRow key={p.po_id}>
@@ -631,7 +632,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           </>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose).
+          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, its submitter can use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose), or <strong>Delete</strong> it if it should not go ahead.
         </div>
       </div>
     </div>

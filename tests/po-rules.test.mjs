@@ -152,6 +152,21 @@ test("canDeletePo: pre-signoff anyone; post-signoff admin only", () => {
   assert.equal(canDeletePo({ status: "APPROVED", finance_status: "CLOSED" }, { isAdmin: false }).ok, false);
 });
 
+test("canDeletePo: a challenged P.O can be deleted by its submitter or an admin", () => {
+  const challenged = { status: "APPROVED", finance_status: "CHALLENGED" };
+  // Submitter (owner) may delete it.
+  assert.equal(canDeletePo(challenged, { isAdmin: false, isOwner: true }).ok, true);
+  // Admin may delete it.
+  assert.equal(canDeletePo(challenged, { isAdmin: true, isOwner: false }).ok, true);
+  // Anyone else cannot, and the reason names the submitter exception.
+  const other = canDeletePo(challenged, { isAdmin: false, isOwner: false });
+  assert.equal(other.ok, false);
+  assert.match(other.reason, /submitter/);
+  // Owning a non-challenged signed-off P.O does NOT grant delete (still admin only).
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "OPEN" }, { isAdmin: false, isOwner: true }).ok, false);
+  assert.equal(canDeletePo({ status: "APPROVED", finance_status: "CLOSED" }, { isAdmin: false, isOwner: true }).ok, false);
+});
+
 test("financeActionError requires a signed-off P.O; blocks double-close", () => {
   assert.match(financeActionError("close", { status: "PENDING_SIGNOFF" }), /not been signed off/);
   assert.equal(financeActionError("close", { status: "APPROVED", finance_status: "OPEN" }), null);
