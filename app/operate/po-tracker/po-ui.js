@@ -88,13 +88,16 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const [editing, setEditing] = useState(null);        // { poId, po } when editing an existing P.O
   const [listFilter, setListFilter] = useState("ALL");  // created-P.Os status filter
   const [listDept, setListDept] = useState("");          // created-P.Os department filter
+  const [listSearch, setListSearch] = useState("");      // created-P.Os text search
   const listCounts = useMemo(() => {
     const c = {}; for (const flt of REQUEST_FILTERS) c[flt.key] = initialPos.filter(flt.test).length; return c;
   }, [initialPos]);
   const visiblePos = useMemo(() => {
     const flt = REQUEST_FILTERS.find((x) => x.key === listFilter) || REQUEST_FILTERS[0];
-    return initialPos.filter((p) => flt.test(p) && (!listDept || p.department === listDept));
-  }, [initialPos, listFilter, listDept]);
+    const q = listSearch.trim().toLowerCase();
+    const matches = (p) => !q || [poRef(p), p.description, p.supplier].some((v) => String(v || "").toLowerCase().includes(q));
+    return initialPos.filter((p) => flt.test(p) && (!listDept || p.department === listDept) && matches(p));
+  }, [initialPos, listFilter, listDept, listSearch]);
   const editingChallenged = !!editing && isChallenged(editing.po);
   const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
 
@@ -483,6 +486,9 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                 {departments.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             )}
+            <input style={{ ...inputSt, minWidth: 220, flex: 1 }} value={listSearch} onChange={(e) => setListSearch(e.target.value)}
+              placeholder="Search description, P.O number or supplier…" />
+            {listSearch && <button style={ghost} onClick={() => setListSearch("")}>Clear</button>}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
