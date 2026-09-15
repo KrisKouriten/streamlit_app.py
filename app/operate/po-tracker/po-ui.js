@@ -371,7 +371,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           </label>
           <label style={field}><span style={labelSt}>Payment terms</span><input style={inputSt} placeholder="e.g. 30 days" value={f.payment_terms} onChange={set("payment_terms")} /></label>
           <label style={field}><span style={labelSt}>Due date</span><DateField value={f.payment_date} onChange={(iso) => { setDueTouched(true); setDate("payment_date")(iso); }} />
-            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{dueTouched ? "set manually" : "auto: P.O date + payment terms"}</span>
+            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{dueTouched ? "Set manually." : "Auto: P.O date + payment terms."} Best-guess for now — set the invoice&rsquo;s actual due date on P.O Summary + Close once it arrives.</span>
           </label>
           <label style={field}><span style={labelSt}>Currency *</span><select style={inputSt} value={f.currency} onChange={set("currency")}>{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label style={field}><span style={labelSt}>Net value (£) *</span><MoneyInput style={inputSt} value={f.payment_value} onChange={set("payment_value")} /></label>
@@ -389,7 +389,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
               <option value="">— choose —</option>
               {entities.map((e) => <option key={e.entity_id} value={e.entity_id}>{e.entity_name}</option>)}
             </select>
-            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{entities.length ? "The legal entity this P.O will be invoiced to." : "No entities set up yet (Finance Data — Entities)."}</span>
+            <span style={{ fontSize: 10.5, color: "var(--faint)" }}>{entities.length ? "The legal entity this P.O will be invoiced to. For central / Head Office spend, use Miniso UK — Limited." : "No entities set up yet (Finance Data — Entities)."}</span>
           </label>
           <label style={field}><span style={labelSt}>Business project</span>
             <select style={inputSt} value={f.business_project_id} onChange={set("business_project_id")}>
