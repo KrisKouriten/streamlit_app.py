@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MISC_CATEGORIES, miscTotals } from "../../../lib/misc-spend-rules";
+import { MISC_CATEGORY_GROUPS, miscTotals } from "../../../lib/misc-spend-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
 
@@ -132,7 +132,11 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
           <label style={field}><span style={labelSt}>Category *</span>
             <select style={inputSt} value={f.category} onChange={(e) => setF((s) => ({ ...s, category: e.target.value }))}>
               <option value="">— choose category —</option>
-              {MISC_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {MISC_CATEGORY_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                </optgroup>
+              ))}
             </select>
           </label>
           <label style={field}><span style={labelSt}>Amount (£) *</span><MoneyInput style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} placeholder="e.g. 45.00" /></label>
