@@ -2,13 +2,32 @@ import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier } from "../../../lib/procurement";
 import { setFxRate } from "../../../lib/fx";
+import { getApproverEmails } from "../../../lib/dept-budget";
+import { resolveBaseUrl } from "../../../lib/invite-rules";
+import { notifyMerchAwaitingHod, notifyMerchHodApproved } from "../../../lib/workflow-notify";
 
 // Role gates per action. Raising / editing needs procurement management; the
-// Head of Department (EXEC) signs off first, then Finance; only Finance can
-// delete (once the Head of Department has approved — enforced in the data layer).
+// Head of Department (EXEC, or the Merchandising Department sign-off approver)
+// signs off first, then Finance; only Finance can delete (once the Head of
+// Department has approved — enforced in the data layer).
 const MANAGE = ["ADMIN", "FINANCE", "OPS"];
-const HOD = ["ADMIN", "EXEC"];
 const FIN = ["ADMIN", "FINANCE"];
+const SOURCE_LABEL = { MINISO: "Miniso HQ", LOCAL: "Local" };
+
+function baseUrlOf(request) {
+  const host = request.headers.get("host");
+  const origin = request.headers.get("origin") || (host ? `${request.headers.get("x-forwarded-proto") || "https"}://${host}` : null);
+  return resolveBaseUrl({ origin, env: process.env });
+}
+
+// The procurement head-of-department sign-off is the Merchandising Department
+// sign-off approver (e.g. Becky), or a Head/admin role.
+async function isMerchApprover(session) {
+  if (hasRole(session, "ADMIN")) return true;
+  const emails = (await getApproverEmails("Merchandising").catch(() => [])).map((e) => (e || "").toLowerCase());
+  return emails.includes((session.email || "").toLowerCase());
+}
+
 
 export async function POST(request) {
   const session = await getSession();
@@ -26,8 +45,17 @@ export async function POST(request) {
       }
       case "purchase": {
         const d = deny(MANAGE, "Procurement entry requires ADMIN, FINANCE or OPS"); if (d) return d;
-        await addProcurementPurchase(body, actor);
-        return NextResponse.json({ ok: true });
+        const res = await addProcurementPurchase(body, actor);
+        // Ping the head of department (the Merchandising Department sign-off, e.g.
+        // Becky) that an order is waiting for sign-off (best-effort — never blocks).
+        try {
+          const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
+          await notifyMerchAwaitingHod({
+            request: { purchaseId: res.purchaseId, submitter: actor, channel: SOURCE_LABEL[body.source] || body.source, supplier: body.supplier, value: body.amount_gbp },
+            hodEmails, baseUrl: baseUrlOf(request),
+          });
+        } catch (e) { console.error("procurement raise notify failed:", e.message); }
+        return NextResponse.json(res);
       }
       case "budget": {
         const d = deny(MANAGE, "Procurement entry requires ADMIN, FINANCE or OPS"); if (d) return d;
@@ -39,8 +67,20 @@ export async function POST(request) {
         return NextResponse.json({ ok: true });
       }
       case "hod-approve": {
-        const d = deny(HOD, "Head-of-Department approval requires the EXEC (head of department) or ADMIN role"); if (d) return d;
-        return NextResponse.json(await hodApproveProcurement(body.id, actor));
+        if (!hasRole(session, "EXEC") && !(await isMerchApprover(session))) {
+          return NextResponse.json({ error: "Head-of-Department sign-off requires the Merchandising Department sign-off, the EXEC role, or ADMIN" }, { status: 403 });
+        }
+        const res = await hodApproveProcurement(body.id, actor);
+        // Now it's the head of department's approval → tell Finance it's ready to
+        // take forward on Procurement Summary + Close (best-effort).
+        try {
+          const o = res.order || {};
+          await notifyMerchHodApproved({
+            request: { purchaseId: o.purchase_id, submitter: o.created_by, approver: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
+            baseUrl: baseUrlOf(request),
+          });
+        } catch (e) { console.error("procurement hod-approve notify failed:", e.message); }
+        return NextResponse.json(res);
       }
       case "finance-approve": {
         const d = deny(FIN, "Finance approval requires the FINANCE or ADMIN role"); if (d) return d;
