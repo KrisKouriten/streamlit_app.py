@@ -241,7 +241,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
-  const { isHod, isFinance } = roles || {};
+  const { isHod, isFinance, isMerchApprover } = roles || {};
   if (!orders.length) return null;
 
   async function act(id, action, extra) {
@@ -301,7 +301,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
                   <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
                     {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
-                        {isHod && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
+                        {(isHod || isMerchApprover) && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => openEdit(o)}>Edit</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
