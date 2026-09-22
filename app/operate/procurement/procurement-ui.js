@@ -302,6 +302,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
                     {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
                         {(isHod || isMerchApprover) && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
+                        {canManage && o.approval_status === "PENDING" && <button disabled={busy} style={btn} title="Re-send the head-of-department sign-off request" onClick={() => act(o.purchase_id, "resubmit")}>Resubmit</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => openEdit(o)}>Edit</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}

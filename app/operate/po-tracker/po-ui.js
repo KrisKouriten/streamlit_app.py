@@ -603,6 +603,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                         )}
                         {p.status === "PENDING_SIGNOFF" && !canApprove(p) && (
                           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department-head sign-off
+                            <button style={{ ...ghost, marginLeft: 6 }} title="Re-send the sign-off request to the approver(s)" onClick={() => poOp(p.po_id, "resubmit-signoff")}>Resubmit</button>
                             <button style={{ ...ghost, marginLeft: 6 }} onClick={() => poOp(p.po_id, "return")}>Return to draft</button>
                           </span>
                         )}
