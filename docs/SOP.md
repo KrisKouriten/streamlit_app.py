@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.5 · 15/09/2026 · Owner: Finance (Miniso UK)**
+**Version 1.6 · 22/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -1211,19 +1211,33 @@ registry, agent registry) and can be changed there without code.
   **in ascending order**; all are safe to re-run. A screen whose table isn't present
   yet renders a "run migration NNN" setup card rather than crashing — so a missed
   migration is a prompt, not an outage.
-- **Current migrations (001–037, with 024 and 032 intentionally unused):** 001 roles
-  & audit · 002 navigation & definitions · 003 workflow · 004 agents · 005 action
-  centre · 006 Xero finance feed · 007 entities · 008 intercompany · 009 budget &
-  forecast · 010 dashboards section · 011 restore plan section · 012
-  management-accounts close · 013 forecast inputs & scenarios · **014 Joiin feed
-  metadata** · 015 month-end task owner · 016 procurement · 017 SKU analysis · 018
-  forecast store→entity · 019 management actuals · **020 Joiin consolidated P&L
-  detail** · **021 Joiin per-entity P&L** · 022 P&L formats · **023 Joiin board pack**
-  · 025 SKU analysis detail · 026 business projects · 027 sessions · 028 forecast
-  versions · 029 MFA · 030 login throttle · **031 Joiin entity map** · 033 trading
-  commentary agent · 034 notifications · 035 close orchestration · **036 Joiin
-  balance sheet** · 037 report definitions. *(The Joiin feed tables — 014, 020, 021,
-  023, 036 — are the ones the board deck and three-statement model depend on.)*
+- **Current migrations: 001–113 (111 files; 024 and 032 intentionally unused).**
+  **`db/migrations/` is the source of truth, not this document.** An earlier
+  version of this section listed only 001–037, which was wrong by seventy-odd
+  files — and a migration that this document never mentions is one nobody thinks
+  to apply. That is not hypothetical: **077 (treasury) went unapplied on the live
+  database**, so the bank trade facility table did not exist, and because the app
+  reads that feed best-effort the Trade-pay spend column simply showed a dash for
+  months rather than an error. Before provisioning or auditing an environment,
+  list the directory and apply everything in numeric order — do not work from a
+  list in prose.
+- **To check what is actually applied:** **GOVERN → Data Quality**
+  (`/govern/data-quality`) compares the tables each feature depends on against
+  what exists, and names the migration that creates any that are missing. Run it
+  after provisioning, after a restore, and whenever a figure reads empty and you
+  are not certain why.
+- **The load-bearing groups** (know these; read the directory for the rest):
+  **001–015** platform foundations — roles & audit, navigation, workflow, agents,
+  entities, intercompany, budget & forecast, close. **014, 020, 021, 023, 036**
+  the Joiin consolidation feed — the board deck and three-statement model depend
+  on these. **046–054, 062, 098–101, 107–111** the Purchase Order chain — requests,
+  finance close, challenge routing, multiple invoices, invoice status.
+  **016, 073–076, 082–084, 090–094, 113** the Procurement chain — purchases,
+  finance close, LC settlement and drawdown, approval, supplier master, FX
+  reporting basis, and how a paid purchase settled. **077** Treasury — the bank
+  trade facility that Trade-pay spend is computed from. **085** FX rates.
+  **049–051, 059–060, 102** Departmental Budgets. **065–067** Merchandising OTB.
+  **055–061** the planning engine. **103, 112** Miscellaneous and Card spend.
 
 ---
 
