@@ -8,6 +8,7 @@ import {
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
 } from "../../../lib/procurement-close-rules";
+import { requestsVsBudget } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -36,6 +37,13 @@ const curMoney = (v, r) => {
 // order, else the GBP value).
 const orderCurTotal = (r) => (isForeignRow(r) && r.amount_ccy != null ? Number(r.amount_ccy) : Number(r.amount_gbp));
 const inputSt = { fontSize: 13, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
+// 'YYYY-MM' → "Sep 2026". Falls back to the raw value rather than rendering an
+// Invalid Date if a month ever arrives in another shape.
+const ymLabel = (ym) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ""));
+  if (!m) return ym || "—";
+  return new Date(Date.UTC(+m[1], +m[2] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+};
 const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
@@ -54,7 +62,66 @@ const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_ra
 // they arrive in Miniso UK's possession.
 const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
 
-export default function ProcurementSummaryUI({ initialRows = [], costingRate = null }) {
+// Finance control: what the purchases still awaiting a decision would do to the
+// budget of the month each falls due in. Here "awaiting" is the finance
+// lifecycle — pending or challenged, i.e. not yet approved or closed — which is
+// exactly this desk's queue. Shown per source, and only for months that actually
+// have something pending.
+const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
+const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
+function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
+  const sections = ["MINISO", "LOCAL"].map((src) => ({
+    src,
+    pipeline: requestsVsBudget(rows.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE),
+  })).filter((s) => s.pipeline.length);
+  if (!sections.length) return null;
+  const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
+  const thR = { ...th, textAlign: "right" };
+  const td = { padding: "9px 12px", borderBottom: "1px solid var(--line)", fontSize: 13 };
+  const tdR = { ...td, textAlign: "right", fontFamily: "var(--mono)" };
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Awaiting your decision vs budget</div>
+      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
+        What the purchases still pending or challenged would commit against each month&rsquo;s procurement budget, if they were all approved. Budgets are set on the Procurement Requests <strong>Budgets</strong> tab.
+      </div>
+      {sections.map(({ src, pipeline }) => (
+        <div key={src} style={{ marginBottom: 14 }}>
+          <div style={{ ...labelSt, marginBottom: 7 }}>{SRC_LABEL[src]}</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>
+              <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
+              <th style={thR}>Settled</th><th style={thR}>Would commit</th><th style={thR}>Budget</th>
+              <th style={thR}>Headroom</th><th style={{ ...th, textAlign: "center" }}>Status</th>
+            </tr></thead>
+            <tbody>
+              {pipeline.map((m) => (
+                <tr key={m.ym}>
+                  <td style={td}>{ymLabel(m.ym)}</td>
+                  <td style={tdR}>{m.awaitingCount}</td>
+                  <td style={tdR}>{money(m.awaiting)}</td>
+                  <td style={tdR}>{m.settled ? money(m.settled) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>{money(m.wouldCommit)}</td>
+                  <td style={tdR}>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</td>
+                  <td style={{ ...tdR, color: m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)" }}>
+                    {m.noBudget ? "—" : money(Math.abs(m.headroom))}
+                  </td>
+                  <td style={{ ...td, textAlign: "center" }}>
+                    {m.noBudget
+                      ? <span style={{ color: "var(--faint)", fontSize: 12 }}>no budget</span>
+                      : <Badge tone={m.over ? "red" : "green"}>{m.over ? (m.alreadyOver ? "Already over" : "Would go over") : "Within"}</Badge>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {} }) {
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
   const [source, setSource] = useState("");
@@ -252,6 +319,9 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
         <Stat label="Closed" value={stats.closed} />
         <Stat label="Committed £" value={money(stats.committed, { compact: true })} />
       </StatRow>
+
+      {/* ---- Budget pressure from the queue below ---- */}
+      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} />
 
       {/* ---- Messages ---- */}
       {error && <div style={{ color: "var(--red)", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}

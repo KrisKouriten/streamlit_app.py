@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
-  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact } from "../lib/procurement-rules.js";
+  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -275,4 +275,87 @@ test("budgetImpact: a month with nothing in it yet, and not enough form to judge
   // A blank amount is a valid zero-impact read, not a crash.
   assert.equal(budgetImpact(IMPACT_MONTHS, "2026-09", "").newCommitted, 40000);
   assert.equal(budgetImpact(undefined, "2026-09", 100).committed, 0);
+});
+
+// ---- Finance control view: requests still to decide, vs budgets set ----
+
+const PIPE_MONTHS = [
+  { ym: "2026-09", committed: 50000, budget: 60000 },
+  { ym: "2026-10", committed: 30000, budget: null },
+];
+// Both screens run a different lifecycle over the same table, so the predicate
+// is the caller's — these mirror the two real ones.
+const awaitingApproval = (o) => o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED";
+const awaitingFinance = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
+
+test("requestsVsBudget: pending requests measured against the month's budget", () => {
+  const rows = [
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 15000, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 9000, approval_status: "HOD_APPROVED" },
+  ];
+  const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
+  assert.equal(m.ym, "2026-09");          // 31 Jul + 60d
+  assert.equal(m.awaitingCount, 2);
+  assert.equal(m.awaiting, 24000);
+  assert.equal(m.settled, 40000);
+  assert.equal(m.wouldCommit, 64000);
+  assert.equal(m.budget, 60000);
+  assert.equal(m.headroom, -4000);
+  assert.equal(m.over, true);
+  assert.equal(m.alreadyOver, false);      // the 40k approved was within budget
+});
+
+test("requestsVsBudget: only months with something pending are returned", () => {
+  const rows = [
+    // Nothing pending here — settled only, so it is not a control problem.
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    // Pending, lands in a different month (31 Aug + 30d = Sep... use 0 terms).
+    { source: "LOCAL", order_ym: "2026-10", terms_days: 0, amount_gbp: 5000, approval_status: "PENDING" },
+  ];
+  const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
+  assert.deepEqual(out.map((m) => m.ym), ["2026-10"]);
+  assert.equal(out[0].settled, 0);
+  assert.equal(out[0].noBudget, true);     // 2026-10 has no budget set
+  assert.equal(out[0].headroom, null);
+  assert.equal(out[0].over, false);
+});
+
+test("requestsVsBudget: a month already over before the pending requests", () => {
+  const rows = [
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 70000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+  ];
+  const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
+  assert.equal(m.alreadyOver, true);
+  assert.equal(m.over, true);
+  assert.equal(m.headroom, -11000);
+});
+
+test("requestsVsBudget: the finance lifecycle reads the same way", () => {
+  const rows = [
+    { source: "MINISO", order_ym: "2026-07", terms_days: 60, amount_gbp: 20000, finance_status: "CLOSED" },
+    { source: "MINISO", order_ym: "2026-07", terms_days: 60, amount_gbp: 10000, finance_status: "CHALLENGED" },
+    { source: "MINISO", order_ym: "2026-07", terms_days: 60, amount_gbp: 5000, finance_status: "PENDING" },
+  ];
+  const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingFinance);
+  assert.equal(m.awaitingCount, 2);        // challenged + pending
+  assert.equal(m.awaiting, 15000);
+  assert.equal(m.settled, 20000);          // closed
+  assert.equal(m.wouldCommit, 35000);
+  assert.equal(m.over, false);             // within the 60k
+  assert.equal(m.headroom, 25000);
+});
+
+test("requestsVsBudget: rows with no month to land in are skipped, empty input is safe", () => {
+  const rows = [
+    // A merch request carries no order month — nothing to bucket it by.
+    { source: "LOCAL", channel_code: "RETAIL", amount_gbp: 9999, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+  ];
+  const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
+  assert.deepEqual(out.map((m) => m.ym), ["2026-09"]);
+  assert.equal(out[0].awaiting, 1000);
+  assert.deepEqual(requestsVsBudget(), []);
+  assert.deepEqual(requestsVsBudget([], []), []);
 });
