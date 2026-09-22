@@ -218,20 +218,30 @@ function BudgetImport({ onErr, onDone }) {
 const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
 const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
 function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
+  const [all, setAll] = useState(false);
   const sections = ["MINISO", "LOCAL"].map((src) => ({
     src,
-    pipeline: requestsVsBudget(rows.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE),
+    pipeline: requestsVsBudget(rows.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
   })).filter((s) => s.pipeline.length);
-  if (!sections.length) return null;
+  if (!sections.length && !all) return null;
   const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
   const thR = { ...th, textAlign: "right" };
   const td = { padding: "9px 12px", borderBottom: "1px solid var(--line)", fontSize: 13 };
   const tdR = { ...td, textAlign: "right", fontFamily: "var(--mono)" };
   return (
     <div style={card}>
-      <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Awaiting your decision vs budget</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 3 }}>
+        <div style={{ fontSize: 14, fontWeight: 650 }}>Awaiting your decision vs budget</div>
+        <button style={{ ...ghost, marginLeft: "auto" }} onClick={() => setAll((x) => !x)}>
+          {all ? "Show exceptions only" : "Show all months"}
+        </button>
+      </div>
       <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
-        What the purchases still pending or challenged would commit against each month&rsquo;s procurement budget, if they were all approved. Budgets are set on the <strong>Budgets</strong> tab above.
+        What the purchases still pending or challenged would commit against each month&rsquo;s procurement budget, if they were all approved.{" "}
+        {all
+          ? <>Showing every month with a budget or activity.</>
+          : <>Showing months with something awaiting a decision, plus any month already over on what is committed or spent.</>}{" "}
+        Budgets are set on the <strong>Budgets</strong> tab above.
       </div>
       {sections.map(({ src, pipeline }) => (
         <div key={src} style={{ marginBottom: 14 }}>
@@ -239,16 +249,18 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
               <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
-              <th style={thR}>Settled</th><th style={thR}>Would commit</th><th style={thR}>Budget</th>
+              <th style={thR}>Committed</th><th style={thR}>Spent</th>
+              <th style={thR}>Would commit</th><th style={thR}>Budget</th>
               <th style={thR}>Headroom</th><th style={{ ...th, textAlign: "center" }}>Status</th>
             </tr></thead>
             <tbody>
               {pipeline.map((m) => (
                 <tr key={m.ym}>
                   <td style={td}>{ymLabel(m.ym)}</td>
-                  <td style={tdR}>{m.awaitingCount}</td>
-                  <td style={tdR}>{money(m.awaiting)}</td>
-                  <td style={tdR}>{m.settled ? money(m.settled) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>{m.awaitingCount || <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>{m.awaiting ? money(m.awaiting) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={{ ...tdR, color: m.overBudget ? "var(--red)" : undefined }}>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={{ ...tdR, color: m.overSpent ? "var(--red)" : undefined }}>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
                   <td style={tdR}>{money(m.wouldCommit)}</td>
                   <td style={tdR}>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</td>
                   <td style={{ ...tdR, color: m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)" }}>
@@ -257,7 +269,12 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
                   <td style={{ ...td, textAlign: "center" }}>
                     {m.noBudget
                       ? <span style={{ color: "var(--faint)", fontSize: 12 }}>no budget</span>
-                      : <Badge tone={m.over ? "red" : "green"}>{m.over ? (m.alreadyOver ? "Already over" : "Would go over") : "Within"}</Badge>}
+                      : <Badge tone={m.overBudget || m.overSpent || m.over ? "red" : "green"}>
+                          {m.overSpent ? "Overspent"
+                            : m.overBudget ? "Over on commitment"
+                            : m.over ? (m.alreadyOver ? "Already over" : "Would go over")
+                            : "Within"}
+                        </Badge>}
                   </td>
                 </tr>
               ))}
