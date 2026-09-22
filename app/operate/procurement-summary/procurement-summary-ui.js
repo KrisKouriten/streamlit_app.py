@@ -3,6 +3,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
+  PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
@@ -123,6 +124,13 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
 
   const saveInvoice = (r) => op(r.purchase_id, { op: "set-invoice", invoice_number: inv[r.purchase_id]?.number || null, invoice_amount: inv[r.purchase_id]?.amount || null }, "Invoice saved.");
   const setPayment = (r, payment_status) => op(r.purchase_id, { op: "set-payment-status", payment_status }, `Marked ${paymentStatusOf({ payment_status }).label.toLowerCase()}.`);
+  // How a paid purchase settled — Cash or Trade pay. Trade pay is reported as
+  // spend from the facility upload; cash is reported on top of it.
+  const setPaymentMethod = (r, payment_method) => op(
+    r.purchase_id,
+    { op: "set-payment-status", payment_status: r.payment_status, payment_method },
+    payment_method ? `Paid via ${(paymentMethodOf({ payment_method })?.label || payment_method).toLowerCase()}.` : "Payment method cleared.",
+  );
   const closeRow = (r) => {
     if (!window.confirm(`Close ${procRef(r)}? It will be reported as committed procurement spend.`)) return;
     op(r.purchase_id, { op: "close", invoice_number: inv[r.purchase_id]?.number || null, invoice_amount: inv[r.purchase_id]?.amount || null }, "Closed — now committed spend.");
@@ -343,9 +351,19 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                 <MoneyInput style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
                                 {financeActionError("invoice", r) === null && <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
                                 {financeActionError("payment", r) === null && (
-                                  <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
-                                    {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-                                  </select>
+                                  <>
+                                    <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
+                                      {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                                    </select>
+                                    {r.payment_status === "PAID" && (
+                                      <select style={{ ...inputSt, width: 118 }} value={r.payment_method || ""} disabled={isBusy}
+                                        title="How this was paid — trade pay is reported as spend from the facility upload; cash is reported on top of it"
+                                        onChange={(e) => setPaymentMethod(r, e.target.value)}>
+                                        <option value="">Paid via…</option>
+                                        {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
+                                      </select>
+                                    )}
+                                  </>
                                 )}
                               </>
                             )}
