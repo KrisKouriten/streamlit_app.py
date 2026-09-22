@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
@@ -9,7 +9,7 @@ import {
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
 } from "../../../lib/procurement-close-rules";
-import { requestsVsBudget } from "../../../lib/procurement-rules";
+import { requestsVsBudget, BUDGET_CSV_TEMPLATE } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -162,10 +162,50 @@ function BudgetsPanel({ months = {}, onSaved }) {
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => setExtraMonths((x) => x + 12)} style={ghost}>+ Add 12 more months</button>
+          <BudgetImport onErr={setErr} onDone={onSaved} />
         </div>
       </div>
+    </>
+  );
+}
+
+
+// Load a whole budget forecast from the spreadsheet Finance already keep, rather
+// than keying 50-odd cells by hand. Months across the top, a row per source.
+// Upserts, so a file covering part of the horizon tops it up and leaves the rest
+// of the forecast alone.
+function BudgetImport({ onErr, onDone }) {
+  const fileRef = useRef(null);
+  const [state, setState] = useState("");
+  async function onFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    onErr?.(""); setState("Loading\u2026");
+    try {
+      const csv = await f.text();
+      const res = await fetch("/api/procurement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "budget-import", csv }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setState(""); onErr?.(j.error || "Could not read that file"); return; }
+      // Say exactly what landed and what didn't — a silent partial load is how a
+      // forecast quietly ends up with holes in it.
+      setState(`Loaded ${j.loaded} budget${j.loaded === 1 ? "" : "s"}${j.from ? ` (${j.from} to ${j.to})` : ""}${j.errors?.length ? ` \u00b7 ${j.errors.length} skipped` : ""}.`);
+      if (j.errors?.length) onErr?.(`Skipped: ${j.errors.slice(0, 4).map((x) => (x.row ? `row ${x.row}: ` : "") + x.reason).join("; ")}${j.errors.length > 4 ? "\u2026" : ""}`);
+      onDone?.();
+    } catch (x) { setState(""); onErr?.(x.message); }
+    finally { if (fileRef.current) fileRef.current.value = ""; }
+  }
+  return (
+    <>
+      <button style={ghost} onClick={() => fileRef.current?.click()}>Upload forecast (CSV)</button>
+      <a style={{ ...ghost, textDecoration: "none" }} href={`data:text/csv;charset=utf-8,${encodeURIComponent(BUDGET_CSV_TEMPLATE)}`} download="procurement-budget-template.csv">Template</a>
+      <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Months across the top, a row for Miniso and a row for Local.</span>
+      {state && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{state}</span>}
+      <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: "none" }} />
     </>
   );
 }
