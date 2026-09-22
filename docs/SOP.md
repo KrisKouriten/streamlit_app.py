@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.6 · 22/09/2026 · Owner: Finance (Miniso UK)**
+**Version 1.7 · 22/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -488,6 +488,24 @@ Two behaviours to rely on: a **blank cell is skipped, not saved as zero** (a gap
 than replacing** — a file covering part of the horizon tops the forecast up instead of
 deleting the months it did not mention. Anything unreadable is reported back, never
 dropped, and the file lands in **one transaction**.
+
+**Re-phase a forecast** slides a whole source along the calendar when the shape of the
+budget is right but the timing has moved — goods slipping a quarter, a facility drawing
+later than planned. Pick the source and the number of months (negative moves it earlier)
+and the preview shows, per month, the **budget now**, the **budget after the shift** and
+what that month actually carries in **committed + spent**. Nothing is written until
+**Apply shift**.
+
+Read the preview for one thing above all: months the shift would leave carrying real
+commitment or settled spend with **no budget**. Those are highlighted and counted, because
+they read as *over* on every screen — a forecast moved too far is worse than one left
+alone. The **Suggested** button fills in the shift that lands the first budget month on
+the first month anything actually happens.
+
+The move is **lossless**: figures are carried across untouched and no month is created or
+destroyed, so **shifting back by the same number undoes it exactly** (provided no budget
+was edited in between). It runs in one transaction and is recorded in the audit log as
+`procurement.budget.shift` with the shift and the before/after month range.
 
 ### 5.10 Intercompany (OPERATE)
 A three-ledger tracker — **Bank Cash**, **Inventory & Recharges**, **Disbursements** —

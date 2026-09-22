@@ -9,7 +9,7 @@ import {
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
 } from "../../../lib/procurement-close-rules";
-import { requestsVsBudget, BUDGET_CSV_TEMPLATE } from "../../../lib/procurement-rules";
+import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -167,7 +167,133 @@ function BudgetsPanel({ months = {}, onSaved }) {
           <BudgetImport onErr={setErr} onDone={onSaved} />
         </div>
       </div>
+
+      <BudgetRephase months={months} onErr={setErr} onDone={onSaved} />
     </>
+  );
+}
+
+// Slide a whole forecast along the calendar. Built because a forecast whose
+// shape is right but whose phasing is out took a hand-written SQL script to
+// correct, which nobody could preview and only one person could run.
+//
+// The preview is the point. It puts the budget as it stands, the budget as the
+// shift would leave it, and what each month actually carries side by side, and
+// names the months the shift would strand — real commitment or settled spend
+// with no budget left to measure it against. Those months read as over on every
+// screen, so seeing them before applying is the difference between re-phasing a
+// forecast and quietly breaking it.
+function BudgetRephase({ months = {}, onErr, onDone }) {
+  const [source, setSource] = useState("MINISO");
+  const [shift, setShift] = useState(6);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState("");
+
+  const n = Number(shift);
+  const invalid = budgetShiftError(n);
+  const plan = useMemo(() => shiftBudgetPlan(months[source] || [], n || 0), [months, source, n]);
+  const rows = plan.rows.filter((r) => r.budgetNow != null || r.budgetAfter != null || r.activity > 0);
+
+  async function apply() {
+    if (invalid) return;
+    const dir = n > 0 ? "later" : "earlier";
+    const warn = plan.stranded.length
+      ? `\n\nWARNING: ${plan.stranded.length} month${plan.stranded.length === 1 ? "" : "s"} with activity would be left with no budget (${plan.stranded.map((r) => ymLabel(r.ym)).join(", ")}).`
+      : "";
+    if (!window.confirm(`Move all ${plan.moved} ${SRC_LABEL[source]} budget months ${Math.abs(n)} month${Math.abs(n) === 1 ? "" : "s"} ${dir}?${warn}\n\nThis can be undone by shifting back the other way.`)) return;
+    onErr?.(""); setDone(""); setBusy(true);
+    try {
+      const res = await fetch("/api/procurement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "budget-shift", source, shift: n }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { onErr?.(j.error || "Could not move the budget"); return; }
+      setDone(`Moved ${j.months} months — now ${ymLabel(j.now?.from)} to ${ymLabel(j.now?.to)}. Shift by ${-n} to undo.`);
+      onDone?.();
+    } catch (e) { onErr?.(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
+  const thR = { ...th, textAlign: "right" };
+  const td = { padding: "7px 12px", borderBottom: "1px solid var(--line)", fontSize: 13 };
+  const tdR = { ...td, textAlign: "right", fontFamily: "var(--mono)" };
+
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Re-phase a forecast</div>
+      <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
+        Move every budget month for one source along the calendar, keeping the figures as they are. Nothing is written until you apply, and shifting back by the same number undoes it.
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14 }}>
+        <Field label="Source">
+          <select value={source} onChange={(e) => { setSource(e.target.value); setDone(""); }} style={inputSt}>
+            {["MINISO", "LOCAL"].map((s) => <option key={s} value={s}>{SRC_LABEL[s]}</option>)}
+          </select>
+        </Field>
+        <Field label="Shift (months)">
+          <input type="number" value={shift} step={1} onChange={(e) => { setShift(e.target.value); setDone(""); }}
+            className="fos-num" style={{ ...inputSt, width: 90, textAlign: "right" }} />
+        </Field>
+        <button onClick={apply} disabled={busy || !!invalid || !plan.moved} style={{ ...btn("var(--accent)"), opacity: busy || invalid || !plan.moved ? 0.5 : 1 }}>
+          {busy ? "Moving…" : "Apply shift"}
+        </button>
+        {plan.suggested != null && plan.suggested !== n && (
+          <button onClick={() => { setShift(plan.suggested); setDone(""); }} style={ghost}>
+            Suggested: {plan.suggested > 0 ? "+" : ""}{plan.suggested}
+          </button>
+        )}
+      </div>
+
+      {invalid && <div style={{ color: "var(--amber)", fontSize: 12.5, marginBottom: 12 }}>{invalid}</div>}
+      {done && <div style={{ color: "var(--green)", fontSize: 12.5, marginBottom: 12 }}>{done}</div>}
+
+      {!plan.moved ? (
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No {SRC_LABEL[source]} budget is set, so there is nothing to move.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10, lineHeight: 1.55 }}>
+            {plan.moved} months, {money(plan.total)} in total, moving from {ymLabel(plan.from)}–{ymLabel(plan.to)} to <strong style={{ color: "var(--ink)" }}>{ymLabel(plan.shiftedFrom)}–{ymLabel(plan.shiftedTo)}</strong>.
+            {plan.firstActivity && <> Activity starts {ymLabel(plan.firstActivity)}.</>}
+          </div>
+
+          {plan.stranded.length > 0 && (
+            <div style={{ border: "1px solid var(--amber)", borderRadius: 9, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, lineHeight: 1.55 }}>
+              <strong style={{ color: "var(--amber)" }}>This shift goes too far.</strong>{" "}
+              {plan.stranded.length} month{plan.stranded.length === 1 ? "" : "s"} carrying {money(plan.strandedActivity)} of commitment and spend would be left with no budget, so {plan.stranded.length === 1 ? "it" : "they"} would read as over.
+              {plan.suggested != null && <> A shift of {plan.suggested > 0 ? "+" : ""}{plan.suggested} lands the budget on the first month anything happens.</>}
+            </div>
+          )}
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr>
+                <th style={th}>Month</th>
+                <th style={thR}>Budget now</th>
+                <th style={thR}>After shift</th>
+                <th style={thR}>Committed + spent</th>
+                <th style={th}> </th>
+              </tr></thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.ym} style={r.stranded ? { background: "color-mix(in srgb, var(--amber) 8%, transparent)" } : undefined}>
+                    <td style={td}>{ymLabel(r.ym)}</td>
+                    <td style={{ ...tdR, color: "var(--muted)" }}>{r.budgetNow == null ? "—" : money(r.budgetNow)}</td>
+                    <td style={{ ...tdR, fontWeight: r.changed ? 650 : 400 }}>{r.budgetAfter == null ? "—" : money(r.budgetAfter)}</td>
+                    <td style={tdR}>{r.activity ? money(r.activity) : "—"}</td>
+                    <td style={{ ...td, fontSize: 11.5 }}>
+                      {r.stranded ? <Badge tone="amber">No budget</Badge> : r.idle ? <span style={{ color: "var(--faint)" }}>no activity</span> : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

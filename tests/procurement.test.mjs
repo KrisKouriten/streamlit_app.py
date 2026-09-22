@@ -715,3 +715,117 @@ test("tradeFacilitySplit flags terms beyond the facility term rather than clampi
   // But an explicit zero is a real answer: no terms, facility carries all of it.
   assert.equal(tradeFacilitySplit(0).facilityDays, 180);
 });
+
+// ---- Re-phasing a budget forecast ----
+import { shiftBudgetPlan, budgetShiftError, ymShift, ymDiff, MAX_BUDGET_SHIFT } from "../lib/procurement-rules.js";
+
+test("ymShift and ymDiff cross year boundaries both ways", () => {
+  assert.equal(ymShift("2026-10", 6), "2027-04");
+  assert.equal(ymShift("2027-04", -6), "2026-10");
+  assert.equal(ymShift("2026-12", 1), "2027-01");
+  assert.equal(ymShift("2026-01", -1), "2025-12");
+  assert.equal(ymShift("2026-07", 0), "2026-07");
+  assert.equal(ymShift("", 6), null);
+  assert.equal(ymShift("nonsense", 6), null);
+  assert.equal(ymDiff("2026-07", "2027-01"), 6);
+  assert.equal(ymDiff("2027-01", "2026-07"), -6);
+  assert.equal(ymDiff("2026-07", "2026-07"), 0);
+  assert.equal(ymDiff("2026-07", ""), null);
+});
+
+test("budgetShiftError refuses what would silently do nothing or run away", () => {
+  assert.equal(budgetShiftError(6), null);
+  assert.equal(budgetShiftError(-6), null);
+  assert.match(budgetShiftError(0), /zero/);
+  assert.match(budgetShiftError(1.5), /whole number/);
+  assert.match(budgetShiftError("abc"), /whole number/);
+  assert.match(budgetShiftError(MAX_BUDGET_SHIFT + 1), /within 36/);
+  assert.equal(budgetShiftError(MAX_BUDGET_SHIFT), null);
+});
+
+test("shiftBudgetPlan moves every budget and leaves the figures alone", () => {
+  const months = [
+    { ym: "2026-07", budget: 700000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-08", budget: 800000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+  ];
+  const p = shiftBudgetPlan(months, 6);
+  assert.equal(p.moved, 2);
+  assert.equal(p.total, 1500000);
+  assert.equal(p.from, "2026-07");
+  assert.equal(p.shiftedFrom, "2027-01");
+  assert.equal(p.shiftedTo, "2027-02");
+  const jan = p.rows.find((r) => r.ym === "2027-01");
+  assert.equal(jan.budgetAfter, 700000);
+  assert.equal(jan.budgetNow, null);
+  const jul = p.rows.find((r) => r.ym === "2026-07");
+  assert.equal(jul.budgetNow, 700000);
+  assert.equal(jul.budgetAfter, null);
+});
+
+test("shiftBudgetPlan names the months a shift would strand", () => {
+  // The exact case that stopped the blanket +6: budget starts Jul 2026, but the
+  // facility drawings fall due from Oct 2026. Shifting +6 empties Oct–Dec while
+  // real money is going out of them.
+  const months = [
+    { ym: "2026-07", budget: 700000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-08", budget: 700000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-09", budget: 800000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-10", budget: 1670000, committed: 0, tradeSpent: 218309, cashSpent: 0 },
+    { ym: "2026-11", budget: 1130000, committed: 640000, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-12", budget: 1130000, committed: 640000, tradeSpent: 0, cashSpent: 0 },
+  ];
+  const six = shiftBudgetPlan(months, 6);
+  assert.deepEqual(six.stranded.map((r) => r.ym), ["2026-10", "2026-11", "2026-12"]);
+  assert.equal(six.strandedActivity, 218309 + 640000 + 640000);
+  // Activity starts in October, budget in July — so the shift that lines them up
+  // is +3, and the plan says so rather than leaving it to be worked out by hand.
+  assert.equal(six.firstActivity, "2026-10");
+  assert.equal(six.suggested, 3);
+
+  // And at the suggested shift nothing is stranded.
+  const three = shiftBudgetPlan(months, 3);
+  assert.deepEqual(three.stranded, []);
+  assert.equal(three.strandedActivity, 0);
+  assert.equal(three.shiftedFrom, "2026-10");
+});
+
+test("shiftBudgetPlan counts commitment, trade pay and cash as activity alike", () => {
+  // A month is covered or not on the total cash landing in it, whatever route it
+  // took — otherwise a month settled entirely through the facility looks empty.
+  const only = (field) => shiftBudgetPlan([
+    { ym: "2026-07", budget: 500000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-09", budget: null, [field]: 250000 },
+  ], 6);
+  for (const f of ["committed", "tradeSpent", "cashSpent"]) {
+    const p = only(f);
+    assert.deepEqual(p.stranded.map((r) => r.ym), ["2026-09"], `${f} should count as activity`);
+    assert.equal(p.strandedActivity, 250000);
+  }
+});
+
+test("shiftBudgetPlan is lossless — shifting back restores the original months", () => {
+  const months = [
+    { ym: "2026-07", budget: 700000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2026-08", budget: 800000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+    { ym: "2027-01", budget: 250000, committed: 0, tradeSpent: 0, cashSpent: 0 },
+  ];
+  const fwd = shiftBudgetPlan(months, 6);
+  // Feed the shifted result back in as the new "now" and shift the other way.
+  const asNow = fwd.rows.filter((r) => r.budgetAfter != null)
+    .map((r) => ({ ym: r.ym, budget: r.budgetAfter, committed: 0, tradeSpent: 0, cashSpent: 0 }));
+  const back = shiftBudgetPlan(asNow, -6);
+  const restored = back.rows.filter((r) => r.budgetAfter != null)
+    .map((r) => ({ ym: r.ym, budget: r.budgetAfter }));
+  assert.deepEqual(restored, months.map((m) => ({ ym: m.ym, budget: m.budget })));
+  assert.equal(back.total, fwd.total);
+});
+
+test("shiftBudgetPlan with no budget set reports nothing to move", () => {
+  const p = shiftBudgetPlan([{ ym: "2026-10", budget: null, committed: 500000 }], 6);
+  assert.equal(p.moved, 0);
+  assert.equal(p.total, 0);
+  assert.equal(p.from, null);
+  assert.equal(p.suggested, null);   // nothing to line up
+  // The activity month is still listed, and still flagged as uncovered.
+  assert.deepEqual(p.stranded.map((r) => r.ym), ["2026-10"]);
+});
