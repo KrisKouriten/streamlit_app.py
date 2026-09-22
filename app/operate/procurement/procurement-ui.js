@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget } from "../../../lib/procurement-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -122,6 +122,8 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
+      {canManage && <AwaitingVsBudget rows={orders.filter((o) => o.source === tab)} months={s.months} />}
+
       <Panel title="Suppliers" note="payment terms drive the cash-out month">
         {s.suppliers.length === 0 ? <Empty>No suppliers yet.</Empty> : (
           <Table head={["Supplier", "Orders", "Terms", "Committed"]} align={[0, 1, 1, 1]}>
@@ -157,6 +159,44 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 const FIELD_LAB = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)", marginBottom: 5, display: "block" };
 function Field({ label, children }) {
   return <label style={{ display: "block" }}><span style={FIELD_LAB}>{label}</span>{children}</label>;
+}
+
+// Finance control: the requests still awaiting a decision, in the month each
+// falls due, against the budget set for it. The table above shows what is
+// already committed; this shows the pressure still coming, so Finance can see a
+// month about to be taken over before they approve into it.
+//
+// On this page "awaiting" means the raise lifecycle: raised but not yet through
+// Finance sign-off. Cancelled requests are not pressure and drop out.
+const AWAITING_APPROVAL = (o) => o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED";
+function AwaitingVsBudget({ rows = [], months = [] }) {
+  const live = rows.filter((o) => o.approval_status !== "CANCELLED");
+  const pipeline = requestsVsBudget(live, months, AWAITING_APPROVAL);
+  if (!pipeline.length) return null;
+  return (
+    <Panel title="Awaiting sign-off vs budget" note="what the requests still to be approved would do to each month's budget — approved and pending together">
+      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Headroom", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 0]}>
+        {pipeline.map((m) => (
+          <tr key={m.ym}>
+            <Td>{monthLabel(m.ym)}</Td>
+            <Td r>{m.awaitingCount}</Td>
+            <Td r>{money(m.awaiting)}</Td>
+            <Td r>{m.settled ? money(m.settled) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+            <Td r>{money(m.wouldCommit)}</Td>
+            <Td r>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
+            <Td r tone={m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)"}>
+              {m.noBudget ? "—" : money(Math.abs(m.headroom))}
+            </Td>
+            <Td>
+              {m.noBudget
+                ? <span style={{ color: "var(--faint)" }}>no budget</span>
+                : <Badge tone={m.over ? "red" : "green"}>{m.over ? (m.alreadyOver ? "Already over" : "Would go over") : "Within"}</Badge>}
+            </Td>
+          </tr>
+        ))}
+      </Table>
+    </Panel>
+  );
 }
 
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
