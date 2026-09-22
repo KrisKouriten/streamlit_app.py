@@ -4,7 +4,7 @@ import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
   reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
-  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, unmatchedFacility,
+  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, unmatchedFacility, findFacilityHeaderRow,
 } from "../lib/treasury-rules.js";
 
 test("lcOnFacility matches on the LC reference", () => {
@@ -188,4 +188,56 @@ test("sales stream vocab", () => {
   assert.equal(SALES_STREAMS.length, 3);
   assert.ok(isSalesStream("RETAIL"));
   assert.equal(isSalesStream("NOPE"), false);
+});
+
+// ---- Header-row detection: an HSBC extract rarely starts with its headers ----
+
+test("parseFacilityCsv finds the header row under a title, run date and blank line", () => {
+  const csv = [
+    "HSBC Trade Services - Outstanding Drawings",   // title
+    "Run date: 22/09/2026",                          // stamp
+    "",                                              // blank
+    "Reference,Beneficiary,Cost Driver,Due Date,GBP Amount",
+    "LAIUK1084010,Miniso,Miniso LC's,11/01/2027,142567.29",
+    "WCTUKA083703,Korea Foods Limited,Local Purchase,05/01/2027,13899.30",
+    "************End************",                   // footer, already handled
+  ].join("\n");
+  const { rows, errors } = parseFacilityCsv(csv);
+  assert.deepEqual(errors, []);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].reference, "LAIUK1084010");
+  assert.equal(rows[0].cost_driver, "Miniso LC's");
+  assert.equal(rows[0].due_date, "2027-01-11");
+  assert.equal(rows[0].facility_payment_gbp, 142567.29);
+  assert.equal(rows[1].cost_driver, "Local Purchase");
+});
+
+test("findFacilityHeaderRow picks the line that maps the most columns", () => {
+  assert.equal(findFacilityHeaderRow(["Title", "reference,beneficiary", "LAIUK1,x"]), 1);
+  assert.equal(findFacilityHeaderRow(["reference,beneficiary", "LAIUK1,x"]), 0);
+  // A line without a reference column is never a header, however much else it maps.
+  assert.equal(findFacilityHeaderRow(["beneficiary,status,currency", "Miniso,Disbursed,GBP"]), -1);
+  assert.equal(findFacilityHeaderRow([]), -1);
+});
+
+test("parseFacilityCsv still rejects a file with no reference column anywhere", () => {
+  const csv = ["Some title", "", "Beneficiary,Amount", "Miniso,100"].join("\n");
+  const { rows, errors } = parseFacilityCsv(csv);
+  assert.equal(rows.length, 0);
+  assert.ok(errors[0].includes("reference"));
+});
+
+test("parseFacilityCsv reports the true file line when the header is offset", () => {
+  const csv = [
+    "Trade facility extract",      // line 1
+    "",                            // line 2
+    "reference,loan_amount",       // line 3 — header
+    "LAIUK1,100",                  // line 4
+    ",200",                        // line 5 — missing reference
+    "LAIUK1,300",                  // line 6 — duplicate
+  ].join("\n");
+  const { rows, errors } = parseFacilityCsv(csv);
+  assert.equal(rows.length, 1);
+  assert.ok(errors.some((e) => e.startsWith("Line 5:") && /missing reference/.test(e)));
+  assert.ok(errors.some((e) => e.startsWith("Line 6:") && /duplicate/.test(e)));
 });
