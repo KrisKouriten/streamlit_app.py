@@ -96,18 +96,22 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
       <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
         <Tile label="Committed spend" value={money(s.totalCommitted, { compact: true })} sub="all months" />
+        <Tile label="Spent" value={money(s.totalSpent, { compact: true })} sub="trade pay + cash settled" />
         <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets" />
         <Tile label="Over-budget months" value={s.months.filter((m) => m.overBudget).length} tone={s.months.some((m) => m.overBudget) ? "var(--red)" : "var(--green)"} sub="cash-out basis" />
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
 
-      <Panel title="Monthly cash budget vs committed" note="committed spend lands in the month it falls due (order month-end + supplier terms)">
+      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid">
         {s.months.length === 0 ? <Empty>No purchases or budgets for this section yet.</Empty> : (
-          <Table head={["Cash-out month", "Committed", "Budget", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 0]}>
+          <Table head={["Cash-out month", "Committed", "Trade pay", "Cash", "Spent", "Budget", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
             {s.months.map((m) => (
               <tr key={m.ym}>
                 <Td>{monthLabel(m.ym)}</Td>
                 <Td r>{money(m.committed)}</Td>
+                <Td r>{m.tradeSpent ? money(m.tradeSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+                <Td r>{m.cashSpent ? money(m.cashSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+                <Td r>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
                 <Td r>{m.budget == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
                 <Td r>{m.budget ? <Bar value={m.committed} max={m.budget} over={m.overBudget} /> : null}</Td>
