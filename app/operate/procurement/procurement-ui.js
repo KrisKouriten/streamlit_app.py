@@ -14,7 +14,7 @@ import SupplierPicker from "../supplier-picker";
    here from the OTB workspace) against the approved Open-to-Buy. Exchange rates
    holds the USD→GBP spot / hedged / costing rates Finance converts at. */
 
-const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["MERCH", "Merchandising requests"], ["FX", "Exchange rates"]];
+const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["BUDGETS", "Budgets"], ["MERCH", "Merchandising requests"], ["FX", "Exchange rates"]];
 // Currencies a purchase can be raised in. USD converts to GBP at a chosen rate.
 const CCY_OPTS = [["GBP", "£ GBP"], ["USD", "$ USD"]];
 const CCY_SYMBOL = { GBP: "£", USD: "$" };
@@ -31,6 +31,10 @@ const REQ_ACTIONS = {
 };
 const CSV_TEMPLATE = "Source,Supplier,Category,Order Month,Amount,Terms (days),Status,Reference\nMiniso,MINISO HQ,Core range,2026-07,420000,60,Committed,PO-1\nLocal,Design360,Fixtures,2026-07,42000,30,Committed,PO-2\n";
 const monthLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }); };
+// Month arithmetic on "YYYY-MM" strings (they sort lexically, so comparisons work).
+const thisYm = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+const ymAdd = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+const ymRange = (start, end) => { const out = []; let c = start; for (let i = 0; c <= end && i < 600; i++) { out.push(c); c = ymAdd(c, 1); } return out; };
 // The submitter, stored as an email or name — show a readable form.
 const submitterName = (v) => (v ? String(v).split("@")[0].replace(/[._]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—");
 
@@ -55,11 +59,13 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
   const isMerch = tab === "MERCH";
   const isFx = tab === "FX";
+  const isBudgets = tab === "BUDGETS";
   const s = data[tab];
 
-  async function saveBudget(ym, value) {
+  // Save a budget for an explicit source (the Budgets tab edits both Miniso and Local).
+  async function saveBudgetFor(source, ym, value) {
     setErr("");
-    try { await post({ action: "budget", source: tab, ym, budget: Number(value) }); router.refresh(); }
+    try { await post({ action: "budget", source, ym, budget: Number(value) }); router.refresh(); }
     catch (x) { setErr(x.message); }
   }
 
@@ -82,6 +88,8 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {isFx ? (
         <FxPanel rates={fxRates} isFinance={roles.isFinance} onErr={setErr} onDone={() => router.refresh()} />
+      ) : isBudgets ? (
+        <BudgetsPanel data={data} isFinance={roles.isFinance} onSave={saveBudgetFor} />
       ) : isMerch ? (
         <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} isMerchApprover={!!roles.isMerchApprover} suppliers={suppliers} />
       ) : (
@@ -100,10 +108,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
               <tr key={m.ym}>
                 <Td>{monthLabel(m.ym)}</Td>
                 <Td r>{money(m.committed)}</Td>
-                <Td r>{canManage ? (
-                  <input type="number" defaultValue={m.budget ?? ""} placeholder="—" onBlur={(e) => { if (e.target.value !== String(m.budget ?? "")) saveBudget(m.ym, e.target.value || 0); }}
-                    style={{ width: 100, textAlign: "right", height: 26, fontSize: 12.5, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" }} className="fos-num" />
-                ) : (m.budget == null ? "—" : money(m.budget))}</Td>
+                <Td r>{m.budget == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
                 <Td r>{m.budget ? <Bar value={m.committed} max={m.budget} over={m.overBudget} /> : null}</Td>
                 <Td>{m.budget == null ? <span style={{ color: "var(--faint)" }}>no budget</span> : <Badge tone={m.overBudget ? "red" : "green"}>{m.overBudget ? "Over" : "Within"}</Badge>}</Td>
@@ -459,6 +464,55 @@ function RateEditor({ rate, note, busy, onSave, inp }) {
       <input value={n} onChange={(e) => setN(e.target.value)} placeholder="note (optional)" style={{ ...inp, width: 160 }} />
       <button className="fos-btn" disabled={busy || !dirty || !(Number(r) > 0)} style={{ height: 30, fontSize: 12 }} onClick={() => onSave(r, n)}>{busy ? "Saving…" : "Save"}</button>
     </span>
+  );
+}
+
+// Finance-only procurement budgets — the monthly cash budget for Miniso and Local
+// purchases, extendable as far ahead as needed. Single source of truth for the
+// budget figures shown on the Miniso/Local cash-budget-vs-committed tables.
+function BudgetsPanel({ data, isFinance, onSave }) {
+  const [extraMonths, setExtraMonths] = useState(0);
+  const budgetMap = (src) => {
+    const map = {};
+    for (const m of data[src]?.months || []) if (m.budget != null) map[m.ym] = m.budget;
+    return map;
+  };
+  const miniso = budgetMap("MINISO");
+  const local = budgetMap("LOCAL");
+  const dataMonths = [...(data.MINISO?.months || []), ...(data.LOCAL?.months || [])].map((m) => m.ym);
+  const now = thisYm();
+  const start = [now, ...dataMonths].sort()[0];
+  const end = [ymAdd(now, 23 + extraMonths), ...dataMonths].sort().slice(-1)[0];
+  const months = ymRange(start, end);
+  const inp = { width: 110, textAlign: "right", height: 26, fontSize: 12.5, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" };
+  const cell = (source, ym, val) => (isFinance
+    ? <input type="number" defaultValue={val ?? ""} placeholder="—" className="fos-num"
+        onBlur={(e) => { if (e.target.value !== String(val ?? "")) onSave(source, ym, e.target.value || 0); }} style={inp} />
+    : (val == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(val)));
+  const totalMiniso = months.reduce((t, ym) => t + (Number(miniso[ym]) || 0), 0);
+  const totalLocal = months.reduce((t, ym) => t + (Number(local[ym]) || 0), 0);
+  return (
+    <>
+      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
+        <Tile label="Miniso budget" value={money(totalMiniso, { compact: true })} sub="shown months" />
+        <Tile label="Local budget" value={money(totalLocal, { compact: true })} sub="shown months" />
+      </div>
+      <Panel title="Procurement budgets" note="Finance sets the monthly cash budget for Miniso and Local purchases. Extend as far ahead as you need.">
+        {!isFinance && <div style={{ fontSize: 12.5, color: "var(--faint)", marginBottom: 12 }}>Read-only — procurement budgets are maintained by Finance.</div>}
+        <Table head={["Month", "Miniso budget", "Local budget"]} align={[0, 1, 1]}>
+          {months.map((ym) => (
+            <tr key={ym}>
+              <Td>{monthLabel(ym)}</Td>
+              <Td r>{cell("MINISO", ym, miniso[ym])}</Td>
+              <Td r>{cell("LOCAL", ym, local[ym])}</Td>
+            </tr>
+          ))}
+        </Table>
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => setExtraMonths((x) => x + 12)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>+ Add 12 more months</button>
+        </div>
+      </Panel>
+    </>
   );
 }
 

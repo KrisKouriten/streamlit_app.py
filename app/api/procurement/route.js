@@ -72,7 +72,7 @@ export async function POST(request) {
         return NextResponse.json({ ok: true, notified: hodEmails.length });
       }
       case "budget": {
-        const d = deny(MANAGE, "Procurement entry requires ADMIN, FINANCE or OPS"); if (d) return d;
+        const d = deny(FIN, "Procurement budgets are maintained by Finance"); if (d) return d;
         const { source, ym, budget } = body;
         if (!["MINISO", "LOCAL"].includes(source) || !/^\d{4}-\d{2}$/.test(ym || "") || !Number.isFinite(Number(budget))) {
           return NextResponse.json({ error: "source, month (YYYY-MM) and a numeric budget are required" }, { status: 400 });
