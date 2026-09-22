@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder } from "../../../lib/procurement";
 import { setFxRate } from "../../../lib/fx";
 import { getApproverEmails } from "../../../lib/dept-budget";
 import { resolveBaseUrl } from "../../../lib/invite-rules";
@@ -56,6 +56,20 @@ export async function POST(request) {
           });
         } catch (e) { console.error("procurement raise notify failed:", e.message); }
         return NextResponse.json(res);
+      }
+      case "resubmit": {
+        // Re-send the head-of-department sign-off request for an order that's still
+        // pending — e.g. if the first notification was missed. Doesn't change state.
+        const d = deny(MANAGE, "Resubmitting requires ADMIN, FINANCE or OPS"); if (d) return d;
+        const order = await getProcurementOrder(body.id);
+        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        if (order.approval_status !== "PENDING") return NextResponse.json({ error: "Only an order still awaiting head-of-department sign-off can be resubmitted" }, { status: 400 });
+        const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
+        await notifyMerchAwaitingHod({
+          request: { purchaseId: order.purchase_id, submitter: order.created_by, channel: SOURCE_LABEL[order.source] || order.source, supplier: order.supplier, value: order.amount_gbp },
+          hodEmails, baseUrl: baseUrlOf(request),
+        });
+        return NextResponse.json({ ok: true, notified: hodEmails.length });
       }
       case "budget": {
         const d = deny(MANAGE, "Procurement entry requires ADMIN, FINANCE or OPS"); if (d) return d;

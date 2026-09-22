@@ -64,6 +64,27 @@ export async function POST(request, { params }) {
       case "return":
         return NextResponse.json(await returnToDraft(id, session));
 
+      // Re-send the sign-off request for a P.O that's already awaiting sign-off
+      // (e.g. the approver missed the first notification). Doesn't change state;
+      // the submitter or an admin can trigger it.
+      case "resubmit-signoff": {
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        if (loaded.po.status !== "PENDING_SIGNOFF") {
+          return NextResponse.json({ error: "Only a P.O awaiting sign-off can be resubmitted" }, { status: 400 });
+        }
+        const me = (session.email || session.name || "").toLowerCase();
+        const isOwner = (loaded.po.created_by || "").toLowerCase() === me;
+        if (!isOwner && !isAdmin(session)) {
+          return NextResponse.json({ error: "Only the P.O's submitter (or an admin) can resubmit it" }, { status: 403 });
+        }
+        try {
+          const approverEmails = await getApproverEmails(loaded.po.department);
+          await notifyPoAwaitingSignoff({ po: loaded.po, approverEmails, baseUrl: baseUrlOf(request) });
+        } catch (e) { console.error("po resubmit notify failed:", e.message); }
+        return NextResponse.json({ ok: true });
+      }
+
       // Submitter resolves a Finance challenge: after editing, resubmit. The
       // creator (or an admin) may do this; the route Finance chose decides where
       // the P.O lands.
