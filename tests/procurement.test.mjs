@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
+import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
+  tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
   parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp } from "../lib/procurement-rules.js";
 
@@ -18,7 +19,10 @@ test("Miniso HQ cash-out = pickup date + 180 days", () => {
   // Miniso with a pickup date uses pickup + 180; without one it falls back to order-month + its terms.
   assert.equal(cashOutFor({ source: "MINISO", pickup_date: "2026-07-15", order_ym: "2026-07", terms_days: 0 }), "2027-01");
   assert.equal(cashOutFor({ source: "MINISO", order_ym: "2026-07", terms_days: 60 }), "2026-09"); // legacy row, no pickup
-  assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: 30 }), "2026-08");
+  // Local settles on the 180-day facility, so its own terms do not move the
+  // cash-out: 31 Jul + 180d = 27 Jan 2027, whatever the supplier terms say.
+  assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: 30 }), "2027-01");
+  assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: 90 }), "2027-01");
 });
 
 test("summarise buckets committed spend into the cash-out month vs budget", () => {
@@ -29,7 +33,7 @@ test("summarise buckets committed spend into the cash-out month vs budget", () =
   ];
   const budgets = [
     { source: "MINISO", ym: "2026-09", budget_gbp: 300000 },
-    { source: "LOCAL", ym: "2026-08", budget_gbp: 50000 },
+    { source: "LOCAL", ym: "2027-01", budget_gbp: 50000 },
   ];
   const s = summarise(purchases, budgets);
   // Miniso 400k ordered Jul/60d → cash-out Sep; budget 300k → over by 100k
@@ -37,11 +41,12 @@ test("summarise buckets committed spend into the cash-out month vs budget", () =
   assert.equal(sep.committed, 400000);
   assert.equal(sep.variance, -100000);
   assert.equal(sep.overBudget, true);
-  // Local 42k ordered Jul/30d → Aug; budget 50k → 8k headroom, not over
-  const aug = s.LOCAL.months.find((m) => m.ym === "2026-08");
-  assert.equal(aug.committed, 42000);
-  assert.equal(aug.variance, 8000);
-  assert.equal(aug.overBudget, false);
+  // Local 42k ordered Jul → facility 180d → Jan 2027 (its 30-day supplier terms
+  // decide the drawdown, not our cash-out); budget 50k → 8k headroom.
+  const jan = s.LOCAL.months.find((m) => m.ym === "2027-01");
+  assert.equal(jan.committed, 42000);
+  assert.equal(jan.variance, 8000);
+  assert.equal(jan.overBudget, false);
   // supplier rollup carries terms
   assert.equal(s.MINISO.suppliers[0].terms_days, 60);
 });
@@ -159,10 +164,10 @@ test("tradeSpendByMonth: the due date wins over payment_month, which is only a f
 
 test("cashSpendByMonth counts only CASH rows — trade pay comes from the facility, not here", () => {
   const spend = cashSpendByMonth([
-    { source: "LOCAL", amount_gbp: 5000, payment_method: "CASH", paid_date: "2027-01-14", order_ym: "2026-07", terms_days: 60 },
-    { source: "LOCAL", amount_gbp: 1000, payment_method: "CASH", paid_date: "2027-01-28", order_ym: "2026-07", terms_days: 60 },
+    { source: "LOCAL", amount_gbp: 5000, payment_method: "CASH", paid_date: "2027-01-14", order_ym: "2026-03", terms_days: 60 },
+    { source: "LOCAL", amount_gbp: 1000, payment_method: "CASH", paid_date: "2027-01-28", order_ym: "2026-03", terms_days: 60 },
     // Already reported by the facility upload — counting it here would double up.
-    { source: "LOCAL", amount_gbp: 90000, payment_method: "TRADE_PAY", paid_date: "2027-01-10", order_ym: "2026-07", terms_days: 60 },
+    { source: "LOCAL", amount_gbp: 90000, payment_method: "TRADE_PAY", paid_date: "2027-01-10", order_ym: "2026-03", terms_days: 60 },
     // Paid before the method was captured — not guessed at.
     { source: "MINISO", amount_gbp: 70000, payment_method: null, paid_date: "2027-01-10", order_ym: "2026-07", terms_days: 60 },
     // No paid date recorded → falls back to the cash-out month (31 Jul + 60d = Sep).
@@ -175,8 +180,8 @@ test("cashSpendByMonth counts only CASH rows — trade pay comes from the facili
 
 test("summarise splits spent into trade pay + cash against the budget", () => {
   const purchases = [
-    { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10" },
-    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-07", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12" },
+    { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10" },
+    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-03", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12" },
   ];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 60000 }];
   const spend = {
@@ -201,7 +206,7 @@ test("summarise splits spent into trade pay + cash against the budget", () => {
 
 test("summarise without any spend reads zero, and a settlement-only month still gets a row", () => {
   // No facility upload and nothing tagged yet — the spend columns must not break.
-  const bare = summarise([{ source: "LOCAL", supplier: "X", order_ym: "2026-07", terms_days: 60, amount_gbp: 100, status: "COMMITTED" }], []);
+  const bare = summarise([{ source: "LOCAL", supplier: "X", order_ym: "2026-03", terms_days: 60, amount_gbp: 100, status: "COMMITTED" }], []);
   const m = bare.LOCAL.months.find((x) => x.ym === "2026-09");
   assert.equal(m.spent, 0);
   assert.equal(m.tradeSpent, 0);
@@ -235,7 +240,7 @@ test("KNOWN: a cash-settled order is netted off the budget twice", () => {
   // to endorse it: if it starts to matter, make `committed` mean the OUTSTANDING
   // commitment so committed + spent is the total with nothing counted twice.
   const purchases = [{
-    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60,
+    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60,
     amount_gbp: 20000, status: "PAID", payment_method: "CASH", paid_date: "2026-09-10",
   }];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
@@ -250,7 +255,7 @@ test("no cash tagged means the overlap costs nothing", () => {
   // Why the above is safe to ship today: until Finance tag a paid invoice,
   // cashSpent is zero everywhere and the formula is exact.
   const purchases = [{
-    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60,
+    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60,
     amount_gbp: 20000, status: "COMMITTED",
   }];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
@@ -333,9 +338,9 @@ const awaitingFinance = (r) => r.finance_status === "PENDING" || r.finance_statu
 
 test("requestsVsBudget: pending requests measured against the month's budget", () => {
   const rows = [
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 15000, approval_status: "PENDING" },
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 9000, approval_status: "HOD_APPROVED" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 15000, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 9000, approval_status: "HOD_APPROVED" },
   ];
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.equal(m.ym, "2026-09");          // 31 Jul + 60d
@@ -352,9 +357,9 @@ test("requestsVsBudget: pending requests measured against the month's budget", (
 test("requestsVsBudget: only months with something pending are returned", () => {
   const rows = [
     // Nothing pending here — settled only, so it is not a control problem.
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
     // Pending, lands in a different month (31 Aug + 30d = Sep... use 0 terms).
-    { source: "LOCAL", order_ym: "2026-10", terms_days: 0, amount_gbp: 5000, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-04", terms_days: 0, amount_gbp: 5000, approval_status: "PENDING" },
   ];
   const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-10"]);
@@ -366,8 +371,8 @@ test("requestsVsBudget: only months with something pending are returned", () => 
 
 test("requestsVsBudget: a month already over before the pending requests", () => {
   const rows = [
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 70000, approval_status: "APPROVED" },
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 70000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
   ];
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.equal(m.alreadyOver, true);
@@ -394,7 +399,7 @@ test("requestsVsBudget: rows with no month to land in are skipped, empty input i
   const rows = [
     // A merch request carries no order month — nothing to bucket it by.
     { source: "LOCAL", channel_code: "RETAIL", amount_gbp: 9999, approval_status: "PENDING" },
-    { source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
   ];
   const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-09"]);
@@ -570,7 +575,7 @@ const OVER_MONTHS = [
 test("requestsVsBudget lists an over-budget month even with nothing queued", () => {
   // Only 2026-09 has a pending request, but Finance still have to explain Oct
   // (over on commitment) and Nov (overspent).
-  const rows = [{ source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" }];
+  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" }];
   const out = requestsVsBudget(rows, OVER_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11"]);
   // A quiet, within-budget month stays out.
@@ -598,7 +603,8 @@ test("requestsVsBudget carries the month's committed and spent through", () => {
   assert.equal(out.find((m) => m.ym === "2026-11").spent, 80000);
   // A month with no row in the budget table reads zero rather than undefined.
   const bare = requestsVsBudget(
-    [{ source: "LOCAL", order_ym: "2027-01", terms_days: 0, amount_gbp: 500, approval_status: "PENDING" }],
+    // Ordered Jul 2026 → 31 Jul + 180d = Jan 2027, outside OVER_MONTHS.
+    [{ source: "LOCAL", order_ym: "2026-07", terms_days: 0, amount_gbp: 500, approval_status: "PENDING" }],
     OVER_MONTHS, awaitingApproval);
   const jan = bare.find((m) => m.ym === "2027-01");
   assert.equal(jan.committed, 0);
@@ -666,4 +672,46 @@ test("summarise carries the unpriced count through to the source summary", () =>
   assert.equal(s.LOCAL.unvaluedDrawings, 1);
   assert.equal(s.LOCAL.totalTradeSpent, 0);
   assert.equal(s.MINISO.unvaluedDrawings, 0);
+});
+
+// ---- Local settles on the 180-day trade facility ----
+
+test("Local cash-out is always the 180-day mark, whatever the supplier terms", () => {
+  assert.equal(LOCAL_FACILITY_DAYS, 180);
+  // 31 Jul 2026 + 180d = 27 Jan 2027, for every set of terms.
+  for (const terms of [0, 14, 30, 60, 90, 120]) {
+    assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: terms }), "2027-01",
+      `terms of ${terms} days should not move the cash-out month`);
+  }
+  // Miniso is unchanged: pickup + 180.
+  assert.equal(cashOutFor({ source: "MINISO", pickup_date: "2026-07-15", order_ym: "2026-07" }), "2027-01");
+  // A legacy row with no source still uses its own terms.
+  assert.equal(cashOutFor({ order_ym: "2026-07", terms_days: 30 }), "2026-08");
+});
+
+test("tradeFacilitySplit shows how the 180 days divides", () => {
+  const s = tradeFacilitySplit(30);
+  assert.equal(s.total, 180);
+  assert.equal(s.supplierDays, 30);     // supplier paid from the drawdown
+  assert.equal(s.facilityDays, 150);    // facility carries the rest
+  assert.equal(s.over, false);
+  assert.equal(tradeFacilitySplit(0).facilityDays, 180);    // nothing on terms — facility carries it all
+  assert.equal(tradeFacilitySplit(180).facilityDays, 0);    // terms consume the whole facility term
+});
+
+test("tradeFacilitySplit flags terms beyond the facility term rather than clamping", () => {
+  // Being paid at 210 days when we repay HSBC at 180 is a real problem, not a
+  // rounding case — report it instead of quietly showing zero.
+  const over = tradeFacilitySplit(210);
+  assert.equal(over.facilityDays, -30);
+  assert.equal(over.over, true);
+  // Nothing entered yet is nothing to split — NOT "0 days, facility carries all
+  // 180", which is what Number(null) and Number("") would otherwise produce.
+  assert.equal(tradeFacilitySplit(null), null);
+  assert.equal(tradeFacilitySplit(undefined), null);
+  assert.equal(tradeFacilitySplit(""), null);
+  assert.equal(tradeFacilitySplit(-1), null);
+  assert.equal(tradeFacilitySplit("abc"), null);
+  // But an explicit zero is a real answer: no terms, facility carries all of it.
+  assert.equal(tradeFacilitySplit(0).facilityDays, 180);
 });

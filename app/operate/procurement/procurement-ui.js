@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit } from "../../../lib/procurement-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -121,7 +121,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {canManage && <AwaitingVsBudget rows={orders.filter((o) => o.source === tab)} months={s.months} />}
 
-      <Panel title="Suppliers" note="payment terms drive the cash-out month">
+      <Panel title="Suppliers" note="terms set when the drawdown pays the supplier; Local cash-out is the 180-day facility mark either way">
         {s.suppliers.length === 0 ? <Empty>No suppliers yet.</Empty> : (
           <Table head={["Supplier", "Orders", "Terms", "Committed"]} align={[0, 1, 1, 1]}>
             {s.suppliers.map((sup) => (
@@ -229,6 +229,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
   // Miniso's month comes off the pickup date, Local's off the order month, so
   // wait for the field that actually decides it — guessing from a half-filled
   // form would point at the wrong month's budget.
+  const split = isMiniso ? null : tradeFacilitySplit(f.terms_days);
   const haveMonth = isMiniso ? !!f.pickup_date : !!f.order_ym;
   const draftYm = haveMonth
     ? cashOutFor({ source, order_ym: f.order_ym, terms_days: f.terms_days, pickup_date: f.pickup_date })
@@ -254,7 +255,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 13, lineHeight: 1.5 }}>
         {isMiniso
           ? <>Miniso HQ settles on fixed <strong>180-day terms from the pickup date</strong> — enter the pickup date and the cash-out month is worked out automatically.</>
-          : <>Enter a purchase directly — no spreadsheet needed. The cash-out month is the order month-end plus the supplier&rsquo;s payment terms.</>}
+          : <>Enter a purchase directly — no spreadsheet needed. Local purchases settle on the <strong>180-day trade facility</strong>, so the cash-out month is the order month-end plus 180 days; the supplier&rsquo;s terms set when the drawdown pays them.</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10 }}>
         <Field label="Supplier">
@@ -271,11 +272,25 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
             <Field label="Terms"><input value="180 days · from pickup" disabled style={{ ...inp, color: "var(--muted)" }} /></Field>
           </>
         ) : (
-          <Field label="Terms (days)"><input type="number" min="0" value={f.terms_days} onChange={set("terms_days")} placeholder={eg.terms} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+          <Field label="Terms (days)">
+            <input type="number" min="0" value={f.terms_days} onChange={set("terms_days")} placeholder={eg.terms} style={{ ...inp, textAlign: "right" }} className="fos-num" />
+          </Field>
         )}
         <Field label="Status"><select value={f.status} onChange={set("status")} style={inp}><option value="COMMITTED">Committed</option><option value="PAID">Paid</option></select></Field>
         <Field label="Reference"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
       </div>
+      {!isMiniso && split && (
+        <div style={{ fontSize: 11.5, marginTop: 11, lineHeight: 1.55, color: split.over ? "var(--red)" : "var(--faint)" }}>
+          {split.over ? (
+            <>Terms of <strong>{split.supplierDays} days</strong> run past the {split.total}-day facility term. The
+            supplier would be paid <strong>{split.supplierDays - split.total} days after</strong> we repay HSBC \u2014 check the terms.</>
+          ) : (
+            <>Local purchases settle on the <strong>{split.total}-day</strong> trade facility. The supplier is paid at{" "}
+            <strong>{split.supplierDays} days</strong> from a drawdown; the facility carries the remaining{" "}
+            <strong>{split.facilityDays} days</strong>. Our cash leaves at the {split.total}-day mark{draftYm ? <> \u2014 <strong>{monthLabel(draftYm)}</strong></> : null}, so the terms decide the drawdown, not the cash-out month.</>
+          )}
+        </div>
+      )}
       {foreign && (
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 11, lineHeight: 1.5 }}>
           {spot == null

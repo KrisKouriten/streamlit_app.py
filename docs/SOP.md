@@ -385,7 +385,7 @@ three can be read side by side. Nothing is bucketed by order date.
 
 | Figure | Lands in the month of |
 | :--- | :--- |
-| **Committed** | order month-end + the payment terms entered on the request. Miniso HQ is fixed **180 days from the pickup date**. |
+| **Committed** | Miniso HQ: **180 days from the pickup date**. Local: **order month-end + 180 days**, because it settles on the trade facility — the supplier's own terms set when the drawdown pays them, not when our cash leaves. |
 | **Trade pay** | the facility drawing's **due date** (when the drawing is repaid). |
 | **Cash** | the invoice's **paid date**. |
 | **Budget** | that same payment month. |
@@ -408,6 +408,14 @@ settled and splits two ways, kept apart so Merch can see how a month was funded:
   Finance tagged *Cash* at payment. A purchase tagged *Trade pay* is deliberately
   skipped here so the facility upload cannot double-count, and a paid purchase with no
   method recorded is skipped rather than guessed at.
+
+**Local settles on the 180-day facility.** All Local purchase is paid via TradePay:
+the supplier is paid at their own terms out of a drawdown, the facility carries the
+balance, and Miniso UK's cash leaves at the **180-day mark**. So 30-day terms mean
+*30 days supplier + 150 days facility* — everyone calculates to the same 180 days, and
+the terms decide the drawdown rather than the cash-out month. The raise form shows the
+split as the terms are entered, and flags terms that run **past** 180 days, which would
+mean paying the supplier after HSBC has already been repaid.
 
 **Raising a request** (*Add a purchase*). As soon as the field that decides the month
 is filled — **pickup date** for Miniso, **order month** for Local — a live **budget
