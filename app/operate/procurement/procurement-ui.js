@@ -86,13 +86,20 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
       <>
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
         <Tile label="Committed spend" value={money(s.totalCommitted, { compact: true })} sub="all months" />
-        <Tile label="Spent" value={money(s.totalSpent, { compact: true })} sub="trade pay + cash settled" />
+        <Tile label="Spent" value={money(s.totalSpent, { compact: true })}
+          sub={s.unvaluedDrawings ? `${s.unvaluedDrawings} drawing${s.unvaluedDrawings === 1 ? "" : "s"} unpriced` : "trade pay + cash settled"}
+          tone={s.unvaluedDrawings ? "var(--amber)" : undefined} />
         <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets" />
         <Tile label="Over-budget months" value={s.months.filter((m) => m.overBudget).length} tone={s.months.some((m) => m.overBudget) ? "var(--red)" : "var(--green)"} sub="cash-out basis" />
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
 
       <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid">
+        {s.unvaluedDrawings > 0 && (
+          <div style={{ fontSize: 12, color: "var(--amber)", marginBottom: 10, lineHeight: 1.5 }}>
+            {s.unvaluedDrawings} facility drawing{s.unvaluedDrawings === 1 ? " is" : "s are"} not counted in Trade pay — no GBP amount on the upload, and no spot rate set for the drawing&rsquo;s currency. Set the rate on <strong>Exchange rates</strong>, or add a GBP column to the facility extract.
+          </div>
+        )}
         {s.months.length === 0 ? <Empty>No purchases or budgets for this section yet.</Empty> : (
           <Table head={["Cash-out month", "Committed", "Trade pay", "Cash", "Spent", "Budget", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
             {s.months.map((m) => (
