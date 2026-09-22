@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
-  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget } from "../lib/procurement-rules.js";
+  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -358,4 +359,111 @@ test("requestsVsBudget: rows with no month to land in are skipped, empty input i
   assert.equal(out[0].awaiting, 1000);
   assert.deepEqual(requestsVsBudget(), []);
   assert.deepEqual(requestsVsBudget([], []), []);
+});
+
+// ---- Budget forecast import (month grid) ----
+
+test("parseMonthHeader reads the month forms a spreadsheet actually exports", () => {
+  assert.equal(parseMonthHeader("Sep-26"), "2026-09");
+  assert.equal(parseMonthHeader("sep 26"), "2026-09");
+  assert.equal(parseMonthHeader("Sept-26"), "2026-09");
+  assert.equal(parseMonthHeader("September 2026"), "2026-09");
+  assert.equal(parseMonthHeader("2026-09"), "2026-09");
+  assert.equal(parseMonthHeader("2026-9"), "2026-09");
+  assert.equal(parseMonthHeader("2026/09/01"), "2026-09");
+  assert.equal(parseMonthHeader("09/2026"), "2026-09");
+  assert.equal(parseMonthHeader("01/09/2026"), "2026-09");   // UK order: day first
+  assert.equal(parseMonthHeader("Dec-28"), "2028-12");
+  // Not months — the label column, a total, junk.
+  assert.equal(parseMonthHeader("Source"), null);
+  assert.equal(parseMonthHeader("Total"), null);
+  assert.equal(parseMonthHeader(""), null);
+  assert.equal(parseMonthHeader("2026-13"), null);           // no 13th month
+  assert.equal(parseMonthHeader("Smurf-26"), null);
+});
+
+test("parseBudgetSource matches the row label on the phrase", () => {
+  assert.equal(parseBudgetSource("Miniso"), "MINISO");
+  assert.equal(parseBudgetSource("MINISO HQ"), "MINISO");
+  assert.equal(parseBudgetSource("Local"), "LOCAL");
+  assert.equal(parseBudgetSource("Local Purchase"), "LOCAL");
+  assert.equal(parseBudgetSource("LP"), "LOCAL");
+  assert.equal(parseBudgetSource("Total"), null);
+  assert.equal(parseBudgetSource(""), null);
+});
+
+test("parseBudgetGridCsv reads a months-across grid into per-month budgets", () => {
+  const csv = [
+    "Source,Sep-26,Oct-26,Nov-26",
+    "Miniso,180000,210000,195000",
+    "Local,60000,55000,62000",
+  ].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.deepEqual(errors, []);
+  assert.equal(records.length, 6);
+  assert.deepEqual(records.find((r) => r.source === "MINISO" && r.ym === "2026-10"), { source: "MINISO", ym: "2026-10", budget_gbp: 210000 });
+  assert.deepEqual(records.find((r) => r.source === "LOCAL" && r.ym === "2026-11"), { source: "LOCAL", ym: "2026-11", budget_gbp: 62000 });
+});
+
+test("parseBudgetGridCsv: blank cells are skipped, not written as zero", () => {
+  // A gap means "not budgeted" — writing 0 would wipe a month Finance had set.
+  const csv = ["Source,Sep-26,Oct-26", "Miniso,180000,", "Local,,55000"].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.deepEqual(errors, []);
+  assert.equal(records.length, 2);
+  assert.ok(records.some((r) => r.source === "MINISO" && r.ym === "2026-09"));
+  assert.ok(records.some((r) => r.source === "LOCAL" && r.ym === "2026-10"));
+  assert.ok(!records.some((r) => r.ym === "2026-10" && r.source === "MINISO"));
+});
+
+test("parseBudgetGridCsv tolerates currency, separators and stray columns", () => {
+  const csv = [
+    "Source,Notes,Sep-26,Oct-26,Total",
+    'Miniso,core range,"£180,000","210,000",390000',
+    "Local,,£60000,55000,115000",
+  ].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.deepEqual(errors, []);
+  // "Notes" and "Total" are not months, so they are ignored entirely.
+  assert.equal(records.length, 4);
+  assert.equal(records.find((r) => r.source === "MINISO" && r.ym === "2026-09").budget_gbp, 180000);
+  assert.equal(records.find((r) => r.source === "LOCAL" && r.ym === "2026-09").budget_gbp, 60000);
+});
+
+test("parseBudgetGridCsv reports what it could not read rather than dropping it", () => {
+  // No month columns at all.
+  const noMonths = parseBudgetGridCsv("Source,Notes\nMiniso,x");
+  assert.equal(noMonths.records.length, 0);
+  assert.match(noMonths.errors[0].reason, /No month columns/);
+  // A Total row is what every real export carries — skipped silently, not flagged.
+  const withTotal = parseBudgetGridCsv(["Source,Sep-26", "Miniso,180000", "Local,60000", "Total,240000"].join("\n"));
+  assert.deepEqual(withTotal.errors, []);
+  assert.equal(withTotal.records.length, 2);
+  assert.equal(parseBudgetGridCsv("Source,Sep-26\nMiniso,1\nGrand Total,1").errors.length, 0);
+  // An unrecognisable row label, and an unreadable amount.
+  const csv = ["Source,Sep-26", "Miniso,180000", "Capex,50000", "Local,abc"].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.equal(records.length, 1);
+  assert.ok(errors.some((e) => /Miniso or Local/.test(e.reason)));
+  assert.ok(errors.some((e) => /Unreadable amount/.test(e.reason)));
+  // A negative budget is refused rather than stored.
+  const neg = parseBudgetGridCsv("Source,Sep-26\nMiniso,-5000");
+  assert.equal(neg.records.length, 0);
+  assert.ok(neg.errors.some((e) => /Negative budget/.test(e.reason)));
+  // An empty file.
+  assert.match(parseBudgetGridCsv("").errors[0].reason, /empty/);
+});
+
+test("parseBudgetGridCsv flags a duplicated month column and conflicting rows", () => {
+  const dupCol = parseBudgetGridCsv("Source,Sep-26,Sep-26\nMiniso,1,2");
+  assert.ok(dupCol.errors.some((e) => /more than once/.test(e.reason)));
+  const dupRow = parseBudgetGridCsv("Source,Sep-26\nMiniso,100\nMiniso HQ,200");
+  assert.ok(dupRow.errors.some((e) => /Two different budgets/.test(e.reason)));
+});
+
+test("the budget template parses cleanly through the importer", () => {
+  const { records, errors } = parseBudgetGridCsv(BUDGET_CSV_TEMPLATE);
+  assert.deepEqual(errors, []);
+  assert.equal(records.length, 8);
+  assert.deepEqual([...new Set(records.map((r) => r.source))].sort(), ["LOCAL", "MINISO"]);
 });
