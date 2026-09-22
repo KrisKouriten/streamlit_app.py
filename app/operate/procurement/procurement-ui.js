@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact } from "../../../lib/procurement-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -141,7 +141,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
-          <AddLine source={tab} fxRates={fxRates} suppliers={suppliers} onDone={() => router.refresh()} />
+          <AddLine source={tab} fxRates={fxRates} suppliers={suppliers} months={s.months} onDone={() => router.refresh()} />
           <Upload onDone={() => router.refresh()} />
         </Panel>
       )}
@@ -161,7 +161,7 @@ function Field({ label, children }) {
 
 // Add a single purchase directly on the page — no spreadsheet. Example values sit
 // in the placeholders so it's obvious what each field wants.
-function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
+function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) {
   const isMiniso = source === "MINISO";
   // Miniso HQ raises in USD; local suppliers in GBP.
   const defaultCcy = isMiniso ? "USD" : "GBP";
@@ -185,6 +185,18 @@ function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
   const foreign = isForeignCurrency(f.currency);
   const spot = findRate(fxRates, f.currency, "SPOT");
   const gbpPreview = foreign ? convertToGbp(f.amount_gbp, spot) : null;
+  // Where this request would land, and what it does to that month's budget. The
+  // GBP value is the spot conversion for a foreign order (Finance re-strikes it
+  // on approval, so this is provisional) and the entered amount for a GBP one.
+  const draftGbp = foreign ? gbpPreview : Number(f.amount_gbp) || 0;
+  // Miniso's month comes off the pickup date, Local's off the order month, so
+  // wait for the field that actually decides it — guessing from a half-filled
+  // form would point at the wrong month's budget.
+  const haveMonth = isMiniso ? !!f.pickup_date : !!f.order_ym;
+  const draftYm = haveMonth
+    ? cashOutFor({ source, order_ym: f.order_ym, terms_days: f.terms_days, pickup_date: f.pickup_date })
+    : null;
+  const impact = budgetImpact(months, draftYm, draftGbp);
   const eg = isMiniso
     ? { supplier: "e.g. MINISO HQ (Guangzhou)", category: "e.g. Core range", amount: "e.g. 420000", ref: "e.g. PO-1042" }
     : { supplier: "e.g. Design360", category: "e.g. Fixtures", amount: "e.g. 42000", terms: "e.g. 30 days", ref: "e.g. PO-2087" };
@@ -234,11 +246,50 @@ function AddLine({ source, fxRates = [], suppliers = [], onDone }) {
             : <>Provisionally ≈ <strong>{money(gbpPreview)}</strong> at the {money(1)}=${spot} spot rate. Finance re-strikes the GBP cost at the chosen rate on approval.</>}
         </div>
       )}
+      {impact && <BudgetCheck impact={impact} />}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 13 }}>
         <button type="submit" className="fos-btn" disabled={busy} style={{ height: 34, fontSize: 12.5 }}>{busy ? "Adding…" : "Add purchase"}</button>
         {msg && <span style={{ fontSize: 12, color: msg === "Added." ? "var(--green)" : "var(--red)" }}>{msg}</span>}
       </div>
     </form>
+  );
+}
+
+// Where a request in progress lands against that month's budget. Shown live as
+// the form is filled so Merch see the position BEFORE submitting, rather than
+// finding out at Finance review. It informs, it does not block — Finance still
+// decides, and a genuinely needed purchase should still be raised.
+function BudgetCheck({ impact }) {
+  const { ym, budget, committed, spent, add, newCommitted, headroom, over, alreadyOver, noBudget } = impact;
+  const tone = noBudget ? "var(--muted)" : over ? "var(--red)" : "var(--green)";
+  const cell = { display: "flex", flexDirection: "column", gap: 2 };
+  const k = { fontSize: 10.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)" };
+  const v = { fontSize: 13, fontWeight: 600 };
+  return (
+    <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 8, border: `1px solid ${noBudget ? "var(--line)" : over ? "var(--red)" : "var(--line)"}`, background: "var(--raise)" }}>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 9, lineHeight: 1.5 }}>
+        This falls due in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — how it sits against that month&rsquo;s budget.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(104px,1fr))", gap: 12 }}>
+        <div style={cell}><span style={k}>Budget</span><span style={v} className="fos-num">{noBudget ? "—" : money(budget)}</span></div>
+        <div style={cell}><span style={k}>Committed</span><span style={v} className="fos-num">{money(committed)}</span></div>
+        <div style={cell}><span style={k}>Spent</span><span style={v} className="fos-num">{spent ? money(spent) : "—"}</span></div>
+        <div style={cell}><span style={k}>This request</span><span style={v} className="fos-num">{money(add)}</span></div>
+        <div style={cell}><span style={k}>Would commit</span><span style={{ ...v, color: tone }} className="fos-num">{money(newCommitted)}</span></div>
+        <div style={cell}>
+          <span style={k}>{over ? "Over by" : "Headroom"}</span>
+          <span style={{ ...v, color: tone }} className="fos-num">{noBudget ? "—" : money(Math.abs(headroom))}</span>
+        </div>
+      </div>
+      {noBudget && <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 9 }}>No procurement budget is set for this month — Finance maintain these on the <strong>Budgets</strong> tab.</div>}
+      {over && (
+        <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 9, lineHeight: 1.5 }}>
+          {alreadyOver
+            ? <>{monthLabel(ym)} is already over budget before this request. Expect Finance to challenge it.</>
+            : <>This request takes {monthLabel(ym)} over budget. You can still raise it — Finance will review it against the budget.</>}
+        </div>
+      )}
+    </div>
   );
 }
 
