@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv } from "../lib/procurement-rules.js";
+import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
+  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -95,4 +96,122 @@ test("delete gate: finance only, once head-approved", () => {
 
 test("status meta covers every status", () => {
   for (const s of ["PENDING", "HOD_APPROVED", "APPROVED", "CANCELLED"]) assert.ok(PROC_STATUS_META[s]?.label);
+});
+
+// ---- Spent: trade pay (facility upload) + cash, migration 113 ----
+
+test("facilitySourceOf maps the procurement cost drivers, ignores the rest", () => {
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso LC's" }), "MINISO");
+  assert.equal(facilitySourceOf({ cost_driver: "Local Purchase" }), "LOCAL");
+  assert.equal(facilitySourceOf({ cost_driver: "local purchase" }), "LOCAL");   // case
+  assert.equal(facilitySourceOf({ cost_driver: "  Miniso   LCs " }), "MINISO"); // spacing / no apostrophe
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso LC’s" }), "MINISO");    // curly apostrophe
+  // The column is typed by hand, so the PHRASE is what matches, not the exact string.
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso LC" }), "MINISO");           // singular
+  assert.equal(facilitySourceOf({ cost_driver: "MinisoLCs" }), "MINISO");           // no space
+  assert.equal(facilitySourceOf({ cost_driver: "Local Purchases" }), "LOCAL");      // plural
+  assert.equal(facilitySourceOf({ cost_driver: "Local purchase - toys" }), "LOCAL");// trailing detail
+  // Not procurement. Miniso Investment is intercompany funding — the loose
+  // matching must not swallow it just because it starts with "Miniso".
+  assert.equal(facilitySourceOf({ cost_driver: "Opex" }), null);
+  assert.equal(facilitySourceOf({ cost_driver: "Capex" }), null);
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso Investment" }), null);
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso" }), null);
+  assert.equal(facilitySourceOf({ cost_driver: "   " }), null);
+  assert.equal(facilitySourceOf({}), null);
+});
+
+test("tradeSpendByMonth sums the facility upload by source and DUE month", () => {
+  const spend = tradeSpendByMonth([
+    { cost_driver: "Miniso LC's", due_date: "2027-01-11", facility_payment_gbp: 142567.3 },
+    { cost_driver: "Miniso LC's", due_date: "2027-01-06", facility_payment_gbp: 84099.6 },
+    { cost_driver: "Miniso LC's", due_date: "2026-12-30", facility_payment_gbp: 113720 },
+    { cost_driver: "Local Purchase", due_date: "2027-01-06", facility_payment_gbp: 22498.56 },
+    { cost_driver: "Opex", due_date: "2027-01-06", facility_payment_gbp: 999999 },  // not procurement
+    { cost_driver: "Local Purchase", due_date: null, facility_payment_gbp: 500 },   // no date to land on
+  ]);
+  assert.equal(Math.round(spend.MINISO["2027-01"]), 226667);
+  assert.equal(spend.MINISO["2026-12"], 113720);
+  assert.equal(spend.LOCAL["2027-01"], 22498.56);
+  assert.equal(spend.LOCAL["2026-12"], undefined);
+});
+
+test("tradeSpendByMonth: the due date wins over payment_month, which is only a fallback", () => {
+  // A Miniso post-shipment loan drawn down in July is not spend until it is repaid.
+  const late = tradeSpendByMonth([
+    { cost_driver: "Miniso LC's", due_date: "2027-01-11", payment_month: "2026-07", facility_payment_gbp: 1000 },
+  ]);
+  assert.equal(late.MINISO["2027-01"], 1000);
+  assert.equal(late.MINISO["2026-07"], undefined);
+  // No due date on the row — fall back rather than drop the spend.
+  const fallback = tradeSpendByMonth([
+    { cost_driver: "Local Purchase", due_date: null, payment_month: "2027-03", facility_payment_gbp: 10 },
+  ]);
+  assert.equal(fallback.LOCAL["2027-03"], 10);
+});
+
+test("cashSpendByMonth counts only CASH rows — trade pay comes from the facility, not here", () => {
+  const spend = cashSpendByMonth([
+    { source: "LOCAL", amount_gbp: 5000, payment_method: "CASH", paid_date: "2027-01-14", order_ym: "2026-07", terms_days: 60 },
+    { source: "LOCAL", amount_gbp: 1000, payment_method: "CASH", paid_date: "2027-01-28", order_ym: "2026-07", terms_days: 60 },
+    // Already reported by the facility upload — counting it here would double up.
+    { source: "LOCAL", amount_gbp: 90000, payment_method: "TRADE_PAY", paid_date: "2027-01-10", order_ym: "2026-07", terms_days: 60 },
+    // Paid before the method was captured — not guessed at.
+    { source: "MINISO", amount_gbp: 70000, payment_method: null, paid_date: "2027-01-10", order_ym: "2026-07", terms_days: 60 },
+    // No paid date recorded → falls back to the cash-out month (31 Jul + 60d = Sep).
+    { source: "MINISO", amount_gbp: 2500, payment_method: "CASH", paid_date: null, order_ym: "2026-07", terms_days: 60 },
+  ]);
+  assert.equal(spend.LOCAL["2027-01"], 6000);
+  assert.equal(spend.MINISO["2027-01"], undefined);
+  assert.equal(spend.MINISO["2026-09"], 2500);
+});
+
+test("summarise splits spent into trade pay + cash against the budget", () => {
+  const purchases = [
+    { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10" },
+    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-07", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12" },
+  ];
+  const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 60000 }];
+  const spend = {
+    trade: tradeSpendByMonth([{ cost_driver: "Local Purchase", due_date: "2026-09-29", facility_payment_gbp: 30000 }]),
+    cash: cashSpendByMonth(purchases),
+  };
+  const m = summarise(purchases, budgets, spend).LOCAL.months.find((x) => x.ym === "2026-09");
+  assert.equal(m.committed, 50000);
+  assert.equal(m.tradeSpent, 30000);
+  assert.equal(m.cashSpent, 20000);
+  assert.equal(m.spent, 50000);
+  assert.equal(m.variance, 10000);        // budget − committed
+  assert.equal(m.spentVariance, 10000);   // budget − spent
+  assert.equal(m.overBudget, false);
+  assert.equal(m.overSpent, false);
+  const s = summarise(purchases, budgets, spend).LOCAL;
+  assert.equal(s.totalTradeSpent, 30000);
+  assert.equal(s.totalCashSpent, 20000);
+  assert.equal(s.totalSpent, 50000);
+});
+
+test("summarise without any spend reads zero, and a settlement-only month still gets a row", () => {
+  // No facility upload and nothing tagged yet — the spend columns must not break.
+  const bare = summarise([{ source: "LOCAL", supplier: "X", order_ym: "2026-07", terms_days: 60, amount_gbp: 100, status: "COMMITTED" }], []);
+  const m = bare.LOCAL.months.find((x) => x.ym === "2026-09");
+  assert.equal(m.spent, 0);
+  assert.equal(m.tradeSpent, 0);
+  assert.equal(m.cashSpent, 0);
+  assert.equal(m.spentVariance, null);    // no budget to compare against
+  assert.equal(bare.LOCAL.totalSpent, 0);
+  // Spend can land in a month with no order or budget of its own — show it anyway.
+  const only = summarise([], [], { trade: tradeSpendByMonth([{ cost_driver: "Miniso LC's", due_date: "2027-05-18", facility_payment_gbp: 1234 }]) });
+  assert.deepEqual(only.MINISO.months.map((x) => x.ym), ["2027-05"]);
+  assert.equal(only.MINISO.months[0].spent, 1234);
+  assert.equal(only.MINISO.months[0].committed, 0);
+});
+
+test("summarise flags a month that is within committed budget but overspent", () => {
+  const budgets = [{ source: "MINISO", ym: "2026-09", budget_gbp: 1000 }];
+  const spend = { trade: tradeSpendByMonth([{ cost_driver: "Miniso LC's", due_date: "2026-09-30", facility_payment_gbp: 1500 }]) };
+  const m = summarise([], budgets, spend).MINISO.months[0];
+  assert.equal(m.overBudget, false);      // nothing committed
+  assert.equal(m.overSpent, true);        // but £1,500 has gone out against a £1,000 budget
+  assert.equal(m.spentVariance, -500);
 });
