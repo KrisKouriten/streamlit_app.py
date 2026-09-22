@@ -134,3 +134,17 @@ test("overallStatus takes the worst — a FAIL is never softened by passes", () 
   assert.equal(overallStatus([{ status: OK }, { status: WARN }, { status: FAIL }]), FAIL);
   assert.equal(overallStatus([]), OK);
 });
+
+test("every CRITICAL_TABLES migration filename exists and creates that table", async () => {
+  // The point of the schema check is to send you to the right file. A name that
+  // doesn't exist is worse than no name, and these were wrong once already —
+  // three of six were guessed from the table name rather than checked.
+  const fs = await import("node:fs");
+  for (const t of CRITICAL_TABLES) {
+    const path = `db/migrations/${t.migration}`;
+    assert.ok(fs.existsSync(path), `${t.migration} does not exist (named for ${t.table})`);
+    const sql = fs.readFileSync(path, "utf8");
+    assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS\\s+finance\\.${t.table}\\b`),
+      `${t.migration} does not create finance.${t.table}`);
+  }
+});
