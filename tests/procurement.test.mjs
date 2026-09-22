@@ -112,11 +112,17 @@ test("facilitySourceOf maps the procurement cost drivers, ignores the rest", () 
   assert.equal(facilitySourceOf({ cost_driver: "MinisoLCs" }), "MINISO");           // no space
   assert.equal(facilitySourceOf({ cost_driver: "Local Purchases" }), "LOCAL");      // plural
   assert.equal(facilitySourceOf({ cost_driver: "Local purchase - toys" }), "LOCAL");// trailing detail
+  // Miniso stock arrives two ways: an LC buyer loan, or TradePay against the
+  // facility. Both are procurement — the real extract carries both wordings.
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso Facility" }), "MINISO");
+  assert.equal(facilitySourceOf({ cost_driver: "miniso facilities" }), "MINISO");
+  assert.equal(facilitySourceOf({ cost_driver: "MinisoFacility" }), "MINISO");
   // Not procurement. Miniso Investment is intercompany funding — the loose
   // matching must not swallow it just because it starts with "Miniso".
   assert.equal(facilitySourceOf({ cost_driver: "Opex" }), null);
   assert.equal(facilitySourceOf({ cost_driver: "Capex" }), null);
   assert.equal(facilitySourceOf({ cost_driver: "Miniso Investment" }), null);
+  assert.equal(facilitySourceOf({ cost_driver: "Miniso Investment Hong Kong" }), null);
   assert.equal(facilitySourceOf({ cost_driver: "Miniso" }), null);
   assert.equal(facilitySourceOf({ cost_driver: "   " }), null);
   assert.equal(facilitySourceOf({}), null);
@@ -562,4 +568,18 @@ test("requestsVsBudget carries the month's committed and spent through", () => {
   assert.equal(jan.committed, 0);
   assert.equal(jan.spent, 0);
   assert.equal(jan.overBudget, false);
+});
+
+
+test("tradeSpendByMonth counts both Miniso routes, and still not Miniso Investment", () => {
+  const spend = tradeSpendByMonth([
+    { cost_driver: "Miniso LC", due_date: "2026-10-13", facility_payment_gbp: 218309 },
+    { cost_driver: "Miniso Facility", due_date: "2026-10-21", facility_payment_gbp: 168341 },
+    { cost_driver: "Miniso Investment", due_date: "2026-10-21", facility_payment_gbp: 95654 }, // not procurement
+    { cost_driver: "Local Purchase", due_date: "2026-10-07", facility_payment_gbp: 117398 },
+    { cost_driver: "Opex", due_date: "2026-10-21", facility_payment_gbp: 110027 },
+    { cost_driver: "Capex", due_date: "2026-10-21", facility_payment_gbp: 32343 },
+  ]);
+  assert.equal(spend.MINISO["2026-10"], 218309 + 168341);   // both routes, no Investment
+  assert.equal(spend.LOCAL["2026-10"], 117398);
 });
