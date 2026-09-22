@@ -3,6 +3,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   displayStatus, PROC_CHALLENGE_REASONS, challengeReasonLabels, PROC_PAYMENT_STATUSES,
+  CHALLENGE_REASON_NEEDS_NOTE, challengeNoteError,
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
@@ -48,6 +49,16 @@ const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6
 const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
 
+// The desk splits by what is being bought, so Finance work one book at a time:
+// the two cash-tracker sources, the OTB-linked merch requests, and the budgets
+// those all measure against. The status filters below apply within the open tab.
+const TABS = [
+  { key: "MINISO", label: "Miniso purchases", test: (r) => r.source === "MINISO" && !isMerchRequest(r) },
+  { key: "LOCAL", label: "Local purchases", test: (r) => r.source === "LOCAL" && !isMerchRequest(r) },
+  { key: "MERCH", label: "Merchandising requests", test: (r) => isMerchRequest(r) },
+  { key: "BUDGETS", label: "Budgets", test: () => false },
+];
+
 const FILTERS = [
   { key: "ATTENTION", label: "Needs Finance", test: (r) => r.finance_status !== "CLOSED" },
   { key: "PENDING", label: "Pending", test: (r) => r.finance_status === "PENDING" },
@@ -61,6 +72,103 @@ const channelCategory = (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_ra
 // LC facility stage: Import loan while goods are in transit, Trade loan once
 // they arrive in Miniso UK's possession.
 const LOAN_META = { IMPORT: { label: "Import loan", tone: "amber" }, TRADE: { label: "Trade loan", tone: "green" } };
+
+// Month arithmetic on "YYYY-MM" strings (they sort lexically, so comparisons work).
+const thisYm = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+const ymAdd = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
+const ymRange = (start, end) => { const out = []; let c = start; for (let i = 0; c <= end && i < 600; i++) { out.push(c); c = ymAdd(c, 1); } return out; };
+
+// Finance-only procurement budgets — the monthly cash budget for Miniso and Local
+// purchases, extendable as far ahead as needed. The single source of truth for
+// every budget figure on the Procurement Requests tables and the control views.
+// It lives on this desk because only Finance reach this page at all.
+function BudgetsPanel({ months = {}, onSaved }) {
+  const [extraMonths, setExtraMonths] = useState(0);
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(null);
+
+  const budgetMap = (src) => {
+    const map = {};
+    for (const m of months[src] || []) if (m.budget != null) map[m.ym] = m.budget;
+    return map;
+  };
+  const miniso = budgetMap("MINISO");
+  const local = budgetMap("LOCAL");
+  // Cover every month that already carries a budget or an order, and at least two
+  // years out from now, so there is always somewhere to type ahead.
+  const dataMonths = [...(months.MINISO || []), ...(months.LOCAL || [])].map((m) => m.ym);
+  const now = thisYm();
+  const start = [now, ...dataMonths].sort()[0];
+  const end = [ymAdd(now, 23 + extraMonths), ...dataMonths].sort().slice(-1)[0];
+  const monthList = ymRange(start, end);
+
+  async function save(source, ym, value) {
+    setErr(""); setSaving(`${source}:${ym}`);
+    try {
+      const res = await fetch("/api/procurement", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "budget", source, ym, budget: Number(value) }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error || "Could not save that budget"); return; }
+      onSaved?.();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(null); }
+  }
+
+  const inp = { width: 120, textAlign: "right", height: 28, fontSize: 12.5, padding: "0 7px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" };
+  const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
+  const thR = { ...th, textAlign: "right" };
+  const td = { padding: "7px 12px", borderBottom: "1px solid var(--line)", fontSize: 13 };
+  const tdR = { ...td, textAlign: "right" };
+  const total = (map) => monthList.reduce((t, ym) => t + (Number(map[ym]) || 0), 0);
+
+  return (
+    <>
+      <StatRow>
+        <Stat label="Miniso budget" value={money(total(miniso), { compact: true })} />
+        <Stat label="Local budget" value={money(total(local), { compact: true })} />
+        <Stat label="Months shown" value={monthList.length} />
+      </StatRow>
+
+      {err && <div style={{ color: "var(--red)", fontSize: 12.5, marginBottom: 12 }}>{err}</div>}
+
+      <div style={card}>
+        <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Procurement budgets</div>
+        <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
+          The monthly cash budget for Miniso and Local purchases, on the same payment-date basis as the committed and spent figures. Type a figure and click away to save. Extend as far ahead as you need.
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>
+              <th style={th}>Month</th><th style={thR}>Miniso budget</th><th style={thR}>Local budget</th>
+            </tr></thead>
+            <tbody>
+              {monthList.map((ym) => (
+                <tr key={ym}>
+                  <td style={td}>{ymLabel(ym)}</td>
+                  {["MINISO", "LOCAL"].map((src) => {
+                    const val = (src === "MINISO" ? miniso : local)[ym];
+                    return (
+                      <td key={src} style={tdR}>
+                        <input type="number" defaultValue={val ?? ""} placeholder="—" className="fos-num"
+                          disabled={saving === `${src}:${ym}`} style={inp}
+                          onBlur={(e) => { if (e.target.value !== String(val ?? "")) save(src, ym, e.target.value || 0); }} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => setExtraMonths((x) => x + 12)} style={ghost}>+ Add 12 more months</button>
+        </div>
+      </div>
+    </>
+  );
+}
 
 // Finance control: what the purchases still awaiting a decision would do to the
 // budget of the month each falls due in. Here "awaiting" is the finance
@@ -83,7 +191,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
     <div style={card}>
       <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Awaiting your decision vs budget</div>
       <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
-        What the purchases still pending or challenged would commit against each month&rsquo;s procurement budget, if they were all approved. Budgets are set on the Procurement Requests <strong>Budgets</strong> tab.
+        What the purchases still pending or challenged would commit against each month&rsquo;s procurement budget, if they were all approved. Budgets are set on the <strong>Budgets</strong> tab above.
       </div>
       {sections.map(({ src, pipeline }) => (
         <div key={src} style={{ marginBottom: 14 }}>
@@ -123,8 +231,8 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
 
 export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {} }) {
   const router = useRouter();
+  const [tab, setTab] = useState("MINISO");
   const [filter, setFilter] = useState("ATTENTION");
-  const [source, setSource] = useState("");
   const [inv, setInv] = useState(() => {
     const m = {};
     for (const r of initialRows) m[r.purchase_id] = { number: r.invoice_number || "", amount: r.invoice_amount != null ? String(r.invoice_amount) : "" };
@@ -150,14 +258,28 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
 
+  // Everything in the open tab, before the status filter — the basis for both the
+  // rows shown and the filter counts, so the counts describe this book only.
+  const inTab = useMemo(() => {
+    const t = TABS.find((x) => x.key === tab);
+    return t ? initialRows.filter(t.test) : [];
+  }, [initialRows, tab]);
+
   const rows = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filter) || FILTERS[FILTERS.length - 1];
-    return initialRows.filter((r) => f.test(r) && (!source || r.source === source));
-  }, [initialRows, filter, source]);
+    return inTab.filter((r) => f.test(r));
+  }, [inTab, filter]);
 
   const counts = useMemo(() => {
     const c = {};
-    for (const f of FILTERS) c[f.key] = initialRows.filter((r) => f.test(r)).length;
+    for (const f of FILTERS) c[f.key] = inTab.filter(f.test).length;
+    return c;
+  }, [inTab]);
+
+  // Tab badges count what still needs Finance, which is what the desk is for.
+  const tabCounts = useMemo(() => {
+    const c = {};
+    for (const t of TABS) c[t.key] = initialRows.filter((r) => t.test(r) && r.finance_status !== "CLOSED").length;
     return c;
   }, [initialRows]);
 
@@ -171,6 +293,10 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     }
     return { pending, approved, challenged, closed, committed };
   }, [initialRows]);
+
+  // "Other" is the catch-all reason, so it carries no meaning without the note.
+  const chNeedsNote = chReasons.has(CHALLENGE_REASON_NEEDS_NOTE);
+  const chNoteErr = challengeNoteError([...chReasons], chNote);
 
   const setInvField = (id, k, v) => setInv((s) => ({ ...s, [id]: { ...s[id], [k]: v } }));
 
@@ -309,8 +435,33 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     a.remove();
   }
 
+  const isBudgets = tab === "BUDGETS";
+
   return (
     <div>
+      {/* ---- Book tabs: which purchases (or the budgets they measure against) ---- */}
+      <div style={{ display: "inline-flex", gap: 3, marginBottom: 20, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
+        {TABS.map((t) => {
+          const on = t.key === tab;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
+              fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 14px", borderRadius: 7, cursor: "pointer",
+              background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+              boxShadow: on ? "var(--shadow-1)" : "none", color: on ? "var(--ink)" : "var(--muted)",
+            }}>
+              {t.label}
+              {t.key !== "BUDGETS" && tabCounts[t.key] > 0 && (
+                <span style={{ color: "var(--faint)", fontWeight: 500 }}> {tabCounts[t.key]}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {isBudgets ? (
+        <BudgetsPanel months={budgetMonths} onSaved={() => router.refresh()} />
+      ) : (
+      <>
       {/* ---- Stats ---- */}
       <StatRow>
         <Stat label="Pending approval" value={stats.pending} />
@@ -341,11 +492,6 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
             );
           })}
         </div>
-        <select style={inputSt} value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="">All sources</option>
-          <option value="MINISO">Miniso</option>
-          <option value="LOCAL">Local</option>
-        </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{rows.length} row{rows.length === 1 ? "" : "s"}</span>
           <button style={ghost} disabled={rows.length === 0} onClick={download}>Download (CSV)</button>
@@ -652,11 +798,16 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                 </label>
                               ))}
                             </div>
-                            <textarea rows={2} placeholder="Optional note (what needs resolving)…" style={{ ...inputSt, width: "100%", resize: "vertical" }} value={chNote} onChange={(e) => setChNote(e.target.value)} />
+                            <textarea rows={2}
+                              placeholder={chNeedsNote ? "Say what the query is — required for “Other”…" : "Optional note (what needs resolving)…"}
+                              style={{ ...inputSt, width: "100%", resize: "vertical", borderColor: chNoteErr ? "var(--red)" : undefined }}
+                              value={chNote} onChange={(e) => setChNote(e.target.value)} />
                             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                              <button style={btn("var(--red)")} disabled={chReasons.size === 0 || busy === id} onClick={() => submitChallenge(r)}>Raise challenge</button>
+                              <button style={btn("var(--red)")} disabled={chReasons.size === 0 || !!chNoteErr || busy === id} onClick={() => submitChallenge(r)}>Raise challenge</button>
                               <button style={ghost} onClick={() => setChallengeFor(null)}>Cancel</button>
-                              {chReasons.size === 0 && <span style={{ fontSize: 11.5, color: "var(--faint)", alignSelf: "center" }}>Choose at least one reason.</span>}
+                              {chReasons.size === 0
+                                ? <span style={{ fontSize: 11.5, color: "var(--faint)", alignSelf: "center" }}>Choose at least one reason.</span>
+                                : chNoteErr && <span style={{ fontSize: 11.5, color: "var(--red)", alignSelf: "center" }}>{chNoteErr}</span>}
                             </div>
                           </td>
                         </tr>
@@ -672,6 +823,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           Approve a purchase, then either record its invoice + payment (Local Purchase) or log the <strong>HSBC Letter of Credit</strong> and reconcile it on settlement (Miniso HQ), before you <strong>Close</strong> it (reported as committed procurement spend). <strong>Challenge</strong> is available on any open purchase under a controlled reason (shown &ldquo;under challenge&rdquo; until resolved). Download the current view to CSV.
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
   settlesByLc, lcActionError, lcStatus, dcDrawdown, validateDc, normDcRef,
   PROC_PAYMENT_METHODS, isProcPaymentMethod, paymentMethodOf,
+  CHALLENGE_REASON_NEEDS_NOTE, challengeNoteError, PROC_CHALLENGE_REASONS,
 } from "../lib/procurement-close-rules.js";
 const ruleLc = { settlesByLc, lcActionError, lcStatus };
 
@@ -193,4 +194,21 @@ test("inventoryCostFx: £ inventory value at the costing FX rate", () => {
   assert.equal(inventoryCostFx({ currency: "USD", amount_ccy: 12700, amount_gbp: 9800, stock_value_gbp: 10160 }, null), 10160);
   // foreign, no rate and no booked valuation → fall back to the GBP cash value
   assert.equal(inventoryCostFx({ currency: "USD", amount_ccy: 12700, amount_gbp: 9800 }, null), 9800);
+});
+
+test("challenge reasons include Other, and Other requires a note", () => {
+  const codes = PROC_CHALLENGE_REASONS.map((r) => r.code);
+  assert.ok(codes.includes("OTHER"));
+  assert.equal(PROC_CHALLENGE_REASONS.find((r) => r.code === "OTHER").label, "Other");
+  assert.ok(isProcChallengeReason("OTHER"));
+  assert.deepEqual(challengeReasonLabels("OTHER,INVOICE_VALUE"), ["Other", "Invoice value"]);
+  // A fixed reason says what the query is on its own — no note needed.
+  assert.equal(challengeNoteError(["INVOICE_VALUE"], ""), null);
+  assert.equal(challengeNoteError([], ""), null);
+  // "Other" does not, so it must be explained.
+  assert.ok(challengeNoteError(["OTHER"], ""));
+  assert.ok(challengeNoteError(["OTHER"], "   "));            // whitespace is not an explanation
+  assert.ok(challengeNoteError(["INVOICE_VALUE", "OTHER"], "")); // still required alongside others
+  assert.equal(challengeNoteError(["OTHER"], "Supplier changed the spec"), null);
+  assert.equal(CHALLENGE_REASON_NEEDS_NOTE, "OTHER");
 });

@@ -14,7 +14,7 @@ import SupplierPicker from "../supplier-picker";
    here from the OTB workspace) against the approved Open-to-Buy. Exchange rates
    holds the USD→GBP spot / hedged / costing rates Finance converts at. */
 
-const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["BUDGETS", "Budgets"], ["MERCH", "Merchandising requests"], ["FX", "Exchange rates"]];
+const SECTIONS = [["MINISO", "Miniso purchases"], ["LOCAL", "Local purchases"], ["MERCH", "Merchandising requests"], ["FX", "Exchange rates"]];
 // Currencies a purchase can be raised in. USD converts to GBP at a chosen rate.
 const CCY_OPTS = [["GBP", "£ GBP"], ["USD", "$ USD"]];
 const CCY_SYMBOL = { GBP: "£", USD: "$" };
@@ -59,15 +59,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
   const isMerch = tab === "MERCH";
   const isFx = tab === "FX";
-  const isBudgets = tab === "BUDGETS";
   const s = data[tab];
-
-  // Save a budget for an explicit source (the Budgets tab edits both Miniso and Local).
-  async function saveBudgetFor(source, ym, value) {
-    setErr("");
-    try { await post({ action: "budget", source, ym, budget: Number(value) }); router.refresh(); }
-    catch (x) { setErr(x.message); }
-  }
 
   return (
     <>
@@ -88,8 +80,6 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {isFx ? (
         <FxPanel rates={fxRates} isFinance={roles.isFinance} onErr={setErr} onDone={() => router.refresh()} />
-      ) : isBudgets ? (
-        <BudgetsPanel data={data} isFinance={roles.isFinance} onSave={saveBudgetFor} />
       ) : isMerch ? (
         <MerchRequests otbVersions={otbVersions} activeVersionId={activeVersionId} requests={merchRequests} channelOpts={channelOpts} canManage={canManage} isMerchApprover={!!roles.isMerchApprover} suppliers={suppliers} />
       ) : (
@@ -562,54 +552,6 @@ function RateEditor({ rate, note, busy, onSave, inp }) {
   );
 }
 
-// Finance-only procurement budgets — the monthly cash budget for Miniso and Local
-// purchases, extendable as far ahead as needed. Single source of truth for the
-// budget figures shown on the Miniso/Local cash-budget-vs-committed tables.
-function BudgetsPanel({ data, isFinance, onSave }) {
-  const [extraMonths, setExtraMonths] = useState(0);
-  const budgetMap = (src) => {
-    const map = {};
-    for (const m of data[src]?.months || []) if (m.budget != null) map[m.ym] = m.budget;
-    return map;
-  };
-  const miniso = budgetMap("MINISO");
-  const local = budgetMap("LOCAL");
-  const dataMonths = [...(data.MINISO?.months || []), ...(data.LOCAL?.months || [])].map((m) => m.ym);
-  const now = thisYm();
-  const start = [now, ...dataMonths].sort()[0];
-  const end = [ymAdd(now, 23 + extraMonths), ...dataMonths].sort().slice(-1)[0];
-  const months = ymRange(start, end);
-  const inp = { width: 110, textAlign: "right", height: 26, fontSize: 12.5, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" };
-  const cell = (source, ym, val) => (isFinance
-    ? <input type="number" defaultValue={val ?? ""} placeholder="—" className="fos-num"
-        onBlur={(e) => { if (e.target.value !== String(val ?? "")) onSave(source, ym, e.target.value || 0); }} style={inp} />
-    : (val == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(val)));
-  const totalMiniso = months.reduce((t, ym) => t + (Number(miniso[ym]) || 0), 0);
-  const totalLocal = months.reduce((t, ym) => t + (Number(local[ym]) || 0), 0);
-  return (
-    <>
-      <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
-        <Tile label="Miniso budget" value={money(totalMiniso, { compact: true })} sub="shown months" />
-        <Tile label="Local budget" value={money(totalLocal, { compact: true })} sub="shown months" />
-      </div>
-      <Panel title="Procurement budgets" note="Finance sets the monthly cash budget for Miniso and Local purchases. Extend as far ahead as you need.">
-        {!isFinance && <div style={{ fontSize: 12.5, color: "var(--faint)", marginBottom: 12 }}>Read-only — procurement budgets are maintained by Finance.</div>}
-        <Table head={["Month", "Miniso budget", "Local budget"]} align={[0, 1, 1]}>
-          {months.map((ym) => (
-            <tr key={ym}>
-              <Td>{monthLabel(ym)}</Td>
-              <Td r>{cell("MINISO", ym, miniso[ym])}</Td>
-              <Td r>{cell("LOCAL", ym, local[ym])}</Td>
-            </tr>
-          ))}
-        </Table>
-        <div style={{ marginTop: 12 }}>
-          <button onClick={() => setExtraMonths((x) => x + 12)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>+ Add 12 more months</button>
-        </div>
-      </Panel>
-    </>
-  );
-}
 
 function Tile({ label, value, sub, tone }) {
   return (
