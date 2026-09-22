@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
-  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth } from "../lib/procurement-rules.js";
+  facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -214,4 +214,65 @@ test("summarise flags a month that is within committed budget but overspent", ()
   assert.equal(m.overBudget, false);      // nothing committed
   assert.equal(m.overSpent, true);        // but £1,500 has gone out against a £1,000 budget
   assert.equal(m.spentVariance, -500);
+});
+
+// ---- Budget check shown while raising a request ----
+
+const IMPACT_MONTHS = [
+  { ym: "2026-09", committed: 40000, spent: 25000, budget: 60000 },
+  { ym: "2026-10", committed: 90000, spent: 0, budget: 60000 },   // already over
+  { ym: "2026-11", committed: 5000, spent: 0, budget: null },     // no budget set
+];
+
+test("budgetImpact: headroom left after the request", () => {
+  const i = budgetImpact(IMPACT_MONTHS, "2026-09", 15000);
+  assert.equal(i.ym, "2026-09");
+  assert.equal(i.budget, 60000);
+  assert.equal(i.committed, 40000);
+  assert.equal(i.spent, 25000);
+  assert.equal(i.add, 15000);
+  assert.equal(i.newCommitted, 55000);
+  assert.equal(i.headroom, 5000);
+  assert.equal(i.over, false);
+  assert.equal(i.alreadyOver, false);
+  assert.equal(i.noBudget, false);
+});
+
+test("budgetImpact: this request is what tips the month over", () => {
+  const i = budgetImpact(IMPACT_MONTHS, "2026-09", 25000);
+  assert.equal(i.newCommitted, 65000);
+  assert.equal(i.headroom, -5000);
+  assert.equal(i.over, true);
+  assert.equal(i.alreadyOver, false);   // 40k was within the 60k budget on its own
+});
+
+test("budgetImpact: the month was already over before this request", () => {
+  const i = budgetImpact(IMPACT_MONTHS, "2026-10", 1000);
+  assert.equal(i.over, true);
+  assert.equal(i.alreadyOver, true);
+  assert.equal(i.headroom, -31000);
+});
+
+test("budgetImpact: a month with no budget still reports, flagged", () => {
+  const i = budgetImpact(IMPACT_MONTHS, "2026-11", 1000);
+  assert.equal(i.noBudget, true);
+  assert.equal(i.budget, null);
+  assert.equal(i.headroom, null);
+  assert.equal(i.over, false);
+  assert.equal(i.newCommitted, 6000);   // still shows what it would commit
+});
+
+test("budgetImpact: a month with nothing in it yet, and not enough form to judge", () => {
+  // Raising into a month that has no row at all — zero committed, no budget.
+  const fresh = budgetImpact(IMPACT_MONTHS, "2027-06", 2000);
+  assert.equal(fresh.committed, 0);
+  assert.equal(fresh.spent, 0);
+  assert.equal(fresh.newCommitted, 2000);
+  assert.equal(fresh.noBudget, true);
+  // No month worked out yet (form half-filled) → nothing to say.
+  assert.equal(budgetImpact(IMPACT_MONTHS, null, 2000), null);
+  assert.equal(budgetImpact(IMPACT_MONTHS, "", 2000), null);
+  // A blank amount is a valid zero-impact read, not a crash.
+  assert.equal(budgetImpact(IMPACT_MONTHS, "2026-09", "").newCommitted, 40000);
+  assert.equal(budgetImpact(undefined, "2026-09", 100).committed, 0);
 });
