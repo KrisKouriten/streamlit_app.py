@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow } from "../lib/procurement-rules.js";
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -582,4 +582,52 @@ test("tradeSpendByMonth counts both Miniso routes, and still not Miniso Investme
   ]);
   assert.equal(spend.MINISO["2026-10"], 218309 + 168341);   // both routes, no Investment
   assert.equal(spend.LOCAL["2026-10"], 117398);
+});
+
+// ---- Valuing a drawing when the extract carries no GBP figure ----
+
+test("facilityGbp: the bank's GBP figure wins when present", () => {
+  assert.equal(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }), 142567.29);
+});
+
+test("facilityGbp: a GBP drawing falls back to its payment amount", () => {
+  assert.equal(facilityGbp({ payment_amount: 13899.3, payment_currency: "GBP" }), 13899.3);
+  assert.equal(facilityGbp({ payment_amount: 13899.3 }), 13899.3);            // currency blank = GBP
+  assert.equal(facilityGbp({ facility_payment_gbp: null, payment_amount: 100, payment_currency: "gbp" }), 100);
+});
+
+test("facilityGbp: a foreign drawing converts at spot, or reports null", () => {
+  const rateFor = (c) => (c === "USD" ? 1.34 : null);
+  assert.equal(Math.round(facilityGbp({ payment_amount: 191040.18, payment_currency: "USD" }, rateFor)), 142567);
+  // No rate for that currency, or no resolver at all — don't guess a value.
+  assert.equal(facilityGbp({ payment_amount: 1000, payment_currency: "EUR" }, rateFor), null);
+  assert.equal(facilityGbp({ payment_amount: 1000, payment_currency: "USD" }), null);
+  // Nothing to value at all.
+  assert.equal(facilityGbp({}), null);
+  assert.equal(facilityGbp({ payment_amount: 0, payment_currency: "GBP" }), null);
+});
+
+test("tradeSpendByMonth values from payment_amount and counts what it cannot price", () => {
+  const rateFor = (c) => (c === "USD" ? 1.34 : null);
+  const spend = tradeSpendByMonth([
+    // No GBP figure — valued from the payment amount at spot.
+    { cost_driver: "Miniso Facility", due_date: "2026-10-21", payment_amount: 134000, payment_currency: "USD" },
+    // GBP drawing, no conversion needed.
+    { cost_driver: "Local Purchase", due_date: "2026-10-07", payment_amount: 117398, payment_currency: "GBP" },
+    // Foreign with no rate — cannot be priced, so counted rather than silently zero.
+    { cost_driver: "Miniso LC", due_date: "2026-10-13", payment_amount: 5000, payment_currency: "EUR" },
+  ], rateFor);
+  assert.equal(spend.MINISO["2026-10"], 100000);
+  assert.equal(spend.LOCAL["2026-10"], 117398);
+  assert.deepEqual(spend.unvalued, { MINISO: 1, LOCAL: 0 });
+});
+
+test("summarise carries the unpriced count through to the source summary", () => {
+  const trade = tradeSpendByMonth([
+    { cost_driver: "Local Purchase", due_date: "2026-09-30", payment_amount: 500, payment_currency: "USD" },
+  ]);   // no rateFor at all
+  const s = summarise([], [], { trade });
+  assert.equal(s.LOCAL.unvaluedDrawings, 1);
+  assert.equal(s.LOCAL.totalTradeSpent, 0);
+  assert.equal(s.MINISO.unvaluedDrawings, 0);
 });

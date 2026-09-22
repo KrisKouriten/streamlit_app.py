@@ -377,11 +377,109 @@ Upside / base / downside levers over the forecast inputs — flex sales, variabl
 fixed by a percentage and read the EBITDA delta vs base across scopes. Scenarios are
 saved and named; they never alter the underlying inputs.
 
-### 5.9 Procurement (OPERATE)
-Two sections — **Miniso purchases** and **Local purchases**. Supplier **payment
-terms** set the cash-out month (order month-end + terms), so committed spend is
-bucketed by the month cash actually leaves against a per-month **cash budget** the
-merch team edit inline. CSV-uploadable; illustrative seed until a real extract loads.
+### 5.9 Procurement — Requests (OPERATE) + Summary & Close (OPERATE)
+
+Procurement runs on **one axis: the payment date**. Every figure on these screens —
+budget, committed, spent — is placed in the month the cash actually leaves, so the
+three can be read side by side. Nothing is bucketed by order date.
+
+| Figure | Lands in the month of |
+| :--- | :--- |
+| **Committed** | order month-end + the payment terms entered on the request. Miniso HQ is fixed **180 days from the pickup date**. |
+| **Trade pay** | the facility drawing's **due date** (when the drawing is repaid). |
+| **Cash** | the invoice's **paid date**. |
+| **Budget** | that same payment month. |
+
+For a Miniso post-shipment buyer loan the due date is materially later than the
+drawdown, so its spend lands in the month the loan is repaid — which is what ties it
+back to the terms-driven month the commitment was projected into.
+
+#### 5.9.1 Procurement Requests (OPERATE) — where the team work
+Four tabs: **Miniso purchases** · **Local purchases** · **Merchandising requests** ·
+**Exchange rates**. (Budgets are **not** here — see §5.9.3.)
+
+**The monthly table** shows, per cash-out month: **Committed · Trade pay · Cash ·
+Spent · Budget · Variance**, with a Within/Over badge. *Spent* is what has actually
+settled and splits two ways, kept apart so Merch can see how a month was funded:
+
+- **Trade pay** — drawn on the HSBC trade facility. The **facility upload is the
+  source of truth** for it (§6.5); it is never read from the purchase rows.
+- **Cash** — settled directly, reported **on top of** the facility, from the purchases
+  Finance tagged *Cash* at payment. A purchase tagged *Trade pay* is deliberately
+  skipped here so the facility upload cannot double-count, and a paid purchase with no
+  method recorded is skipped rather than guessed at.
+
+**Raising a request** (*Add a purchase*). As soon as the field that decides the month
+is filled — **pickup date** for Miniso, **order month** for Local — a live **budget
+check** appears above the Add button: that month's Budget, Committed, Spent, what this
+request adds, what it *would* commit, and the headroom left or the amount it goes over
+by. It **informs, it does not block**: an over-budget request still submits and says it
+will be reviewed, and the wording distinguishes a month *this* request tips over from
+one already over before it. A foreign-currency request is measured at the spot
+conversion; Finance re-strike it on approval.
+
+**Awaiting sign-off vs budget** (managers only) shows the requests still to be approved,
+by the month each falls due, and what approving them all would commit — plus any month
+already over on committed or spent, even with nothing queued.
+
+**Approval route.** A merchandiser raises → the **Merchandising Department sign-off
+approver** approves (GOVERN → Users, Roles & Permissions → Department sign-off) → it
+reaches Finance on the close desk. The approver is emailed when a request is raised, and
+Finance when it is approved. A **Resubmit** button re-sends a sign-off request that was
+missed.
+
+#### 5.9.2 Procurement Summary + Close (OPERATE) — Finance's desk
+Finance/Admin only. Four tabs: **Miniso purchases** · **Local purchases** ·
+**Merchandising requests** · **Budgets**. Merch requests have their own book rather than
+mixing into the two cash-tracker sources. The status filters (**Needs Finance · Pending ·
+Approved · Challenged · Closed · All**) sit below the tabs and apply **within the open
+book**, with counts scoped to it; each tab badges what still needs Finance.
+
+**Lifecycle:** PENDING → APPROVED → (CHALLENGED) → CLOSED, plus re-open.
+
+**Challenge reasons:** Invoice value · Supplier terms · Landed cost · Spend vs budget ·
+OTB exceeded · **Other**. *Other* carries no meaning on its own, so it **requires the
+note** — enforced in the form and again in the API, so an unexplained challenge cannot
+be recorded.
+
+**Recording payment.** Set the payment status (Unpaid / Part-paid / Paid); once **Paid**,
+a **Paid via…** selector records **how it settled — Cash or Trade pay**. This is what
+drives the Spent split above, so it matters that it is set.
+
+**Awaiting your decision vs budget** (top of the desk) shows what the pending and
+challenged purchases would commit against each month's budget, alongside that month's
+Committed and Spent, badged **Within / Would go over / Already over / Overspent**. Months
+with nothing pending are hidden unless they are already over; **Show all months** drops
+the filter.
+
+#### 5.9.3 Procurement budgets — Finance only
+Budgets live on the **close desk → Budgets tab**, not on Procurement Requests: only
+Finance and Admin reach that page, so the control sits with the people who hold it. The
+team still see the Budget column on the Miniso/Local tables — read-only.
+
+A row per month, editable columns for **Miniso** and **Local**, saved on blur. The grid
+opens on 24 months and **+ Add 12 more months** extends it as far ahead as needed.
+
+**Upload forecast (CSV)** loads a whole forecast from the grid Finance already keep —
+**months across the top, a row per source**:
+
+```
+Source      | Notes | Sep-26  | Oct-26  | Nov-26  | ... | Total
+Miniso HQ   | fcst  | 180,000 | 210,000 | 195,000 | ... | ...
+Local Purch | fcst  |  60,000 |  55,000 |  62,000 | ... | ...
+```
+
+It reads what a spreadsheet actually exports: the **header row is found wherever it
+sits** (a title, a run date or a blank line above it is fine); month headers may be
+`Sep-26`, `September 2026`, `2026-09`, `09/2026` or `01/09/2026`; amounts may carry
+currency symbols and separators; `Notes`/`Total` columns and a `Total` row are ignored;
+and `Miniso HQ` / `Local Purchase` both match on the phrase.
+
+Two behaviours to rely on: a **blank cell is skipped, not saved as zero** (a gap means
+*not budgeted*, and zeros would wipe months already set), and the import **upserts rather
+than replacing** — a file covering part of the horizon tops the forecast up instead of
+deleting the months it did not mention. Anything unreadable is reported back, never
+dropped, and the file lands in **one transaction**.
 
 ### 5.10 Intercompany (OPERATE)
 A three-ledger tracker — **Bank Cash**, **Inventory & Recharges**, **Disbursements** —
