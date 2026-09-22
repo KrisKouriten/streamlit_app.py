@@ -5,8 +5,28 @@ import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
   settlesByLc, lcActionError, lcStatus, dcDrawdown, validateDc, normDcRef,
+  PROC_PAYMENT_METHODS, isProcPaymentMethod, paymentMethodOf,
 } from "../lib/procurement-close-rules.js";
 const ruleLc = { settlesByLc, lcActionError, lcStatus };
+
+test("PROC_PAYMENT_METHODS is Cash / Trade pay, and isProcPaymentMethod validates", () => {
+  assert.deepEqual(PROC_PAYMENT_METHODS.map((m) => m.code), ["CASH", "TRADE_PAY"]);
+  assert.deepEqual(PROC_PAYMENT_METHODS.map((m) => m.label), ["Cash", "Trade pay"]);
+  assert.ok(isProcPaymentMethod("CASH"));
+  assert.ok(isProcPaymentMethod("TRADE_PAY"));
+  assert.ok(!isProcPaymentMethod("PAID"));     // that's a payment status, not a method
+  assert.ok(!isProcPaymentMethod(""));
+  assert.ok(!isProcPaymentMethod(null));
+});
+
+test("paymentMethodOf reads the row's method, null when unset or unknown", () => {
+  assert.equal(paymentMethodOf({ payment_method: "CASH" }).label, "Cash");
+  assert.equal(paymentMethodOf({ payment_method: "TRADE_PAY" }).label, "Trade pay");
+  // Not paid yet, or paid before the method was captured.
+  assert.equal(paymentMethodOf({}), null);
+  assert.equal(paymentMethodOf({ payment_method: null }), null);
+  assert.equal(paymentMethodOf({ payment_method: "BOGUS" }), null);
+});
 
 test("dcDrawdown — used = logged LCs, remaining = value − used, grouped by DC ref", () => {
   const dcs = [
