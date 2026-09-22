@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE } from "../lib/procurement-rules.js";
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -466,4 +466,100 @@ test("the budget template parses cleanly through the importer", () => {
   assert.deepEqual(errors, []);
   assert.equal(records.length, 8);
   assert.deepEqual([...new Set(records.map((r) => r.source))].sort(), ["LOCAL", "MINISO"]);
+});
+
+// ---- Finding the header row (a real export rarely starts with it) ----
+
+test("parseBudgetGridCsv finds the header row under a title and blank lines", () => {
+  const csv = [
+    "Procurement Budget Forecast 2026-2028",   // title line
+    "",                                         // spacer
+    "Prepared by Finance,,,",                   // a note row
+    "Source,Sep-26,Oct-26",
+    "Miniso,180000,210000",
+    "Local,60000,55000",
+  ].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.deepEqual(errors, []);
+  assert.equal(records.length, 4);
+  assert.equal(records.find((r) => r.source === "MINISO" && r.ym === "2026-10").budget_gbp, 210000);
+});
+
+test("findMonthHeaderRow picks the row with the months, not the first row", () => {
+  assert.equal(findMonthHeaderRow([["Title"], ["Source", "Sep-26", "Oct-26"], ["Miniso", "1", "2"]]), 1);
+  assert.equal(findMonthHeaderRow([["Source", "Sep-26"], ["Miniso", "1"]]), 0);
+  // Nothing month-like anywhere.
+  assert.equal(findMonthHeaderRow([["Source", "Notes"], ["Miniso", "x"]]), -1);
+  assert.equal(findMonthHeaderRow([]), -1);
+});
+
+test("row numbers in errors still point at the real line in the file", () => {
+  const csv = [
+    "Budget forecast",      // line 1
+    "Source,Sep-26",        // line 2 — header
+    "Miniso,180000",        // line 3
+    "Capex,50000",          // line 4 — unrecognised label
+  ].join("\n");
+  const { records, errors } = parseBudgetGridCsv(csv);
+  assert.equal(records.length, 1);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].row, 4);
+});
+
+test("a repeated month column is reported, not silently overwritten", () => {
+  // Positional parsing keeps the two columns distinct; keying by header text
+  // would have collapsed them and let the second quietly win.
+  const { records, errors } = parseBudgetGridCsv("Source,Sep-26,Sep-26\nMiniso,100,999");
+  assert.ok(errors.some((e) => /more than once/.test(e.reason)));
+  assert.ok(errors.some((e) => /Two different budgets/.test(e.reason)));
+  assert.equal(records.length, 2);
+  assert.deepEqual(records.map((r) => r.budget_gbp), [100, 999]);
+});
+
+// ---- The control view surfaces over-budget months, not just queued ones ----
+
+const OVER_MONTHS = [
+  { ym: "2026-09", committed: 50000, spent: 0, budget: 60000, overBudget: false, overSpent: false },
+  { ym: "2026-10", committed: 90000, spent: 0, budget: 60000, overBudget: true, overSpent: false },
+  { ym: "2026-11", committed: 10000, spent: 80000, budget: 60000, overBudget: false, overSpent: true },
+  { ym: "2026-12", committed: 5000, spent: 0, budget: 60000, overBudget: false, overSpent: false },
+];
+
+test("requestsVsBudget lists an over-budget month even with nothing queued", () => {
+  // Only 2026-09 has a pending request, but Finance still have to explain Oct
+  // (over on commitment) and Nov (overspent).
+  const rows = [{ source: "LOCAL", order_ym: "2026-07", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" }];
+  const out = requestsVsBudget(rows, OVER_MONTHS, awaitingApproval);
+  assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11"]);
+  // A quiet, within-budget month stays out.
+  assert.ok(!out.some((m) => m.ym === "2026-12"));
+  const oct = out.find((m) => m.ym === "2026-10");
+  assert.equal(oct.awaitingCount, 0);
+  assert.equal(oct.committed, 90000);
+  assert.equal(oct.overBudget, true);
+  assert.equal(out.find((m) => m.ym === "2026-11").overSpent, true);
+});
+
+test("requestsVsBudget with { all } shows the whole horizon", () => {
+  const out = requestsVsBudget([], OVER_MONTHS, awaitingApproval, { all: true });
+  assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11", "2026-12"]);
+  assert.equal(out.find((m) => m.ym === "2026-12").committed, 5000);
+  // Exceptions-only is still the default.
+  assert.equal(requestsVsBudget([], OVER_MONTHS, awaitingApproval).length, 2);
+});
+
+test("requestsVsBudget carries the month's committed and spent through", () => {
+  const out = requestsVsBudget([], OVER_MONTHS, awaitingApproval, { all: true });
+  const sep = out.find((m) => m.ym === "2026-09");
+  assert.equal(sep.committed, 50000);
+  assert.equal(sep.spent, 0);
+  assert.equal(out.find((m) => m.ym === "2026-11").spent, 80000);
+  // A month with no row in the budget table reads zero rather than undefined.
+  const bare = requestsVsBudget(
+    [{ source: "LOCAL", order_ym: "2027-01", terms_days: 0, amount_gbp: 500, approval_status: "PENDING" }],
+    OVER_MONTHS, awaitingApproval);
+  const jan = bare.find((m) => m.ym === "2027-01");
+  assert.equal(jan.committed, 0);
+  assert.equal(jan.spent, 0);
+  assert.equal(jan.overBudget, false);
 });
