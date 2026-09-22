@@ -188,10 +188,11 @@ test("summarise splits spent into trade pay + cash against the budget", () => {
   assert.equal(m.tradeSpent, 30000);
   assert.equal(m.cashSpent, 20000);
   assert.equal(m.spent, 50000);
-  assert.equal(m.variance, 10000);        // budget − committed
-  assert.equal(m.spentVariance, 10000);   // budget − spent
-  assert.equal(m.overBudget, false);
-  assert.equal(m.overSpent, false);
+  // Variance = budget − committed − trade pay − cash, as Finance define it.
+  assert.equal(m.variance, 60000 - 50000 - 30000 - 20000);   // −40,000
+  assert.equal(m.spentVariance, 10000);              // budget − spent, unchanged
+  assert.equal(m.overBudget, true);
+  assert.equal(m.overSpent, false);                  // only £50k has actually settled
   const s = summarise(purchases, budgets, spend).LOCAL;
   assert.equal(s.totalTradeSpent, 30000);
   assert.equal(s.totalCashSpent, 20000);
@@ -214,13 +215,48 @@ test("summarise without any spend reads zero, and a settlement-only month still 
   assert.equal(only.MINISO.months[0].committed, 0);
 });
 
-test("summarise flags a month that is within committed budget but overspent", () => {
+test("summarise: a facility drawing with nothing committed still breaches the budget", () => {
   const budgets = [{ source: "MINISO", ym: "2026-09", budget_gbp: 1000 }];
   const spend = { trade: tradeSpendByMonth([{ cost_driver: "Miniso LC's", due_date: "2026-09-30", facility_payment_gbp: 1500 }]) };
   const m = summarise([], budgets, spend).MINISO.months[0];
-  assert.equal(m.overBudget, false);      // nothing committed
-  assert.equal(m.overSpent, true);        // but £1,500 has gone out against a £1,000 budget
+  // Nothing is committed, but £1,500 has been drawn on the facility against a
+  // £1,000 budget — that is over on both measures, and variance says so.
+  assert.equal(m.variance, -500);         // 1000 − 0 committed − 1500 trade pay
+  assert.equal(m.overBudget, true);
+  assert.equal(m.overSpent, true);
   assert.equal(m.spentVariance, -500);
+});
+
+test("KNOWN: a cash-settled order is netted off the budget twice", () => {
+  // Not an accident — Finance chose budget − committed − trade pay − cash, and
+  // cash spend is read from the same purchase rows that make up `committed`.
+  // So a cash-settled order reduces headroom twice and the month reads tighter
+  // than it is. This test exists to make that visible and findable rather than
+  // to endorse it: if it starts to matter, make `committed` mean the OUTSTANDING
+  // commitment so committed + spent is the total with nothing counted twice.
+  const purchases = [{
+    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60,
+    amount_gbp: 20000, status: "PAID", payment_method: "CASH", paid_date: "2026-09-10",
+  }];
+  const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
+  const m = summarise(purchases, budgets, { cash: cashSpendByMonth(purchases) }).LOCAL.months[0];
+  assert.equal(m.committed, 20000);
+  assert.equal(m.cashSpent, 20000);       // the same £20,000 order, counted again
+  assert.equal(m.variance, 10000);        // 50,000 − 20,000 − 20,000, not 30,000
+  assert.equal(m.overBudget, false);
+});
+
+test("no cash tagged means the overlap costs nothing", () => {
+  // Why the above is safe to ship today: until Finance tag a paid invoice,
+  // cashSpent is zero everywhere and the formula is exact.
+  const purchases = [{
+    source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-07", terms_days: 60,
+    amount_gbp: 20000, status: "COMMITTED",
+  }];
+  const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
+  const m = summarise(purchases, budgets, { cash: cashSpendByMonth(purchases) }).LOCAL.months[0];
+  assert.equal(m.cashSpent, 0);
+  assert.equal(m.variance, 30000);        // 50,000 − 20,000, nothing counted twice
 });
 
 // ---- Budget check shown while raising a request ----

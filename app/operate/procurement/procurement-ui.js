@@ -94,7 +94,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
 
-      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid">
+      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − trade pay − cash">
         {s.unvaluedDrawings > 0 && (
           <div style={{ fontSize: 12, color: "var(--amber)", marginBottom: 10, lineHeight: 1.5 }}>
             {s.unvaluedDrawings} facility drawing{s.unvaluedDrawings === 1 ? " is" : "s are"} not counted in Trade pay — no GBP amount on the upload, and no spot rate set for the drawing&rsquo;s currency. Set the rate on <strong>Exchange rates</strong>, or add a GBP column to the facility extract.
@@ -111,7 +111,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
                 <Td r>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
                 <Td r>{m.budget == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
-                <Td r>{m.budget ? <Bar value={m.committed} max={m.budget} over={m.overBudget} /> : null}</Td>
+                <Td r>{m.budget ? <Bar value={m.committed + m.spent} max={m.budget} over={m.overBudget} /> : null}</Td>
                 <Td>{m.budget == null ? <span style={{ color: "var(--faint)" }}>no budget</span> : <Badge tone={m.overBudget ? "red" : "green"}>{m.overBudget ? "Over" : "Within"}</Badge>}</Td>
               </tr>
             ))}
