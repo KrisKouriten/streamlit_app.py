@@ -69,7 +69,7 @@ test("dcDrawdown — over-draw flagged when logged LCs exceed the DC value", () 
 
 test("validateDc — reference required, value optional and non-negative", () => {
   assert.deepEqual(validateDc({ dc_reference: "  DC  UK1233788 ", dc_value: "200000" }).clean,
-    { dc_reference: "DC UK1233788", dc_value: 200000, notes: null });
+    { dc_reference: "DC UK1233788", dc_value: 200000, expected_payment_date: null, notes: null });
   assert.ok(validateDc({ dc_reference: "" }).errors.includes("DC reference is required"));
   assert.ok(validateDc({ dc_reference: "DC1", dc_value: "-5" }).errors.length === 1);
   assert.equal(validateDc({ dc_reference: "DC1" }).clean.dc_value, null); // blank value ok
@@ -211,4 +211,67 @@ test("challenge reasons include Other, and Other requires a note", () => {
   assert.ok(challengeNoteError(["INVOICE_VALUE", "OTHER"], "")); // still required alongside others
   assert.equal(challengeNoteError(["OTHER"], "Supplier changed the spec"), null);
   assert.equal(CHALLENGE_REASON_NEEDS_NOTE, "OTHER");
+});
+
+// ---- DC expected payment month, and the open balance it places ----
+import { validateDc as validateDcExp, dcDrawdown as dcDrawdownExp } from "../lib/procurement-close-rules.js";
+
+test("validateDc accepts a month, stores a date, and rejects nonsense", () => {
+  // The picker gives 'YYYY-MM'; only the month is ever used, so it stores the 1st.
+  assert.equal(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "2027-03" }).clean.expected_payment_date, "2027-03-01");
+  // A full date is accepted as typed.
+  assert.equal(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "2027-03-16" }).clean.expected_payment_date, "2027-03-16");
+  // Optional — absent or blank is not an error, it just has no month.
+  assert.equal(validateDcExp({ dc_reference: "DC UK1" }).clean.expected_payment_date, null);
+  assert.equal(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "  " }).clean.expected_payment_date, null);
+  assert.equal(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "" }).errors.length, 0);
+  // Rubbish is refused rather than stored as null and quietly forgotten.
+  assert.match(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "March" }).errors.join(), /YYYY-MM/);
+  assert.match(validateDcExp({ dc_reference: "DC UK1", expected_payment_date: "2027-13" }).errors.join(), /not a real month/);
+});
+
+test("dcDrawdown reports the open balance and the month it lands in", () => {
+  // The real shape from the desk: a DC of $220,000 with $209,355 drawn leaves
+  // $10,645 of credit agreed but not yet drawn as an LC. That is a commitment
+  // with no LC and therefore no date of its own — the DC's expected month places it.
+  const [g] = dcDrawdownExp(
+    [{ dc_id: 1, dc_reference: "DC UK1242544", dc_value: 220000, expected_payment_date: "2027-03-01" }],
+    [{ dc_reference: "DC UK1242544", lc_amount: 209355 }]);
+  assert.equal(g.used, 209355);
+  assert.equal(g.remaining, 10645);
+  assert.equal(g.openBalance, 10645);
+  assert.equal(g.openMonth, "2027-03");
+  assert.equal(g.openNeedsMonth, false);
+});
+
+test("dcDrawdown flags an open balance with nowhere to land", () => {
+  // A DC with money still to draw and no expected month is the case the desk has
+  // to ask about — otherwise it silently falls back to the pickup + 180 estimate.
+  const [g] = dcDrawdownExp([{ dc_id: 1, dc_reference: "DCUK1246655", dc_value: 220000 }], []);
+  assert.equal(g.openBalance, 220000);
+  assert.equal(g.openMonth, null);
+  assert.equal(g.openNeedsMonth, true);
+});
+
+test("dcDrawdown: a fully drawn or over-drawn DC has no open balance", () => {
+  const [full] = dcDrawdownExp(
+    [{ dc_id: 1, dc_reference: "A", dc_value: 220000, expected_payment_date: "2027-03-01" }],
+    [{ dc_reference: "A", lc_amount: 220000 }]);
+  assert.equal(full.openBalance, 0);
+  assert.equal(full.openNeedsMonth, false);      // nothing open, so nothing to ask about
+
+  // Over-drawn is a problem, but it is not open credit — it must not read as a
+  // negative commitment and credit a month back.
+  const [over] = dcDrawdownExp(
+    [{ dc_id: 2, dc_reference: "B", dc_value: 220000 }],
+    [{ dc_reference: "B", lc_amount: 230000 }]);
+  assert.equal(over.remaining, -10000);
+  assert.equal(over.over, true);
+  assert.equal(over.openBalance, 0);
+  assert.equal(over.openNeedsMonth, false);
+
+  // A DC with no value recorded cannot have a known balance either way.
+  const [novalue] = dcDrawdownExp([{ dc_id: 3, dc_reference: "C" }], []);
+  assert.equal(novalue.openBalance, null);
+  assert.equal(novalue.openNeedsMonth, false);
 });

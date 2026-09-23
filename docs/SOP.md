@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 2.1 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 2.2 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -566,6 +566,18 @@ The move is **lossless**: figures are carried across untouched and no month is c
 destroyed, so **shifting back by the same number undoes it exactly** (provided no budget
 was edited in between). It runs in one transaction and is recorded in the audit log as
 `procurement.budget.shift` with the shift and the before/after month range.
+
+**Documentary Credits and the open balance.** A Miniso request's LCs group under a DC,
+which carries the credit value they draw against. The **open balance** is `DC value −
+logged LCs`: credit agreed but not yet drawn as an LC. It is a firm commitment with no LC
+and therefore **no date of its own**, so each DC carries an **expected payment month**
+(migration 114) — that is the month its open balance is expected to be paid in, and the
+month it will be measured against. A DC with an open balance and no month set is flagged
+amber; until one is set the balance falls back to the request's pickup + 180 estimate.
+
+> Why it matters: pickup + 180 is a good estimate before anything is drawn, but once the
+> bank's own dates exist they are better, and they differ — LC96 estimates February 2027
+> while its four LCs all expect March 2027.
 
 ### 5.10 Intercompany (OPERATE)
 A three-ledger tracker — **Bank Cash**, **Inventory & Recharges**, **Disbursements** —
