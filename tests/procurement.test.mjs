@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp } from "../lib/procurement-rules.js";
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp,
+  fxOnCommitment } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -1073,4 +1074,107 @@ test("summarise carries the split onto the month, with cash alongside", () => {
   assert.deepEqual(m.spentByDriver, { "Miniso LC": 500000, "Miniso Facility": 297072, Cash: 12000 });
   // Cash is spend ON TOP of the facility, so the parts still make the whole.
   assert.equal(Object.values(m.spentByDriver).reduce((a, b) => a + b, 0), m.spent);
+});
+
+// ---- FX held inside the commitment (option 1: separate it from variance) ----
+//
+// Committed is struck at the COSTING rate (USD 1.28) because that is what stock
+// is valued at; spend is struck at SPOT (1.33) because that is what the bank
+// settles at. The 3.9% between them sat in the variance column and read as
+// budget performance. It is a valuation difference, so it now comes out.
+
+test("fxOnCommitment reads the attached figure, and is nil when absent", () => {
+  assert.equal(fxOnCommitment({ fx_gbp: 14292.8 }), 14292.8);
+  assert.equal(fxOnCommitment({}), 0);                 // GBP order, or no rate set
+  assert.equal(fxOnCommitment({ fx_gbp: null }), 0);
+  assert.equal(fxOnCommitment(), 0);
+});
+
+test("summarise lifts FX out of variance, so variance is budget performance", () => {
+  // $1,000,000 order, $512,293 drawn as LCs and reported as spend at spot.
+  // Undrawn $487,707:  at costing 1.28 = £380,989.84   (what `committed` shows)
+  //                    at spot    1.33 = £366,697.00
+  // FX held inside the commitment      = £ 14,292.84
+  const undrawnAtCosting = 487707 / 1.28;
+  const undrawnAtSpot = 487707 / 1.33;
+  const fx = undrawnAtCosting - undrawnAtSpot;
+  const drawnAtSpot = 512293 / 1.33;
+
+  const months = [{ source: "MINISO", ym: "2027-03", budget_gbp: 500000 }];
+  const order = {
+    source: "MINISO", supplier: "Miniso HQ", order_ym: "2026-09",
+    pickup_date: "2026-09-18", amount_gbp: 751879.70,
+    committed_gbp: undrawnAtCosting,
+    fx_gbp: fx,
+  };
+  const spend = { trade: { MINISO: { "2027-03": drawnAtSpot }, LOCAL: {} }, cash: { MINISO: {}, LOCAL: {} } };
+  const mar = summarise([order], months, spend).MINISO.months.find((m) => m.ym === "2027-03");
+
+  assert.equal(mar.committed, undrawnAtCosting);       // unchanged — still costing
+  assert.equal(mar.fx, fx);                            // reported on its own
+  // Variance adds the FX back: the month costs what the cash costs, not what the
+  // stock is valued at. Without this it read £14,292.84 worse than it is.
+  assert.ok(Math.abs(mar.variance - (500000 - undrawnAtCosting - drawnAtSpot + fx)) < 1e-9);
+  // Which is the whole order at spot against the budget — one basis throughout.
+  assert.ok(Math.abs(mar.variance - (500000 - 1000000 / 1.33)) < 1e-6);
+});
+
+test("summarise: no FX attached leaves variance exactly as it was", () => {
+  // A GBP order, a Local purchase, or a foreign order with no spot rate set.
+  // The formula must not move for anything that carries no FX.
+  const months = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 100000 }];
+  const local = { source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000 };
+  const sep = summarise([local], months, {}).LOCAL.months.find((m) => m.ym === "2026-09");
+  assert.equal(sep.fx, 0);
+  assert.equal(sep.variance, 100000 - 40000);
+  assert.equal(sep.overBudget, false);
+});
+
+test("overBudget and variance agree once FX is separated", () => {
+  // The month is over on the costing basis and inside it on the cash basis.
+  // The badge must follow the variance, not contradict it.
+  const months = [{ source: "MINISO", ym: "2027-03", budget_gbp: 380000 }];
+  const order = {
+    source: "MINISO", supplier: "Miniso HQ", order_ym: "2026-09", pickup_date: "2026-09-18",
+    amount_gbp: 390000, committed_gbp: 390000, fx_gbp: 15000,
+  };
+  const mar = summarise([order], months, {}).MINISO.months.find((m) => m.ym === "2027-03");
+  assert.equal(mar.committed, 390000);                 // over on the face of it
+  assert.equal(mar.variance, 380000 - 390000 + 15000); // +5,000 once FX is out
+  assert.equal(mar.overBudget, false);                 // so the badge says Within
+  assert.ok(mar.variance > 0 !== mar.overBudget === true);
+});
+
+test("budgetImpact nets FX off, so the raise check and the budget table agree", () => {
+  // Both read the same month row. When they disagreed on basis before, a request
+  // looked affordable on one screen and not on the other.
+  const months = [{ ym: "2027-03", budget: 500000, committed: 380990, spent: 385183, fx: 14293 }];
+  const i = budgetImpact(months, "2027-03", 50000);
+  assert.equal(i.fx, 14293);
+  assert.equal(i.used, 380990 + 385183 - 14293);
+  assert.equal(i.headroomBefore, 500000 - (380990 + 385183 - 14293));
+  assert.equal(i.headroom, i.headroomBefore - 50000);
+  // And it matches what summarise would put in the variance column for the month.
+  assert.equal(i.headroomBefore, 500000 - 380990 - 385183 + 14293);
+});
+
+test("requestsVsBudget splits FX by decided vs awaiting, not off the month total", () => {
+  // The month row's FX covers every order in the month. This rollup partitions
+  // the same orders, so taking the month total would credit the decided side
+  // with FX that belongs to the queue.
+  const decided  = { source: "MINISO", supplier: "HQ", order_ym: "2026-07", terms_days: 60,
+                     amount_gbp: 300000, committed_gbp: 300000, fx_gbp: 12000, finance_status: "APPROVED" };
+  const awaiting = { source: "MINISO", supplier: "HQ", order_ym: "2026-07", terms_days: 60,
+                     amount_gbp: 100000, committed_gbp: 100000, fx_gbp: 4000, finance_status: "PENDING" };
+  const months = [{ ym: "2026-09", budget: 350000, spent: 0, fx: 16000 }];
+  const [row] = requestsVsBudget([decided, awaiting], months, (r) => r.finance_status === "PENDING");
+
+  assert.equal(row.committed, 300000);
+  assert.equal(row.fx, 12000);                         // the decided side's FX only
+  assert.equal(row.awaiting, 100000);
+  assert.equal(row.awaitingFx, 4000);
+  assert.equal(row.headroom, 350000 - 300000 + 12000);            // 62,000
+  assert.equal(row.headroomIfApproved, 350000 - 400000 + 16000);  // -34,000
+  assert.equal(row.over, false);
+  assert.equal(row.wouldGoOver, true);
 });
