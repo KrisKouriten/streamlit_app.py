@@ -995,3 +995,34 @@ test("summarise: a zero balance commits nothing, and is not mistaken for absent"
   assert.equal(out.MINISO.totalCommitted, 0);
   assert.equal(out.MINISO.months.find((m) => m.committed !== 0), undefined);
 });
+
+test("requestsVsBudget uses the same committed basis as summarise", () => {
+  // THE FAULT THIS PINS. Committed is computed in TWO places: summarise() for
+  // the budget tables, and requestsVsBudget() for the close desk panel. The
+  // first was moved onto the LC balance and the second was not, so the close
+  // desk went on showing every Miniso month over — counting the drawn part as
+  // committed there while Treasury also reported it as spent.
+  const months = [{ ym: "2026-11", committed: 0, spent: 385183, budget: 512676 }];
+  // LC90: fully drawn, so nothing is still committed.
+  const rows = [{
+    source: "MINISO", order_ym: "2026-06", pickup_date: "2026-06-15",
+    amount_gbp: 413534, committed_gbp: 0, finance_status: "APPROVED",
+  }];
+  const [m] = requestsVsBudget(rows, months, AWAITING_FIN, { all: true });
+  assert.equal(m.ym, "2026-11");
+  assert.equal(m.committed, 0);                  // the balance, not the £413,534 order
+  assert.equal(m.wouldCommit, 0);
+  // 512,676 budget − 0 committed − 385,183 spent. The month is no longer over.
+  assert.equal(m.headroom, 127493);
+  assert.equal(m.over, false);
+});
+
+const AWAITING_FIN = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
+
+test("requestsVsBudget still uses the order value when no balance is given", () => {
+  // A Local purchase, or a Miniso order with nothing drawn — unchanged.
+  const months = [{ ym: "2026-09", committed: 0, spent: 0, budget: 100000 }];
+  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, finance_status: "APPROVED" }];
+  const [m] = requestsVsBudget(rows, months, AWAITING_FIN, { all: true });
+  assert.equal(m.committed, 40000);
+});
