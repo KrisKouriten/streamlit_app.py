@@ -196,3 +196,36 @@ test("schemaCheck covers the LC and DC tables the Miniso desk needs", () => {
   assert.equal(c.status, FAIL);
   assert.equal(c.detail[0].value, "093_procurement_dc.sql");
 });
+
+// ---- Which database is answering ----
+import { connectionCheck } from "../lib/diagnostics-rules.js";
+
+test("connectionCheck names the database and host, and never a password", () => {
+  const c = connectionCheck({
+    envKey: "DATABASE_URL",
+    host: "ep-cool-frost-12345-pooler.eu-west-2.aws.neon.tech",
+    database: "neondb",
+    server: "neondb as neondb_owner",
+  });
+  assert.equal(c.status, OK);
+  assert.match(c.summary, /neondb at ep-cool-frost-12345-pooler/);
+  assert.match(c.remedy, /Apply migrations to THIS database/);
+  const blob = JSON.stringify(c);
+  assert.ok(!/password|secret|:\/\//.test(blob), "must not carry a connection string or credential");
+});
+
+test("connectionCheck flags a fallback variable, since DATABASE_URL wins", () => {
+  // Several DATABASE_URLs are set on the project and only the first match is
+  // used — so which one is in play is worth saying out loud.
+  const plain = connectionCheck({ envKey: "DATABASE_URL", host: "h", database: "d" });
+  assert.equal(plain.detail.find((d) => d.label === "From variable").note, null);
+  const fallback = connectionCheck({ envKey: "Finance_DATABASE_URL", host: "h", database: "d" });
+  assert.match(fallback.detail.find((d) => d.label === "From variable").note, /DATABASE_URL is checked first/);
+});
+
+test("connectionCheck warns rather than guessing when there is no connection", () => {
+  const c = connectionCheck({});
+  assert.equal(c.status, WARN);
+  assert.match(c.remedy, /DATABASE_URL is set/);
+  assert.equal(connectionCheck().status, WARN);
+});
