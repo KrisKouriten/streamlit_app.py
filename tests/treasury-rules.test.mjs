@@ -334,3 +334,51 @@ test("parseFacilityCsv keeps a real facility_payment_gbp over the payment amount
   assert.equal(rows[0].facility_payment_gbp, 166000);   // the file's own figure
   assert.equal(rows[1].facility_payment_gbp, 171259);   // junk ignored, payment used
 });
+
+// ---- The payment amount is sterling, except when it was never converted ----
+//
+// THE FAULT THIS PINS. The extract states the drawing in its own currency and
+// the settlement in sterling, while payment_currency names the LOAN — so on a
+// USD row payment_amount IS pounds despite the column beside it saying USD, and
+// taking it as sterling is what makes November read the £512,293 actually paid.
+//
+// Except on one row it isn't. WCTUKA080493 carries EUR 31,642.80 against a
+// payment of 31,643 — the same figure. A foreign loan settling at a ratio of
+// 1.0000 is not an exchange rate: that cell was never converted, and treating
+// it as sterling valued a €31,643 drawing at £31,643 instead of about £27,516.
+
+const facRow = (extra) => "reference,cost_driver,payment_currency,loan_amount,loan_currency,payment_amount,due_date\n" + extra;
+
+test("a converted payment is taken as sterling", () => {
+  // The November shape: USD loan, sterling settlement, ratio 1.3360.
+  const { rows } = parseFacilityCsv(facRow('LAIUK1,Miniso LC,USD,"228,802.02",USD,"171,259",23/11/2026\n'));
+  assert.equal(rows[0].facility_payment_gbp, 171259);
+});
+
+test("a payment equal to a FOREIGN loan was never converted, so it is not sterling", () => {
+  const { rows } = parseFacilityCsv(facRow('WCTUKA080493,Local Purchase,EUR,"31,642.80",EUR,"31,643",18/12/2026\n'));
+  // Nothing is claimed as sterling — the caller converts the loan properly.
+  assert.equal(rows[0].facility_payment_gbp, null);
+  assert.equal(rows[0].loan_amount, 31642.8);
+  assert.equal(rows[0].loan_currency, "EUR");
+});
+
+test("a sterling loan's payment is sterling whether or not it matches", () => {
+  // No conversion is involved either way, so the equality carries no meaning.
+  const { rows } = parseFacilityCsv(facRow('WCTUKA1,Local Purchase,GBP,"42,089.67",GBP,"42,090",19/03/2027\n'));
+  assert.equal(rows[0].facility_payment_gbp, 42090);
+});
+
+test("the unconverted test tolerates rounding, not a real conversion", () => {
+  // 42,089.67 → 42,090 is the same figure rounded to the pound.
+  const near = parseFacilityCsv(facRow('WCTUKA2,Local Purchase,EUR,"42,089.67",EUR,"42,090",19/03/2027\n'));
+  assert.equal(near.rows[0].facility_payment_gbp, null);
+  // A genuine conversion, even a shallow one, is a different figure and stands.
+  const conv = parseFacilityCsv(facRow('WCTUKA3,Local Purchase,EUR,"42,089.67",EUR,"36,600",19/03/2027\n'));
+  assert.equal(conv.rows[0].facility_payment_gbp, 36600);
+});
+
+test("no loan amount to compare against — the payment stands as sterling", () => {
+  const { rows } = parseFacilityCsv(facRow('WCTUKA4,Local Purchase,USD,,,"10,950",03/02/2027\n'));
+  assert.equal(rows[0].facility_payment_gbp, 10950);
+});
