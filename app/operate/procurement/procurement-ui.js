@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders } from "../../../lib/procurement-rules";
+import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -398,6 +399,21 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
 
   return (
     <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete once head-approved">
+      {(() => {
+        // A challenge is Finance handing the order back. It is the one state on
+        // this page where somebody is waiting on the team who raised it, so it
+        // gets said once at the top rather than only inside a row.
+        const q = challengedOrders(orders);
+        if (!q.length) return null;
+        return (
+          <div style={{ border: "1px solid var(--red)", borderRadius: 9, padding: "10px 13px", marginBottom: 11, fontSize: 12.5, lineHeight: 1.55 }}>
+            <strong style={{ color: "var(--red)" }}>
+              {q.length} order{q.length === 1 ? "" : "s"} challenged by Finance
+            </strong>{" "}
+            — {q.length === 1 ? "it is" : "they are"} marked below with the reason. Amend the order, or cancel it if it is no longer wanted. Finance re-review once it changes.
+          </div>
+        );
+      })()}
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 860 }}>
           <thead><tr>
@@ -408,6 +424,10 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
           <tbody>
             {orders.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
+              // Finance's own lifecycle. A challenge lands here, not on
+              // approval_status, so without this the row reads "Approved" while
+              // Finance are waiting on an answer.
+              const chal = financeChallenge(o);
               const last = i === orders.length - 1 && fxApprove !== o.purchase_id;
               const bb = last ? "none" : "1px solid var(--hairline)";
               const cancelled = o.approval_status === "CANCELLED";
@@ -426,7 +446,23 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
                     {money(o.amount_gbp)}
                     {foreign && <div style={{ fontSize: 10.5, color: "var(--faint)", fontWeight: 400 }}>{ccyMoney(o.amount_ccy, o.currency)} {o.currency}{approved && o.cost_rate_type ? ` · ${FX_RATE_LABEL[o.cost_rate_type] || o.cost_rate_type}` : ""}</div>}
                   </td>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb }}>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                      <Badge tone={meta.tone}>{meta.label}</Badge>
+                      {chal && <Badge tone="red">Challenged</Badge>}
+                    </div>
+                    {chal && (
+                      <div style={{ marginTop: 5, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.45 }}>
+                        <div style={{ fontSize: 11, color: "var(--red)", fontWeight: 600 }}>
+                          {challengeReasonLabels(chal.reasons).join(" · ") || "Queried by Finance"}
+                        </div>
+                        {chal.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>&ldquo;{chal.note}&rdquo;</div>}
+                        <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 2 }}>
+                          Finance are waiting on you — amend it, or cancel it.
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
                     {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
