@@ -346,12 +346,16 @@ test("requestsVsBudget: pending requests measured against the month's budget", (
   assert.equal(m.ym, "2026-09");          // 31 Jul + 60d
   assert.equal(m.awaitingCount, 2);
   assert.equal(m.awaiting, 24000);
-  assert.equal(m.settled, 40000);
+  assert.equal(m.committed, 40000);
+  assert.equal(m.committedCount, 1);
+  // The whole point: the two are exclusive and add up to would-commit.
+  assert.equal(m.committed + m.awaiting, m.wouldCommit);
   assert.equal(m.wouldCommit, 64000);
   assert.equal(m.budget, 60000);
-  assert.equal(m.headroom, -4000);
-  assert.equal(m.over, true);
-  assert.equal(m.alreadyOver, false);      // the 40k approved was within budget
+  assert.equal(m.headroom, 20000);          // 60k budget - 40k committed - 0 spent
+  assert.equal(m.headroomIfApproved, -4000);
+  assert.equal(m.over, false);              // not over on what is decided
+  assert.equal(m.wouldGoOver, true);        // but approving the queue breaks it
 });
 
 test("requestsVsBudget: only months with something pending are returned", () => {
@@ -363,7 +367,7 @@ test("requestsVsBudget: only months with something pending are returned", () => 
   ];
   const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-10"]);
-  assert.equal(out[0].settled, 0);
+  assert.equal(out[0].committed, 0);
   assert.equal(out[0].noBudget, true);     // 2026-10 has no budget set
   assert.equal(out[0].headroom, null);
   assert.equal(out[0].over, false);
@@ -375,9 +379,10 @@ test("requestsVsBudget: a month already over before the pending requests", () =>
     { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
   ];
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
-  assert.equal(m.alreadyOver, true);
-  assert.equal(m.over, true);
-  assert.equal(m.headroom, -11000);
+  assert.equal(m.over, true);               // 70k approved against a 60k budget
+  assert.equal(m.headroom, -10000);
+  assert.equal(m.headroomIfApproved, -11000);
+  assert.equal(m.wouldGoOver, false);       // already over, not "would go" over
 });
 
 test("requestsVsBudget: the finance lifecycle reads the same way", () => {
@@ -389,10 +394,11 @@ test("requestsVsBudget: the finance lifecycle reads the same way", () => {
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingFinance);
   assert.equal(m.awaitingCount, 2);        // challenged + pending
   assert.equal(m.awaiting, 15000);
-  assert.equal(m.settled, 20000);          // closed
+  assert.equal(m.committed, 20000);        // closed
   assert.equal(m.wouldCommit, 35000);
   assert.equal(m.over, false);             // within the 60k
-  assert.equal(m.headroom, 25000);
+  assert.equal(m.headroom, 40000);         // 60k - 20k committed
+  assert.equal(m.headroomIfApproved, 25000);
 });
 
 test("requestsVsBudget: rows with no month to land in are skipped, empty input is safe", () => {
@@ -580,25 +586,30 @@ test("requestsVsBudget lists an over-budget month even with nothing queued", () 
   assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11"]);
   // A quiet, within-budget month stays out.
   assert.ok(!out.some((m) => m.ym === "2026-12"));
+  // Oct and Nov are listed because the BUDGET TABLE flags them, but their
+  // committed figure now comes from the rows passed in — none here — so it
+  // reads zero rather than borrowing a number computed on a different basis.
   const oct = out.find((m) => m.ym === "2026-10");
   assert.equal(oct.awaitingCount, 0);
-  assert.equal(oct.committed, 90000);
-  assert.equal(oct.overBudget, true);
-  assert.equal(out.find((m) => m.ym === "2026-11").overSpent, true);
+  assert.equal(oct.committed, 0);
+  assert.equal(out.find((m) => m.ym === "2026-11").spent, 80000);
 });
 
 test("requestsVsBudget with { all } shows the whole horizon", () => {
   const out = requestsVsBudget([], OVER_MONTHS, awaitingApproval, { all: true });
   assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11", "2026-12"]);
-  assert.equal(out.find((m) => m.ym === "2026-12").committed, 5000);
   // Exceptions-only is still the default.
   assert.equal(requestsVsBudget([], OVER_MONTHS, awaitingApproval).length, 2);
 });
 
-test("requestsVsBudget carries the month's committed and spent through", () => {
-  const out = requestsVsBudget([], OVER_MONTHS, awaitingApproval, { all: true });
+test("requestsVsBudget takes spend from the budget table and commitment from the rows", () => {
+  // Spend is settlement — the facility upload and cash — so it can only come
+  // from the budget table. Commitment is the rows themselves, so that it and
+  // `awaiting` partition the same population and actually add up.
+  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 12000, approval_status: "APPROVED" }];
+  const out = requestsVsBudget(rows, OVER_MONTHS, awaitingApproval, { all: true });
   const sep = out.find((m) => m.ym === "2026-09");
-  assert.equal(sep.committed, 50000);
+  assert.equal(sep.committed, 12000);      // from the row, not the table's 50000
   assert.equal(sep.spent, 0);
   assert.equal(out.find((m) => m.ym === "2026-11").spent, 80000);
   // A month with no row in the budget table reads zero rather than undefined.
@@ -609,7 +620,23 @@ test("requestsVsBudget carries the month's committed and spent through", () => {
   const jan = bare.find((m) => m.ym === "2027-01");
   assert.equal(jan.committed, 0);
   assert.equal(jan.spent, 0);
-  assert.equal(jan.overBudget, false);
+  assert.equal(jan.noBudget, true);
+});
+
+test("requestsVsBudget: spent counts against headroom alongside committed", () => {
+  // The agreed variance is budget - committed - trade pay - cash. A month whose
+  // budget is eaten by settlement is over even with a small order book.
+  const months = [{ ym: "2026-09", committed: 0, spent: 55000, budget: 60000 }];
+  const rows = [
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 8000, approval_status: "APPROVED" },
+    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 2000, approval_status: "PENDING" },
+  ];
+  const [m] = requestsVsBudget(rows, months, awaitingApproval);
+  assert.equal(m.spent, 55000);
+  assert.equal(m.headroom, -3000);           // 60000 - 8000 - 55000
+  assert.equal(m.headroomIfApproved, -5000);
+  assert.equal(m.over, true);
+  assert.equal(m.wouldGoOver, false);        // already over, so not "would go"
 });
 
 
@@ -828,4 +855,22 @@ test("shiftBudgetPlan with no budget set reports nothing to move", () => {
   assert.equal(p.suggested, null);   // nothing to line up
   // The activity month is still listed, and still flagged as uncovered.
   assert.deepEqual(p.stranded.map((r) => r.ym), ["2026-10"]);
+});
+
+test("requestsVsBudget places a Miniso order by pickup date, as the budget table does", () => {
+  // The close desk didn't select pickup_date, so cashOutFor fell back to order
+  // month + terms and put the row in a DIFFERENT month than the budget table.
+  // The two screens then showed the same order against two months, side by side,
+  // and "would commit" tied to neither. Selecting pickup_date is the fix; this
+  // pins the behaviour it restores.
+  const months = [{ ym: "2027-03", committed: 0, spent: 0, budget: 600000 }];
+  const withPickup = [{ source: "MINISO", order_ym: "2026-06", terms_days: 30, pickup_date: "2026-09-15", amount_gbp: 498422, finance_status: "CHALLENGED" }];
+  const [m] = requestsVsBudget(withPickup, months, awaitingFinance, { all: true });
+  assert.equal(m.ym, "2027-03");             // 15 Sep 2026 + 180d
+  assert.equal(m.awaiting, 498422);
+
+  // Without it, the same order lands in Jul 2026 — the bug, kept visible.
+  const noPickup = [{ ...withPickup[0], pickup_date: undefined }];
+  const out = requestsVsBudget(noPickup, months, awaitingFinance, { all: true });
+  assert.ok(out.some((r) => r.ym === "2026-07" && r.awaiting === 498422));
 });

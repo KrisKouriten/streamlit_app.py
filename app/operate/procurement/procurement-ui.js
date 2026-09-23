@@ -171,23 +171,26 @@ function AwaitingVsBudget({ rows = [], months = [] }) {
   const pipeline = requestsVsBudget(live, months, AWAITING_APPROVAL);
   if (!pipeline.length) return null;
   return (
-    <Panel title="Awaiting sign-off vs budget" note="what the requests still to be approved would do to each month's budget — approved and pending together">
-      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Headroom", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 0]}>
+    <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together">
+      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Headroom", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
         {pipeline.map((m) => (
           <tr key={m.ym}>
             <Td>{monthLabel(m.ym)}</Td>
             <Td r>{m.awaitingCount}</Td>
             <Td r>{money(m.awaiting)}</Td>
-            <Td r>{m.settled ? money(m.settled) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+            <Td r>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
             <Td r>{money(m.wouldCommit)}</Td>
             <Td r>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
             <Td r tone={m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)"}>
-              {m.noBudget ? "—" : money(Math.abs(m.headroom))}
+              {m.noBudget ? "—" : `${m.headroom < 0 ? "−" : ""}${money(Math.abs(m.headroom))}`}
+            </Td>
+            <Td r tone={m.noBudget ? undefined : m.headroomIfApproved < 0 ? "var(--red)" : "var(--green)"}>
+              {m.noBudget ? "—" : `${m.headroomIfApproved < 0 ? "−" : ""}${money(Math.abs(m.headroomIfApproved))}`}
             </Td>
             <Td>
               {m.noBudget
                 ? <span style={{ color: "var(--faint)" }}>no budget</span>
-                : <Badge tone={m.over ? "red" : "green"}>{m.over ? (m.alreadyOver ? "Already over" : "Would go over") : "Within"}</Badge>}
+                : <Badge tone={m.over ? "red" : m.wouldGoOver ? "amber" : "green"}>{m.over ? "Over" : m.wouldGoOver ? "Would go over" : "Within"}</Badge>}
             </Td>
           </tr>
         ))}

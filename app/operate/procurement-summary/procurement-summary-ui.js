@@ -9,7 +9,7 @@ import {
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
 } from "../../../lib/procurement-close-rules";
-import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError } from "../../../lib/procurement-rules";
+import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -345,9 +345,13 @@ const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_stat
 const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
 function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
   const [all, setAll] = useState(false);
+  // A cancelled order commits nothing, so it must not weigh on a budget month.
+  // (approval_status is absent on a database before migration 082 — an undefined
+  // status simply isn't CANCELLED, so the row still counts, as it did before.)
+  const live = rows.filter((r) => r.approval_status !== "CANCELLED");
   const sections = ["MINISO", "LOCAL"].map((src) => ({
     src,
-    pipeline: requestsVsBudget(rows.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
+    pipeline: requestsVsBudget(live.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
   })).filter((s) => s.pipeline.length);
   if (!sections.length && !all) return null;
   const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
@@ -368,6 +372,9 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
           ? <>Showing every month with a budget or activity.</>
           : <>Showing months with something awaiting a decision, plus any month already over on what is committed or spent.</>}{" "}
         Budgets are set on the <strong>Budgets</strong> tab above.
+        <div style={{ marginTop: 6 }}>
+          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Headroom</strong> is budget &minus; committed &minus; spent; <strong>If approved</strong> takes the awaiting value off as well.
+        </div>
       </div>
       {sections.map(({ src, pipeline }) => (
         <div key={src} style={{ marginBottom: 14 }}>
@@ -377,7 +384,8 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
               <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
               <th style={thR}>Committed</th><th style={thR}>Spent</th>
               <th style={thR}>Would commit</th><th style={thR}>Budget</th>
-              <th style={thR}>Headroom</th><th style={{ ...th, textAlign: "center" }}>Status</th>
+              <th style={thR}>Headroom</th><th style={thR}>If approved</th>
+              <th style={{ ...th, textAlign: "center" }}>Status</th>
             </tr></thead>
             <tbody>
               {pipeline.map((m) => (
@@ -385,21 +393,21 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
                   <td style={td}>{ymLabel(m.ym)}</td>
                   <td style={tdR}>{m.awaitingCount || <span style={{ color: "var(--faint)" }}>—</span>}</td>
                   <td style={tdR}>{m.awaiting ? money(m.awaiting) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
-                  <td style={{ ...tdR, color: m.overBudget ? "var(--red)" : undefined }}>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
-                  <td style={{ ...tdR, color: m.overSpent ? "var(--red)" : undefined }}>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
                   <td style={tdR}>{money(m.wouldCommit)}</td>
                   <td style={tdR}>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</td>
                   <td style={{ ...tdR, color: m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)" }}>
-                    {m.noBudget ? "—" : money(Math.abs(m.headroom))}
+                    {m.noBudget ? "—" : `${m.headroom < 0 ? "−" : ""}${money(Math.abs(m.headroom))}`}
+                  </td>
+                  <td style={{ ...tdR, color: m.noBudget ? undefined : m.headroomIfApproved < 0 ? "var(--red)" : "var(--green)" }}>
+                    {m.noBudget ? "—" : `${m.headroomIfApproved < 0 ? "−" : ""}${money(Math.abs(m.headroomIfApproved))}`}
                   </td>
                   <td style={{ ...td, textAlign: "center" }}>
                     {m.noBudget
                       ? <span style={{ color: "var(--faint)", fontSize: 12 }}>no budget</span>
-                      : <Badge tone={m.overBudget || m.overSpent || m.over ? "red" : "green"}>
-                          {m.overSpent ? "Overspent"
-                            : m.overBudget ? "Over on commitment"
-                            : m.over ? (m.alreadyOver ? "Already over" : "Would go over")
-                            : "Within"}
+                      : <Badge tone={m.over ? "red" : m.wouldGoOver ? "amber" : "green"}>
+                          {m.over ? "Over" : m.wouldGoOver ? "Would go over" : "Within"}
                         </Badge>}
                   </td>
                 </tr>
@@ -593,7 +601,10 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   }
 
   function download() {
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    // The export keeps Invoice no / net — they are still the record of what
+    // Finance keyed, even though the screen now shows them only where they are
+    // entered. Payment month rides alongside, on the cash-out basis.
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -606,6 +617,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
         reportBasis(r), r.report_gbp != null ? r.report_gbp : "",
         sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
+        cashOutFor(r) || "",
         r.finance_status, r.payment_status, r.invoice_number || "", r.invoice_amount != null ? r.invoice_amount : "",
       ].map(esc).join(","));
     }
@@ -689,7 +701,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Invoice no", "Invoice net", "Status", "Payment", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -727,8 +739,28 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             );
                           })()}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{r.invoice_number || "—"}</td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>{r.invoice_amount != null ? money(r.invoice_amount) : "—"}</td>
+                        {/* The month the cash actually leaves — the same basis the
+                            budgets and the facility due dates run on, so a line here
+                            can be traced to the month it lands in above. Miniso runs
+                            180 days from pickup, Local 180 on the facility, everything
+                            else order month-end + terms. */}
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                          {(() => {
+                            const ym = cashOutFor(r);
+                            if (!ym) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            return (
+                              <>
+                                {ymLabel(ym)}
+                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>
+                                  {r.source === "MINISO"
+                                    ? (r.pickup_date ? `pickup ${fmtDate(r.pickup_date)} + 180d` : "no pickup date yet")
+                                    : r.source === "LOCAL" ? "facility 180d"
+                                    : `${Number(r.terms_days) || 0}d terms`}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           <Badge tone={st.tone}>{st.label}</Badge>
                           {fs === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(r.challenge_reasons).join(" · ")}</div>}
