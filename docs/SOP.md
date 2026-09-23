@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.8 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 1.9 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -419,12 +419,22 @@ mean paying the supplier after HSBC has already been repaid.
 
 **Raising a request** (*Add a purchase*). As soon as the field that decides the month
 is filled — **pickup date** for Miniso, **order month** for Local — a live **budget
-check** appears above the Add button: that month's Budget, Committed, Spent, what this
-request adds, what it *would* commit, and the headroom left or the amount it goes over
-by. It **informs, it does not block**: an over-budget request still submits and says it
-will be reviewed, and the wording distinguishes a month *this* request tips over from
-one already over before it. A foreign-currency request is measured at the spot
-conversion; Finance re-strike it on approval.
+check** appears above the Add button. It answers one question: **does the month this is
+paid in have the budget left to carry it?** It shows that month's Budget, Committed,
+Spent, what is **Left before this**, what this request adds, and what is **Left after**
+or the amount it goes over by.
+
+Headroom is the agreed variance — **budget − committed − spent** — so a month the trade
+facility has already drawn from shows what is genuinely left, not the whole budget. (It
+previously showed Spent and then left it out of the arithmetic, so a month already drawn
+down reported full headroom and the request that used it up looked affordable.)
+
+It **informs, it does not block**: an over-budget request still submits and says it will
+be reviewed, and the wording distinguishes a month *this* request tips over from one
+already over before it. Where a month has no room, the practical answer is usually a
+**pickup or order date that pays in a month that does** — the budget is not moved to fit
+the order. A foreign-currency request is measured at the spot conversion; Finance
+re-strike it on approval.
 
 **Awaiting sign-off vs budget** (managers only) shows the requests still to be approved,
 by the month each falls due, and what approving them all would commit — plus any month
@@ -514,9 +524,19 @@ than replacing** — a file covering part of the horizon tops the forecast up in
 deleting the months it did not mention. Anything unreadable is reported back, never
 dropped, and the file lands in **one transaction**.
 
-**Re-phase a forecast** slides a whole source along the calendar when the shape of the
-budget is right but the timing has moved — goods slipping a quarter, a facility drawing
-later than planned. Pick the source and the number of months (negative moves it earlier)
+**Re-phase a forecast** slides a whole source along the calendar. Use it **only to correct
+a forecast loaded into the wrong months** — a mis-cut export, a phasing keyed a quarter
+out.
+
+> **Never move the budget to fit what has been ordered.** The budget is the cash-out plan
+> and it is the authority: the control is that an order's **payment month has the headroom
+> to carry it** before it is committed, which the budget check at the point of raise
+> (§5.9.1) exists to enforce. Re-phasing the budget because commitment landed elsewhere
+> inverts that — it makes the plan chase the spend, and there is then nothing left to
+> measure against. If orders are landing in months with no budget, the answer is to move
+> the orders, challenge them, or set a budget for those months deliberately.
+
+Pick the source and the number of months (negative moves it earlier)
 and the preview shows, per month, the **budget now**, the **budget after the shift** and
 what that month actually carries in **committed + spent**. Nothing is written until
 **Apply shift**.
