@@ -7,9 +7,10 @@ import {
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
+import { grossOf, vatLabel } from "../../../lib/vat-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -568,8 +569,19 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   // spend from the facility upload; cash is reported on top of it.
   const setPaymentMethod = (r, payment_method) => op(
     r.purchase_id,
-    { op: "set-payment-status", payment_status: r.payment_status, payment_method },
+    // The drawing reference rides with the method: switching to cash clears it,
+    // because a stale reference would reconcile against a drawing that paid for
+    // something else.
+    { op: "set-payment-status", payment_status: r.payment_status, payment_method, trade_pay_ref: payment_method === "TRADE_PAY" ? r.trade_pay_ref : null },
     payment_method ? `Paid via ${(paymentMethodOf({ payment_method })?.label || payment_method).toLowerCase()}.` : "Payment method cleared.",
+  );
+  // Which drawing a trade-pay row settled on — the bank's own reference, WC… on
+  // TradePay. Saved as typed and matched loosely against the facility: not found
+  // is flagged, never refused, because the extract is uploaded periodically.
+  const setTradePayRef = (r, trade_pay_ref) => op(
+    r.purchase_id,
+    { op: "set-payment-status", payment_status: r.payment_status, payment_method: r.payment_method, trade_pay_ref },
+    trade_pay_ref ? `Trade-pay reference saved.` : "Trade-pay reference cleared.",
   );
   const closeRow = (r) => {
     if (!window.confirm(`Close ${procRef(r)}? It will be reported as committed procurement spend.`)) return;
@@ -660,7 +672,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     // The export keeps Invoice no / net — they are still the record of what
     // Finance keyed, even though the screen now shows them only where they are
     // entered. Payment month rides alongside, on the cash-out basis.
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Gross value", "VAT basis", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -669,7 +681,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     for (const r of rows) {
       const sv = inventoryCostFx(r, costingRate), v = fxToPL(r);
       lines.push([
-        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r),
+        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r), grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"), vatLabel(r),
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
         reportBasis(r), r.report_gbp != null ? r.report_gbp : "",
         sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
@@ -757,7 +769,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "LC drawdown", "LC balance", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Gross", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -780,6 +792,14 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                           {money(lineValue(r))}
                           {isForeignRow(r) && r.amount_ccy != null && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{ccyAmt(r.amount_ccy, r.currency)}{r.cost_rate_type ? ` @ ${r.cost_rate_type.toLowerCase()}` : ""}</div>}
                           {fs === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Committed {money(committedAmount(r))}</div>}
+                        </td>
+                        {/* Net is what Merch entered; GROSS is what leaves the
+                            bank and what the budget is charged. Both are shown
+                            because a request read as £1,000 hitting a budget as
+                            £1,200 has to say why here, not in a variance. */}
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                          {money(grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"))}
+                          <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{vatLabel(r)}</div>
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
@@ -831,29 +851,37 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             the same basis as the Inventory column. */}
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
-                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
-                            const drawn = lcDrawdownGbp(r, costingRate);
-                            if (drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
-                            if (!drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const oc = outstandingCommitment(r, costingRate);
+                            if (settlesByLc(r) && oc.drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
+                            if (!oc.drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const lcs = (r.lcs || []).length;
                             return (
                               <>
-                                {money(drawn)}
-                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{(r.lcs || []).length} LC{(r.lcs || []).length === 1 ? "" : "s"} · spent via Treasury</div>
+                                {money(oc.drawn)}
+                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>
+                                  {settlesByLc(r)
+                                    ? `${lcs} LC${lcs === 1 ? "" : "s"} · spent via Treasury`
+                                    : r.payment_method === "CASH" ? "cash"
+                                    : r.payment_method === "TRADE_PAY" ? (r.trade_pay?.ref || "trade pay")
+                                    : "paid"}
+                                </div>
                               </>
                             );
                           })()}
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
-                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
-                            const bal = lcBalanceGbp(r, costingRate);
-                            if (bal == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            // A settled row commits nothing — cash has gone, and a
+                            // trade-pay drawing is already reported as spend from
+                            // the facility, so committing it again would charge the
+                            // month twice for the same money.
+                            const oc = outstandingCommitment(r, costingRate);
+                            if (oc.balance == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const TONE = { red: "var(--red)", green: "var(--green)", amber: "var(--amber)" };
                             return (
                               <>
-                                <span style={{ color: bal < 0 ? "var(--red)" : undefined, fontWeight: 600 }}>{money(bal)}</span>
-                                <div style={{ fontSize: 10.5, color: bal < 0 ? "var(--red)" : "var(--faint)", marginTop: 4 }}>
-                                  {bal < 0 ? "drawn over the order value" : "still committed"}
-                                </div>
+                                <span style={{ color: TONE[oc.tone], fontWeight: 600 }}>{money(oc.balance)}</span>
+                                {oc.note && <div style={{ fontSize: 10.5, color: TONE[oc.tone] || "var(--faint)", marginTop: 4 }}>{oc.note}</div>}
                               </>
                             );
                           })()}
@@ -883,6 +911,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                         <option value="">Paid via…</option>
                                         {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
                                       </select>
+                                    )}
+                                    {/* Which drawing it settled on. Only on trade pay —
+                                        cash has no drawing to reconcile to. */}
+                                    {r.payment_status === "PAID" && r.payment_method === "TRADE_PAY" && (
+                                      <TradePayRef row={r} busy={isBusy} onSave={(v) => setTradePayRef(r, v)} />
                                     )}
                                   </>
                                 )}
@@ -1201,5 +1234,48 @@ function PhasingVerdict({ phase, source }) {
         </>
       )}
     </div>
+  );
+}
+
+/*
+ * The trade-pay drawing a paid purchase settled on (migration 115).
+ *
+ * Recording HOW a purchase was paid was not enough to reconcile anything —
+ * "trade pay" says which register the money is in, not which line of it. With
+ * the reference, a procurement order can be tied to its HSBC drawing and closed
+ * once that loan has been repaid in full.
+ *
+ * A reference the facility has never heard of is FLAGGED, not refused. The
+ * extract is uploaded periodically, so a genuine reference may simply not be
+ * loaded yet, and refusing it would stop Finance recording a payment that really
+ * happened. Same treatment the LC references already get.
+ */
+function TradePayRef({ row, busy, onSave }) {
+  const saved = row.trade_pay_ref || "";
+  const [v, setV] = useState(saved);
+  useEffect(() => { setV(row.trade_pay_ref || ""); }, [row.trade_pay_ref]);
+  const dirty = v.trim().toUpperCase() !== saved.toUpperCase();
+  const m = row.trade_pay || {};
+  const TONE = { green: "var(--green)", amber: "var(--amber)", muted: "var(--faint)" };
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <input
+        value={v} onChange={(e) => setV(e.target.value)} disabled={busy}
+        placeholder="WC…" maxLength={40} title={m.label || "The HSBC drawing reference this settled on"}
+        style={{ ...inputSt, width: 130, fontFamily: "var(--mono)", fontSize: 11.5, textTransform: "uppercase" }}
+      />
+      {dirty
+        ? <button style={ghost} disabled={busy} onClick={() => onSave(v.trim().toUpperCase() || null)}>Save ref</button>
+        : m.state && m.state !== "n/a" && (
+            <span title={m.label} style={{ fontSize: 15, lineHeight: 1, color: TONE[m.tone] || "var(--faint)", cursor: "help" }}>
+              {m.state === "matched" ? "✓" : m.state === "unknown" ? "·" : "!"}
+            </span>
+          )}
+      {/* The facility saying the loan is repaid is what makes this order
+          closable — the whole point of capturing the reference. */}
+      {!dirty && row.trade_pay_settled === true && (
+        <span style={{ fontSize: 10.5, color: "var(--green)" }} title="The facility reports this drawing fully repaid — this order can be closed">settled</span>
+      )}
+    </span>
   );
 }

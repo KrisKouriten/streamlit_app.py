@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { getFxRates, setFxRate } from "../../../lib/fx";
+import { getFxRates, setFxRate, addFxCurrency, removeFxCurrency } from "../../../lib/fx";
 
 export const dynamic = "force-dynamic";
 const isFinance = (s) => hasRole(s, "ADMIN", "FINANCE");
@@ -20,6 +20,8 @@ export async function POST(request) {
   const actor = session.email || session.name;
   try {
     if (body.action === "set-fx-rate") return NextResponse.json(await setFxRate(body, actor));
+    if (body.action === "add-fx-currency") return NextResponse.json(await addFxCurrency(body.currency, actor));
+    if (body.action === "remove-fx-currency") return NextResponse.json(await removeFxCurrency(body.currency, actor));
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     return NextResponse.json({ error: e.message || "Request failed" }, { status: 400 });

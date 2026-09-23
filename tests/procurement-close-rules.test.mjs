@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp } from "../lib/procurement-close-rules.js";
+import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp,
+  normTradePayRef,
+  tradePayRefError,
+  tradePayMatch,
+  outstandingCommitment,
+  committedAmountNet
+} from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
@@ -131,9 +137,19 @@ test("lineValue prefers landed cost, falls back to order amount", () => {
   assert.equal(lineValue({ landed_cost: 0, amount_gbp: 9000 }), 9000);
 });
 
-test("committedAmount prefers the invoice net", () => {
-  assert.equal(committedAmount({ invoice_amount: 8800, landed_cost: 12000 }), 8800);
-  assert.equal(committedAmount({ landed_cost: 12000 }), 12000);
+test("committedAmount prefers the invoice net, and grosses it", () => {
+  // Both figures it chooses between are NET — invoice_amount is the invoice net
+  // Finance key in, landed_cost the net landed value. What leaves the bank is
+  // the gross, so the choice is unchanged and the grossing is applied after it.
+  assert.equal(committedAmount({ invoice_amount: 8800, landed_cost: 12000, vat_rate: 0 }), 8800);
+  assert.equal(committedAmount({ landed_cost: 12000, vat_rate: 0 }), 12000);
+  // At the standard rate (the Local / Merch default).
+  assert.equal(committedAmount({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 10560);
+  assert.equal(committedAmount({ source: "LOCAL", landed_cost: 12000 }), 14400);
+  // Miniso is an import — VAT goes to HMRC at the border, not to the supplier.
+  assert.equal(committedAmount({ source: "MINISO", landed_cost: 12000 }), 12000);
+  // The net figure stays available for showing the two side by side.
+  assert.equal(committedAmountNet({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 8800);
 });
 
 test("challengeReasonLabels maps codes back to labels", () => {
@@ -329,4 +345,153 @@ test("lcBalanceGbp goes negative when more is drawn than the order is worth", ()
   // Over-drawn is a problem to surface, not to clamp away.
   const over = { currency: "GBP", amount_gbp: 10000, lcs: [{ lc_amount: 12000 }] };
   assert.equal(lcBalanceGbp(over, null), -2000);
+});
+
+// ---- Which drawing a trade-pay row settled on (migration 115) ----
+//
+// Migration 113 records HOW a purchase was paid. It does not record WHICH
+// drawing, so a row tagged TRADE_PAY could not be tied to the HSBC facility and
+// the two registers had to be reconciled by eye. The point of the link: close a
+// procurement order once the loan behind it is repaid in full.
+
+test("normTradePayRef ignores case and whitespace", () => {
+  assert.equal(normTradePayRef(" wctuka096701 "), "WCTUKA096701");
+  assert.equal(normTradePayRef("WCTUKA 096701"), "WCTUKA096701");
+  assert.equal(normTradePayRef(""), "");
+  assert.equal(normTradePayRef(null), "");
+  assert.equal(normTradePayRef(undefined), "");
+});
+
+test("tradePayRefError: a reference belongs only on a trade-pay row", () => {
+  assert.equal(tradePayRefError("TRADE_PAY", "WCTUKA096701"), null);
+  assert.equal(tradePayRefError("TRADE_PAY", "LAIUK1076002"), null);
+  assert.equal(tradePayRefError("TRADE_PAY", ""), null);          // optional
+  assert.equal(tradePayRefError("CASH", ""), null);
+  assert.equal(tradePayRefError(null, null), null);
+  // Cash has no drawing — a reference on it would reconcile against something
+  // that paid for a different purchase entirely.
+  assert.match(tradePayRefError("CASH", "WCTUKA096701"), /only applies/);
+  assert.match(tradePayRefError(null, "WCTUKA096701"), /only applies/);
+  // Shape.
+  assert.match(tradePayRefError("TRADE_PAY", "WC"), /too short/);
+  assert.match(tradePayRefError("TRADE_PAY", "W".repeat(41)), /too long/);
+  assert.match(tradePayRefError("TRADE_PAY", "WCTUK@096701"), /letters, digits/);
+});
+
+test("tradePayMatch: not found is a warning, never a refusal", () => {
+  const refs = new Set(["WCTUKA096701", "WCTUKA095259"]);
+  const of = (ref, method = "TRADE_PAY") => tradePayMatch({ payment_method: method, trade_pay_ref: ref }, refs);
+
+  assert.equal(of("WCTUKA096701").state, "matched");
+  assert.equal(of(" wctuka096701 ").state, "matched");           // normalised both sides
+  assert.match(of("WCTUKA096701").label, /Reconciles/);
+
+  // THE POINT. The HSBC extract is uploaded periodically, so a genuine reference
+  // may not be loaded yet. Flagged, not refused.
+  const miss = of("WCTUKA099999");
+  assert.equal(miss.state, "unmatched");
+  assert.equal(miss.tone, "amber");
+  assert.match(miss.label, /not on the facility register/);
+
+  // Trade pay with no reference at all cannot be reconciled, and says so.
+  assert.equal(of("").state, "missing");
+  assert.equal(of(null).state, "missing");
+
+  // Cash rows are not in this conversation.
+  assert.equal(of("WCTUKA096701", "CASH").state, "n/a");
+  assert.equal(of("", "CASH").state, "n/a");
+  assert.equal(of(null, null).state, "n/a");
+});
+
+test("tradePayMatch: an unreadable facility is unknown, not unmatched", () => {
+  // Before migration 077, or when the register cannot be read, a reference must
+  // not be reported as wrong — we simply cannot say.
+  const m = tradePayMatch({ payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA096701" }, null);
+  assert.equal(m.state, "unknown");
+  assert.equal(m.ref, "WCTUKA096701");
+  assert.match(m.label, /cannot be checked/);
+  // An empty register is different from an absent one: there it genuinely is not present.
+  assert.equal(tradePayMatch({ payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA096701" }, new Set()).state, "unmatched");
+});
+
+// ---- What a purchase still commits, whatever it settles on ----
+//
+// The LC drawdown / LC balance pair only meant anything for Miniso. A Local
+// Purchase showed a dash in both — which is not "nothing to say", it is the same
+// question with a different answer. And a Local order settled on trade pay is a
+// drawing on the facility, which the desk ALREADY reports as spend: leaving it
+// committed charges the month twice for the same money, the exact double count
+// that made every Miniso month read over.
+
+// vat_rate pinned to 0 so these assert the SETTLEMENT rule and nothing else.
+// Grossing is migration 116's job and is tested in tests/vat-rules.test.mjs.
+const local = (extra = {}) => ({ source: "LOCAL", amount_gbp: 5000, vat_rate: 0, ...extra });
+
+test("outstandingCommitment: an unsettled Local order commits its full value", () => {
+  const oc = outstandingCommitment(local());
+  assert.equal(oc.drawn, null);
+  assert.equal(oc.balance, 5000);
+  assert.equal(oc.closable, false);
+  // Committed, not paid — a dash here used to be the only answer available.
+  assert.equal(oc.note, "still committed");
+});
+
+test("outstandingCommitment: cash settles it — balance nil", () => {
+  const oc = outstandingCommitment(local({ payment_status: "PAID", payment_method: "CASH" }));
+  assert.equal(oc.drawn, 5000);
+  assert.equal(oc.balance, 0);
+  assert.equal(oc.note, "settled in cash");
+  assert.equal(oc.closable, true);
+});
+
+test("outstandingCommitment: trade pay commits nothing, because the facility reports it", () => {
+  const open = outstandingCommitment(local({
+    payment_status: "PAID", payment_method: "TRADE_PAY",
+    trade_pay: { state: "matched", ref: "WCTUKA096701" }, trade_pay_settled: false,
+  }));
+  assert.equal(open.balance, 0, "a trade-pay drawing is already spend on the facility");
+  assert.equal(open.drawn, 5000);
+  assert.equal(open.closable, false);          // the loan is still outstanding
+
+  // The facility saying the loan is repaid is what makes the order closable.
+  const done = outstandingCommitment(local({
+    payment_status: "PAID", payment_method: "TRADE_PAY",
+    trade_pay: { state: "matched", ref: "WCTUKA096701" }, trade_pay_settled: true,
+  }));
+  assert.equal(done.closable, true);
+  assert.match(done.note, /ready to close/);
+});
+
+test("outstandingCommitment: a trade-pay row with no usable reference says so", () => {
+  const noRef = outstandingCommitment(local({ payment_status: "PAID", payment_method: "TRADE_PAY", trade_pay: { state: "missing" } }));
+  assert.equal(noRef.tone, "amber");
+  assert.match(noRef.note, /no drawing reference/);
+
+  const bad = outstandingCommitment(local({ payment_status: "PAID", payment_method: "TRADE_PAY", trade_pay: { state: "unmatched", ref: "WC999" } }));
+  assert.equal(bad.tone, "amber");
+  assert.match(bad.note, /not on the facility/);
+});
+
+test("outstandingCommitment: paid with no method recorded is flagged, not guessed", () => {
+  // Tagging it either way would move real money between Cash and Trade pay on
+  // the desk. The balance still clears, because the money has gone.
+  const oc = outstandingCommitment(local({ payment_status: "PAID" }));
+  assert.equal(oc.balance, 0);
+  assert.equal(oc.tone, "amber");
+  assert.match(oc.note, /not recorded/);
+  assert.equal(oc.closable, false);
+});
+
+test("outstandingCommitment: Miniso keeps the LC balance it already had", () => {
+  const miniso = { source: "MINISO", currency: "USD", amount_ccy: 100000, lc_drawn_ccy: 40000 };
+  const oc = outstandingCommitment(miniso, 1.28);
+  // inventory 100,000/1.28 = 78,125; drawn 40,000/1.28 = 31,250; balance 46,875.
+  assert.equal(Math.round(oc.drawn), 31250);
+  assert.equal(Math.round(oc.balance), 46875);
+  assert.equal(oc.note, "still committed");
+  // Over-drawn stays visible rather than clamping to zero.
+  const over = outstandingCommitment({ source: "MINISO", currency: "USD", amount_ccy: 10000, lc_drawn_ccy: 20000 }, 1.28);
+  assert.ok(over.balance < 0);
+  assert.equal(over.tone, "red");
+  assert.match(over.note, /drawn over/);
 });
