@@ -179,13 +179,22 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
   const [product, setProduct] = useState("");
 
   // Upload a fresh HSBC extract (replace-mode). Reads the chosen CSV and posts it.
+  const [ignored, setIgnored] = useState([]);
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     e.target.value = "";                         // allow re-selecting the same file
     if (!file) return;
     if (rows.length && !window.confirm(`Replace the whole facility register (${rows.length} drawing${rows.length === 1 ? "" : "s"}) with the contents of “${file.name}”? This cannot be undone.`)) return;
     const csv = await file.text();
-    await op({ op: "upload-facility", csv }, "Bank trade facility updated.");
+    const res = await op({ op: "upload-facility", csv }, "Bank trade facility updated.");
+    // Columns the parser did not recognise. It drops them, which is usually
+    // right — an extract carries plenty the register has no use for — but it
+    // used to drop them in silence, and a GBP column spelled a way the header
+    // list did not know went with them. The register then showed no GBP, the
+    // desk converted at spot instead, and a month read six figures light.
+    if (res?.ignored?.length) setIgnored(res.ignored);
+    else setIgnored([]);
   }
   function downloadTemplate() {
     const csv = FACILITY_UPLOAD_COLUMNS.join(",") + "\n";
@@ -202,10 +211,10 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
     // The loan pair is exported alongside the payment pair. Downloading only one
     // of them, with a bare "Currency" header covering both, is how the two came
     // to be added up as if they were the same money.
-    const head = ["Reference", "DC reference", "Beneficiary", "Loan currency", "Loan amount", "Payment currency", "Payment amount", "Facility GBP", "Counted GBP", "Product", "Cost driver", "Start", "Due", "Days", "Settlement month", "Status"];
+    const head = ["Reference", "DC reference", "Beneficiary", "Loan currency", "Loan amount", "Payment currency", "Payment amount", "Facility GBP", "Counted GBP", "Implied rate", "Product", "Cost driver", "Start", "Due", "Days", "Settlement month", "Status"];
     const esc = (v) => { const x = v == null ? "" : String(v); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
     const lines = [head.join(",")];
-    for (const r of filtered) lines.push([r.reference, r.in_procurement ? (r.dc_reference || "") : "NOT IN PROCUREMENT", r.beneficiary, r.loan_currency || r.payment_currency, r.loan_amount, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.gbp_at_spot, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
+    for (const r of filtered) lines.push([r.reference, r.in_procurement ? (r.dc_reference || "") : "NOT IN PROCUREMENT", r.beneficiary, r.loan_currency || r.payment_currency, r.loan_amount, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.gbp_at_spot, r.implied_rate, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
     const a = document.createElement("a");
     a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(lines.join("\n"));
     a.download = `bank-trade-facility-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -254,6 +263,19 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
             )}
           </div>
         </div>
+        {ignored.length > 0 && (
+          <div style={{ border: "1px solid var(--amber)", borderRadius: 9, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, lineHeight: 1.55 }}>
+            <strong style={{ color: "var(--amber)" }}>
+              {ignored.length} column{ignored.length === 1 ? "" : "s"} in that file {ignored.length === 1 ? "was" : "were"} not read.
+            </strong>{" "}
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11.5 }}>{ignored.join(" · ")}</span>
+            <div style={{ color: "var(--muted)", marginTop: 5 }}>
+              Usually harmless — an extract carries more than the register needs. But if one of those holds the sterling
+              amount, the desk will convert the foreign figure at spot instead of using it. Check against the{" "}
+              <strong style={{ color: "var(--ink)" }}>Template</strong> column names, or tell me the header and I will map it.
+            </div>
+          </div>
+        )}
         {canManage && !rows.length && (
           <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>
             No facility drawings loaded. Download the <strong>Template</strong>, paste your HSBC extract into it (one drawing per row — <span style={{ fontFamily: "var(--mono)" }}>reference</span> is the bank drawing ref, e.g. LAIUK…), then <strong>Upload HSBC extract</strong>. Uploading replaces the whole register.
@@ -265,7 +287,7 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
               {/* Loan and Payment are separate money on a post-shipment buyer
                   loan. Showing only one of them, unlabelled as to currency, is
                   what made November unreadable. */}
-              {["Reference", "DC", "Beneficiary", "Product", "Cost driver", "Loan", "Payment", "Counted (GBP)", "Start", "Due", "Days", "Settle"].map((h, i) => (
+              {["Reference", "DC", "Beneficiary", "Product", "Cost driver", "Loan", "Counted (GBP)", "Rate", "Start", "Due", "Days", "Settle"].map((h, i) => (
                 <th key={h} style={{ ...th, textAlign: i >= 5 && i <= 7 ? "right" : "left" }}>{h}</th>
               ))}
             </tr></thead>
@@ -279,24 +301,23 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
                   <td style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{r.beneficiary}</td>
                   <td style={td}>{r.product_type === "Post-shipment buyer loan" ? <Badge tone="accent">Buyer loan</Badge> : <Badge tone="muted">TradePay</Badge>}</td>
                   <td style={td}>{r.cost_driver}</td>
-                  {/* The drawing itself — what Trade-pay spend is valued from. */}
+                  {/* The drawing in its own currency. */}
                   <td style={tdR}>{money(r.loan_amount, { ccy: r.loan_currency || r.payment_currency })}</td>
-                  {/* The settlement. Not the same money as the loan, and it
-                      printed a £ against a USD figure — a month's drawings were
-                      read off this column as sterling, which is the whole
-                      reason November looked £127k light. */}
-                  <td style={tdR}>{money(r.payment_amount, { ccy: r.payment_currency })}</td>
-                  {/* The bank's own GBP where the extract carries one; otherwise
-                      what Trade-pay spend actually counts, converted at spot.
-                      A dash here used to mean "no idea", while the desk was
-                      quietly using a figure nobody could see. */}
+                  {/* The sterling that settled it — what Trade-pay spend counts.
+                      The extract carries this in `payment_amount`, with a £ in
+                      the cell, while `payment_currency` names the LOAN. Read the
+                      other way round it said "USD 171,259", and the desk
+                      converted an already-sterling figure at spot. */}
                   <td style={tdR}>
-                    {r.facility_payment_gbp != null && Number(r.facility_payment_gbp)
-                      ? money(r.facility_payment_gbp)
-                      : r.gbp_at_spot != null
-                        ? <span title={`Converted at the spot rate from the LOAN amount, not the payment amount. This is the figure Trade-pay spend counts.`}
-                                style={{ color: "var(--muted)" }}>{money(r.gbp_at_spot)}<span style={{ fontSize: 9.5, color: "var(--faint)", marginLeft: 3 }}>spot</span></span>
-                        : <span style={{ color: "var(--faint)" }}>—</span>}
+                    {r.gbp_at_spot != null ? money(r.gbp_at_spot) : <span style={{ color: "var(--faint)" }}>—</span>}
+                  </td>
+                  {/* loan / sterling = the rate the bank actually dealt at.
+                      Arithmetic on two columns the bank supplied, not an
+                      inference, so the hedge is checkable per drawing. */}
+                  <td style={tdR} title={r.implied_rate ? "Loan ÷ sterling settled — the rate the bank dealt at" : undefined}>
+                    {r.implied_rate
+                      ? <span className="fos-num" style={{ color: "var(--muted)" }}>{r.implied_rate.toFixed(4)}</span>
+                      : <span style={{ color: "var(--faint)" }}>—</span>}
                   </td>
                   <td style={td}>{dLabel(r.loan_start_date)}</td>
                   <td style={td}>{dLabel(r.due_date)}</td>

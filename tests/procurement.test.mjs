@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement,
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement, facilityImpliedRate,
   fxOnCommitment, phasingCheck } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
@@ -675,34 +675,31 @@ test("tradeSpendByMonth counts both Miniso routes, and still not Miniso Investme
 
 // ---- Valuing a drawing when the extract carries no GBP figure ----
 
-test("facilityGbp: the bank's GBP figure is the FALLBACK, not the answer", () => {
-  // No rate resolver, so there is nothing to convert with and the extract's own
-  // figure is all there is. Losing the money would be worse than a basis it was
-  // not struck on.
-  assert.equal(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }), 142567.29);
-  // Same row, with a spot rate available: spot wins.
+test("facilityGbp: a GBP figure on the row wins — it is the cash, not an estimate", () => {
+  // CORRECTED. An earlier change made the spot conversion win over the extract's
+  // own GBP, on the inference that that column held figures struck at an odd
+  // rate. The data disproved it: the column was EMPTY, because the upload was
+  // silently dropping its header. Where Finance do put sterling on a row, that
+  // is the cash that left, dealt at whatever rate the bank actually used, and
+  // converting it again at spot replaces a real number with an estimate.
   const rateFor = (c) => (c === "USD" ? 1.33 : null);
-  assert.equal(Math.round(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }, rateFor)), 143639);
-  // No amount to convert — fall back rather than report nothing.
-  assert.equal(facilityGbp({ facility_payment_gbp: 500, payment_currency: "USD" }, rateFor), 500);
-  // No rate for THAT currency — same.
-  assert.equal(facilityGbp({ facility_payment_gbp: 500, payment_amount: 700, payment_currency: "EUR" }, rateFor), 500);
+  assert.equal(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }, rateFor), 142567.29);
+  assert.equal(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }), 142567.29);
+  // A loan amount already in sterling is the same case.
+  assert.equal(facilityGbp({ loan_amount: 512293, loan_currency: "GBP", payment_amount: 171259, payment_currency: "USD" }, rateFor), 512293);
+  // And so is a sterling payment amount when nothing else is sterling.
+  assert.equal(facilityGbp({ loan_amount: 512293, loan_currency: "USD", payment_amount: 385183, payment_currency: "GBP" }, rateFor), 385183);
 });
 
-test("facilityGbp: the November case — the extract's GBP was on a rate we do not hold", () => {
-  // THE FAULT THIS PINS. Nov'26 Miniso read £385,183 where the bank said about
-  // £512k. The extract's GBP column implied 1.78 against the drawing's USD
-  // value; spot is 1.33. No 1.78 exists anywhere in the app — it was never a
-  // rate we held, only arithmetic baked into a column we trusted outright.
+test("facilityGbp converts only when there is no sterling figure at all", () => {
   const rateFor = (c) => (c === "USD" ? 1.33 : null);
-  const row = { payment_amount: 685626, payment_currency: "USD", facility_payment_gbp: 385183 };
-  assert.equal(Math.round(facilityGbp(row, rateFor)), 515508);       // spot, not the column
-
-  const r = facilityGbpRestatement(row, rateFor);
-  assert.equal(Math.round(r.impliedRate * 100) / 100, 1.78);          // the phantom rate, named
-  assert.equal(r.onRow, 385183);
-  assert.equal(Math.round(r.atSpot), 515508);
-  assert.equal(Math.round(r.diff), -130325);                          // the extract was LOW by this
+  // Nothing in GBP anywhere — convert, preferring the loan over the payment.
+  assert.equal(Math.round(facilityGbp({ loan_amount: 512293, loan_currency: "USD", payment_amount: 999999, payment_currency: "USD" }, rateFor)), 385183);
+  assert.equal(Math.round(facilityGbp({ payment_amount: 512293, payment_currency: "USD" }, rateFor)), 385183);
+  // No rate for that currency — say nothing rather than guess a value.
+  assert.equal(facilityGbp({ payment_amount: 1000, payment_currency: "EUR" }, rateFor), null);
+  assert.equal(facilityGbp({ payment_amount: 1000, payment_currency: "USD" }), null);
+  assert.equal(facilityGbp({}), null);
 });
 
 test("facilityGbpRestatement: nothing to report when there is nothing to compare", () => {
@@ -1252,14 +1249,14 @@ test("the November drawings: USD total converts to exactly what the desk shows",
 // the payment pair is what made November read £385,183 against a bank figure of
 // about £512,000.
 
-test("facilityGbp values from the loan amount when the extract carries one", () => {
+test("facilityGbp values from the loan amount when both are foreign", () => {
   const rateFor = (c) => (c === "USD" ? 1.33 : null);
-  // Loan in GBP, payment in USD — the two must not be confused, and the loan wins.
-  assert.equal(facilityGbp({ loan_amount: 512293, loan_currency: "GBP", payment_amount: 171259, payment_currency: "USD" }, rateFor), 512293);
-  // Loan in USD converts at spot, the payment pair is never reached.
-  assert.equal(Math.round(facilityGbp({ loan_amount: 512293, loan_currency: "USD", payment_amount: 999999, payment_currency: "GBP" }, rateFor)), 385183);
-  // No loan_currency on the file: upload copies payment_currency into it, and
-  // an older row without either still resolves through the payment currency.
+  // The loan is the drawing; the payment pair is the settlement, and on a
+  // post-shipment buyer loan those are not the same money. With neither in
+  // sterling, the loan is the one to convert.
+  assert.equal(Math.round(facilityGbp({ loan_amount: 512293, loan_currency: "USD", payment_amount: 999999, payment_currency: "USD" }, rateFor)), 385183);
+  // No loan_currency on the file: the upload copies payment_currency across, and
+  // a row without either still resolves through the payment currency.
   assert.equal(Math.round(facilityGbp({ loan_amount: 512293, payment_currency: "USD" }, rateFor)), 385183);
 });
 
@@ -1369,4 +1366,25 @@ test("phasingCheck prefers the smaller move when two shifts score the same", () 
   const months = [];
   for (let i = 1; i <= 6; i += 1) months.push({ ym: `2026-${String(i).padStart(2, "0")}`, budget: 100000, committed: 100000 });
   assert.equal(phasingCheck(months).best, 0);
+});
+
+test("facilityImpliedRate: the rate the bank actually dealt at", () => {
+  // Arithmetic on two columns the bank supplied, not an inference. On the real
+  // September 2026 extract every USD row comes out at 1.3360 — the HEDGED rate,
+  // not spot, which is worth being able to see per drawing.
+  const r = (loan, gbp) => facilityImpliedRate({ loan_amount: loan, loan_currency: "USD", facility_payment_gbp: gbp });
+  assert.equal(r(228802.02, 171259).toFixed(4), "1.3360");
+  assert.equal(r(225484.18, 168776).toFixed(4), "1.3360");
+  assert.equal(r(291660.38, 218309).toFixed(4), "1.3360");
+  assert.equal(r(207300.26, 155165).toFixed(4), "1.3360");
+});
+
+test("facilityImpliedRate says nothing where there is nothing to imply", () => {
+  // A sterling loan has no rate, and a row missing either side cannot have one.
+  assert.equal(facilityImpliedRate({ loan_amount: 42089.67, loan_currency: "GBP", facility_payment_gbp: 42090 }), null);
+  assert.equal(facilityImpliedRate({ loan_amount: 228802, loan_currency: "USD" }), null);
+  assert.equal(facilityImpliedRate({ loan_currency: "USD", facility_payment_gbp: 171259 }), null);
+  assert.equal(facilityImpliedRate({}), null);
+  // loan_currency absent falls back to payment_currency, as the upload does.
+  assert.equal(facilityImpliedRate({ loan_amount: 228802.02, payment_currency: "USD", facility_payment_gbp: 171259 }).toFixed(4), "1.3360");
 });

@@ -241,3 +241,96 @@ test("parseFacilityCsv reports the true file line when the header is offset", ()
   assert.ok(errors.some((e) => e.startsWith("Line 5:") && /missing reference/.test(e)));
   assert.ok(errors.some((e) => e.startsWith("Line 6:") && /duplicate/.test(e)));
 });
+
+// ---- A dropped column is never silent again ----
+//
+// THE FAULT THIS PINS. The header list mapped a fixed set of spellings and
+// dropped everything else without a word. An upload that DID carry sterling —
+// headed "Loan Amount (GBP)" — lost that column, the register showed no GBP,
+// the desk converted the USD figure at spot instead, and November read six
+// figures light. Nothing on any screen said a column had been lost.
+
+test("parseFacilityCsv reads a sterling column however it is headed", () => {
+  const variants = [
+    "Loan Amount (GBP)", "Loan amount GBP", "Payment Amount (GBP)", "Amount (GBP)",
+    "GBP equivalent", "GBP Equivalent Amount", "Equivalent in GBP", "Sterling amount",
+    "Settlement GBP", "GBP Value", "Facility payment GBP",
+  ];
+  for (const h of variants) {
+    const csv = `Reference,Cost driver,Currency,Payment amount,${h},Due date\nLAIUK1,Miniso LC,USD,171259,128000,23/11/2026\n`;
+    const { rows, errors, ignored } = parseFacilityCsv(csv);
+    assert.equal(errors.length, 0, `${h}: ${errors.join(" ")}`);
+    assert.equal(rows[0].facility_payment_gbp, 128000, `"${h}" was not read as the GBP column`);
+    assert.equal(ignored.length, 0, `"${h}" should not be reported as ignored`);
+  }
+});
+
+test("parseFacilityCsv reports the columns it did not read", () => {
+  const csv = "Reference,Cost driver,Currency,Payment amount,Nostro account,Interest rate,Due date\n"
+            + "LAIUK1,Miniso LC,USD,171259,12345678,4.2,23/11/2026\n";
+  const { rows, errors, ignored } = parseFacilityCsv(csv);
+  assert.equal(errors.length, 0);
+  assert.equal(rows.length, 1);
+  // Reported, not rejected — an extract carries plenty the register has no use
+  // for, and a failed upload would be worse than a noted one.
+  assert.deepEqual(ignored, ["Nostro account", "Interest rate"]);
+});
+
+test("parseFacilityCsv reports nothing when every column is understood", () => {
+  const csv = "Reference,Cost driver,Payment currency,Payment amount,GBP equivalent,Due date\n"
+            + "LAIUK1,Miniso LC,USD,171259,128000,23/11/2026\n";
+  const { ignored } = parseFacilityCsv(csv);
+  assert.deepEqual(ignored, []);
+});
+
+test("parseFacilityCsv reads a loan currency stated separately from the payment currency", () => {
+  // The two are different money on a post-shipment buyer loan, so a file that
+  // states both must not have one overwrite the other.
+  const csv = "Reference,Cost driver,Loan currency,Loan amount,Payment currency,Payment amount,Due date\n"
+            + "LAIUK1,Miniso LC,GBP,128000,USD,171259,23/11/2026\n";
+  const { rows, ignored } = parseFacilityCsv(csv);
+  assert.equal(ignored.length, 0);
+  assert.equal(rows[0].loan_currency, "GBP");
+  assert.equal(rows[0].loan_amount, 128000);
+  assert.equal(rows[0].payment_currency, "USD");
+  assert.equal(rows[0].payment_amount, 171259);
+});
+
+// ---- The sterling is in payment_amount, not facility_payment_gbp ----
+//
+// THE FAULT THIS PINS, from the real September 2026 extract. The bank states the
+// drawing in USD (loan_amount) and the settlement in sterling (payment_amount,
+// with a £ in the cell), while payment_currency names the LOAN's currency. Read
+// the other way round that says "USD 171,259", and the desk converted an
+// already-sterling figure at spot: November reported £385,183 against the
+// £512,293 actually paid.
+
+const REAL_NOV = "reference,beneficiary,customer_reference,payment_currency,loan_amount,loan_currency,outstanding_amount,status,product_type,cost_driver,loan_start_date,due_date,loan_period_days,payment_amount,payment_month,facility_payment_gbp\n"
+  + 'LAIUK1076002,,LC87 21.04.26 1/3,USD,"228,802.02",USD,"228,802.02",Disbursed,Post-shipment buyer loan,Miniso LC,27-May-26,23-Nov-26,180,"£171,259",30/11/2026,Miniso LC\n'
+  + 'LAIUK1075524,,LC87 21.04.26 3/3,USD,"225,484.18",USD,"225,484.18",Disbursed,Post-shipment buyer loan,Miniso LC,22-May-26,18-Nov-26,180,"£168,776",30/11/2026,Miniso LC\n'
+  + 'LAIUK1075531,,LC87 21.04.26 2/3,USD,"230,136.63",USD,"230,136.63",Disbursed,Post-shipment buyer loan,Miniso LC,22-May-26,18-Nov-26,180,"£172,258",30/11/2026,Miniso LC\n';
+
+test("parseFacilityCsv takes the sterling settlement from payment_amount", () => {
+  const { rows, errors } = parseFacilityCsv(REAL_NOV);
+  assert.equal(errors.length, 0);
+  assert.equal(rows.length, 3);
+  // The £ symbol and the thousands separators are stripped; the loan keeps its
+  // own currency and is NOT overwritten.
+  assert.deepEqual(rows.map((r) => r.facility_payment_gbp), [171259, 168776, 172258]);
+  assert.deepEqual(rows.map((r) => r.loan_amount), [228802.02, 225484.18, 230136.63]);
+  assert.deepEqual(rows.map((r) => r.loan_currency), ["USD", "USD", "USD"]);
+  // £512,293 — the figure actually paid, and the one the desk must report.
+  assert.equal(rows.reduce((t, r) => t + r.facility_payment_gbp, 0), 512293);
+});
+
+test("parseFacilityCsv keeps a real facility_payment_gbp over the payment amount", () => {
+  // Where the file gives its own sterling column, that wins. Here the column
+  // holds a stray copy of the cost driver, which parses to nothing — so the
+  // payment amount is used, as it must be.
+  const csv = "reference,payment_currency,loan_amount,loan_currency,cost_driver,due_date,payment_amount,facility_payment_gbp\n"
+            + 'LAIUK1,USD,"228,802.02",USD,Miniso LC,23-Nov-26,"£171,259",166000\n'
+            + 'LAIUK2,USD,"228,802.02",USD,Miniso LC,23-Nov-26,"£171,259",Miniso LC\n';
+  const { rows } = parseFacilityCsv(csv);
+  assert.equal(rows[0].facility_payment_gbp, 166000);   // the file's own figure
+  assert.equal(rows[1].facility_payment_gbp, 171259);   // junk ignored, payment used
+});
