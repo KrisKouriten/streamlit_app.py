@@ -9,6 +9,7 @@ import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money, pct 
 import DeptDashControls from "./dept-dash-controls";
 import DeptApprovals from "./dept-approvals";
 import RegisterTabs from "./register-tabs";
+import ProcCash from "./proc-cash";
 
 export const dynamic = "force-dynamic";
 
@@ -256,10 +257,24 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           })()}
 
           {/* Procurement (Merchandising) — the Summary + Close lifecycle rolled up
-              here, same visibility Marketing has for its POs. */}
+              here, same visibility Marketing has for its POs, and the cash budget
+              vs committed summaries from Procurement Requests (consolidated
+              first, then by source) so the budget holder reads the month's
+              position without changing screen. */}
+          {(d.proc?.ready || d.procCash) && (
+            <div style={{ fontSize: 15, fontWeight: 600, margin: "8px 0 12px" }}>Procurement</div>
+          )}
+
+          {d.procCash && <ProcCash procCash={d.procCash} />}
+
           {d.proc?.ready && (
             <>
-              <div style={{ fontSize: 15, fontWeight: 600, margin: "8px 0 12px" }}>Procurement</div>
+              {/* The lifecycle view — where each purchase has got to — sits under
+                  the cash summaries, which are the budget position. Labelled so
+                  the two sets of tiles are not read as one: "committed" above is
+                  what falls due against budget, "committed" here is what Finance
+                  has closed. */}
+              <div style={{ fontSize: 13.5, fontWeight: 600, margin: "4px 0 12px", color: "var(--muted)" }}>Where purchases have got to</div>
               <StatRow>
                 <Stat label="Committed spend" value={money(d.proc.committed, { compact: true })} sub={`${d.proc.committedCount} closed`} />
                 <Stat label="Open procurement" value={money(d.proc.open, { compact: true })}
