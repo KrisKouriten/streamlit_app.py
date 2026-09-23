@@ -315,7 +315,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
 // finding out at Finance review. It informs, it does not block — Finance still
 // decides, and a genuinely needed purchase should still be raised.
 function BudgetCheck({ impact }) {
-  const { ym, budget, committed, spent, add, newCommitted, headroom, over, alreadyOver, noBudget } = impact;
+  const { ym, budget, committed, spent, add, newCommitted, headroom, headroomBefore, over, alreadyOver, noBudget } = impact;
   const tone = noBudget ? "var(--muted)" : over ? "var(--red)" : "var(--green)";
   const cell = { display: "flex", flexDirection: "column", gap: 2 };
   const k = { fontSize: 10.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)" };
@@ -323,16 +323,22 @@ function BudgetCheck({ impact }) {
   return (
     <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 8, border: `1px solid ${noBudget ? "var(--line)" : over ? "var(--red)" : "var(--line)"}`, background: "var(--raise)" }}>
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 9, lineHeight: 1.5 }}>
-        This falls due in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — how it sits against that month&rsquo;s budget.
+        This is paid in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — whether that month has the budget left to carry it.
+        {!noBudget && <> Headroom is budget &minus; committed &minus; spent, so a month the facility has already drawn from shows what is genuinely left.</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(104px,1fr))", gap: 12 }}>
         <div style={cell}><span style={k}>Budget</span><span style={v} className="fos-num">{noBudget ? "—" : money(budget)}</span></div>
         <div style={cell}><span style={k}>Committed</span><span style={v} className="fos-num">{money(committed)}</span></div>
         <div style={cell}><span style={k}>Spent</span><span style={v} className="fos-num">{spent ? money(spent) : "—"}</span></div>
-        <div style={cell}><span style={k}>This request</span><span style={v} className="fos-num">{money(add)}</span></div>
-        <div style={cell}><span style={k}>Would commit</span><span style={{ ...v, color: tone }} className="fos-num">{money(newCommitted)}</span></div>
         <div style={cell}>
-          <span style={k}>{over ? "Over by" : "Headroom"}</span>
+          <span style={k}>Left before this</span>
+          <span style={{ ...v, color: noBudget ? undefined : headroomBefore < 0 ? "var(--red)" : "var(--green)" }} className="fos-num">
+            {noBudget ? "—" : `${headroomBefore < 0 ? "−" : ""}${money(Math.abs(headroomBefore))}`}
+          </span>
+        </div>
+        <div style={cell}><span style={k}>This request</span><span style={v} className="fos-num">{money(add)}</span></div>
+        <div style={cell}>
+          <span style={k}>{over ? "Over by" : "Left after"}</span>
           <span style={{ ...v, color: tone }} className="fos-num">{noBudget ? "—" : money(Math.abs(headroom))}</span>
         </div>
       </div>
@@ -340,8 +346,8 @@ function BudgetCheck({ impact }) {
       {over && (
         <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 9, lineHeight: 1.5 }}>
           {alreadyOver
-            ? <>{monthLabel(ym)} is already over budget before this request. Expect Finance to challenge it.</>
-            : <>This request takes {monthLabel(ym)} over budget. You can still raise it — Finance will review it against the budget.</>}
+            ? <>{monthLabel(ym)} is already over budget on what is committed and spent, before this request. Expect Finance to challenge it.</>
+            : <>This request takes {monthLabel(ym)} over budget. You can still raise it — Finance will review it — but consider a pickup or order date that pays in a month with headroom.</>}
         </div>
       )}
     </div>
