@@ -7,7 +7,7 @@ import {
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
@@ -768,7 +768,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "LC drawdown", "LC balance", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -842,29 +842,37 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             the same basis as the Inventory column. */}
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
-                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
-                            const drawn = lcDrawdownGbp(r, costingRate);
-                            if (drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
-                            if (!drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const oc = outstandingCommitment(r, costingRate);
+                            if (settlesByLc(r) && oc.drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
+                            if (!oc.drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const lcs = (r.lcs || []).length;
                             return (
                               <>
-                                {money(drawn)}
-                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{(r.lcs || []).length} LC{(r.lcs || []).length === 1 ? "" : "s"} · spent via Treasury</div>
+                                {money(oc.drawn)}
+                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>
+                                  {settlesByLc(r)
+                                    ? `${lcs} LC${lcs === 1 ? "" : "s"} · spent via Treasury`
+                                    : r.payment_method === "CASH" ? "cash"
+                                    : r.payment_method === "TRADE_PAY" ? (r.trade_pay?.ref || "trade pay")
+                                    : "paid"}
+                                </div>
                               </>
                             );
                           })()}
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
-                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
-                            const bal = lcBalanceGbp(r, costingRate);
-                            if (bal == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            // A settled row commits nothing — cash has gone, and a
+                            // trade-pay drawing is already reported as spend from
+                            // the facility, so committing it again would charge the
+                            // month twice for the same money.
+                            const oc = outstandingCommitment(r, costingRate);
+                            if (oc.balance == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const TONE = { red: "var(--red)", green: "var(--green)", amber: "var(--amber)" };
                             return (
                               <>
-                                <span style={{ color: bal < 0 ? "var(--red)" : undefined, fontWeight: 600 }}>{money(bal)}</span>
-                                <div style={{ fontSize: 10.5, color: bal < 0 ? "var(--red)" : "var(--faint)", marginTop: 4 }}>
-                                  {bal < 0 ? "drawn over the order value" : "still committed"}
-                                </div>
+                                <span style={{ color: TONE[oc.tone], fontWeight: 600 }}>{money(oc.balance)}</span>
+                                {oc.note && <div style={{ fontSize: 10.5, color: TONE[oc.tone] || "var(--faint)", marginTop: 4 }}>{oc.note}</div>}
                               </>
                             );
                           })()}

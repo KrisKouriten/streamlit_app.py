@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp,
   normTradePayRef,
   tradePayRefError,
-  tradePayMatch
+  tradePayMatch,
+  outstandingCommitment
 } from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
@@ -400,4 +401,84 @@ test("tradePayMatch: an unreadable facility is unknown, not unmatched", () => {
   assert.match(m.label, /cannot be checked/);
   // An empty register is different from an absent one: there it genuinely is not present.
   assert.equal(tradePayMatch({ payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA096701" }, new Set()).state, "unmatched");
+});
+
+// ---- What a purchase still commits, whatever it settles on ----
+//
+// The LC drawdown / LC balance pair only meant anything for Miniso. A Local
+// Purchase showed a dash in both — which is not "nothing to say", it is the same
+// question with a different answer. And a Local order settled on trade pay is a
+// drawing on the facility, which the desk ALREADY reports as spend: leaving it
+// committed charges the month twice for the same money, the exact double count
+// that made every Miniso month read over.
+
+const local = (extra = {}) => ({ source: "LOCAL", amount_gbp: 5000, ...extra });
+
+test("outstandingCommitment: an unsettled Local order commits its full value", () => {
+  const oc = outstandingCommitment(local());
+  assert.equal(oc.drawn, null);
+  assert.equal(oc.balance, 5000);
+  assert.equal(oc.closable, false);
+  // Committed, not paid — a dash here used to be the only answer available.
+  assert.equal(oc.note, "still committed");
+});
+
+test("outstandingCommitment: cash settles it — balance nil", () => {
+  const oc = outstandingCommitment(local({ payment_status: "PAID", payment_method: "CASH" }));
+  assert.equal(oc.drawn, 5000);
+  assert.equal(oc.balance, 0);
+  assert.equal(oc.note, "settled in cash");
+  assert.equal(oc.closable, true);
+});
+
+test("outstandingCommitment: trade pay commits nothing, because the facility reports it", () => {
+  const open = outstandingCommitment(local({
+    payment_status: "PAID", payment_method: "TRADE_PAY",
+    trade_pay: { state: "matched", ref: "WCTUKA096701" }, trade_pay_settled: false,
+  }));
+  assert.equal(open.balance, 0, "a trade-pay drawing is already spend on the facility");
+  assert.equal(open.drawn, 5000);
+  assert.equal(open.closable, false);          // the loan is still outstanding
+
+  // The facility saying the loan is repaid is what makes the order closable.
+  const done = outstandingCommitment(local({
+    payment_status: "PAID", payment_method: "TRADE_PAY",
+    trade_pay: { state: "matched", ref: "WCTUKA096701" }, trade_pay_settled: true,
+  }));
+  assert.equal(done.closable, true);
+  assert.match(done.note, /ready to close/);
+});
+
+test("outstandingCommitment: a trade-pay row with no usable reference says so", () => {
+  const noRef = outstandingCommitment(local({ payment_status: "PAID", payment_method: "TRADE_PAY", trade_pay: { state: "missing" } }));
+  assert.equal(noRef.tone, "amber");
+  assert.match(noRef.note, /no drawing reference/);
+
+  const bad = outstandingCommitment(local({ payment_status: "PAID", payment_method: "TRADE_PAY", trade_pay: { state: "unmatched", ref: "WC999" } }));
+  assert.equal(bad.tone, "amber");
+  assert.match(bad.note, /not on the facility/);
+});
+
+test("outstandingCommitment: paid with no method recorded is flagged, not guessed", () => {
+  // Tagging it either way would move real money between Cash and Trade pay on
+  // the desk. The balance still clears, because the money has gone.
+  const oc = outstandingCommitment(local({ payment_status: "PAID" }));
+  assert.equal(oc.balance, 0);
+  assert.equal(oc.tone, "amber");
+  assert.match(oc.note, /not recorded/);
+  assert.equal(oc.closable, false);
+});
+
+test("outstandingCommitment: Miniso keeps the LC balance it already had", () => {
+  const miniso = { source: "MINISO", currency: "USD", amount_ccy: 100000, lc_drawn_ccy: 40000 };
+  const oc = outstandingCommitment(miniso, 1.28);
+  // inventory 100,000/1.28 = 78,125; drawn 40,000/1.28 = 31,250; balance 46,875.
+  assert.equal(Math.round(oc.drawn), 31250);
+  assert.equal(Math.round(oc.balance), 46875);
+  assert.equal(oc.note, "still committed");
+  // Over-drawn stays visible rather than clamping to zero.
+  const over = outstandingCommitment({ source: "MINISO", currency: "USD", amount_ccy: 10000, lc_drawn_ccy: 20000 }, 1.28);
+  assert.ok(over.balance < 0);
+  assert.equal(over.tone, "red");
+  assert.match(over.note, /drawn over/);
 });
