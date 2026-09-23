@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp,
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement,
   fxOnCommitment } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
@@ -675,8 +675,49 @@ test("tradeSpendByMonth counts both Miniso routes, and still not Miniso Investme
 
 // ---- Valuing a drawing when the extract carries no GBP figure ----
 
-test("facilityGbp: the bank's GBP figure wins when present", () => {
+test("facilityGbp: the bank's GBP figure is the FALLBACK, not the answer", () => {
+  // No rate resolver, so there is nothing to convert with and the extract's own
+  // figure is all there is. Losing the money would be worse than a basis it was
+  // not struck on.
   assert.equal(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }), 142567.29);
+  // Same row, with a spot rate available: spot wins.
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  assert.equal(Math.round(facilityGbp({ facility_payment_gbp: 142567.29, payment_amount: 191040.18, payment_currency: "USD" }, rateFor)), 143639);
+  // No amount to convert — fall back rather than report nothing.
+  assert.equal(facilityGbp({ facility_payment_gbp: 500, payment_currency: "USD" }, rateFor), 500);
+  // No rate for THAT currency — same.
+  assert.equal(facilityGbp({ facility_payment_gbp: 500, payment_amount: 700, payment_currency: "EUR" }, rateFor), 500);
+});
+
+test("facilityGbp: the November case — the extract's GBP was on a rate we do not hold", () => {
+  // THE FAULT THIS PINS. Nov'26 Miniso read £385,183 where the bank said about
+  // £512k. The extract's GBP column implied 1.78 against the drawing's USD
+  // value; spot is 1.33. No 1.78 exists anywhere in the app — it was never a
+  // rate we held, only arithmetic baked into a column we trusted outright.
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  const row = { payment_amount: 685626, payment_currency: "USD", facility_payment_gbp: 385183 };
+  assert.equal(Math.round(facilityGbp(row, rateFor)), 515508);       // spot, not the column
+
+  const r = facilityGbpRestatement(row, rateFor);
+  assert.equal(Math.round(r.impliedRate * 100) / 100, 1.78);          // the phantom rate, named
+  assert.equal(r.onRow, 385183);
+  assert.equal(Math.round(r.atSpot), 515508);
+  assert.equal(Math.round(r.diff), -130325);                          // the extract was LOW by this
+});
+
+test("facilityGbpRestatement: nothing to report when there is nothing to compare", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  // Sterling — no conversion, so no restatement.
+  assert.equal(facilityGbpRestatement({ facility_payment_gbp: 100, payment_currency: "GBP" }, rateFor), null);
+  // Foreign with no GBP column — nothing to compare against.
+  assert.equal(facilityGbpRestatement({ payment_amount: 1000, payment_currency: "USD" }, rateFor), null);
+  // Foreign with no rate — cannot say.
+  assert.equal(facilityGbpRestatement({ payment_amount: 1000, payment_currency: "EUR", facility_payment_gbp: 700 }, rateFor), null);
+  // Agreeing figures report a zero difference rather than nothing, so "checked
+  // and fine" is distinguishable from "not checked".
+  const same = facilityGbpRestatement({ payment_amount: 1330, payment_currency: "USD", facility_payment_gbp: 1000 }, rateFor);
+  assert.equal(Math.round(same.diff), 0);
+  assert.equal(Math.round(same.impliedRate * 100) / 100, 1.33);
 });
 
 test("facilityGbp: a GBP drawing falls back to its payment amount", () => {

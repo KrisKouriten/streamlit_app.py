@@ -260,3 +260,33 @@ test("connectionCheck warns rather than guessing when there is no connection", (
   assert.match(c.remedy, /DATABASE_URL is set/);
   assert.equal(connectionCheck().status, WARN);
 });
+
+test("facilityCheck reports what the spot restatement moved, and by how much", () => {
+  // Trade-pay spend now converts foreign drawings at spot rather than trusting
+  // the extract's own GBP column. Replacing a figure that was trusted outright
+  // has to be auditable, so the size of the change is named.
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  const c = facilityCheck([
+    // The November shape: the extract's GBP implies 1.78 against the USD value.
+    { cost_driver: "Miniso LC", due_date: "2026-11-14", payment_amount: 685626, payment_currency: "USD", facility_payment_gbp: 385183 },
+    // A well-behaved row, struck near spot — under £1 of difference, not reported.
+    { cost_driver: "Miniso LC", due_date: "2026-10-13", payment_amount: 1330, payment_currency: "USD", facility_payment_gbp: 1000 },
+    // Sterling: nothing to restate.
+    { cost_driver: "Local Purchase", due_date: "2026-10-07", payment_amount: 117398, payment_currency: "GBP", facility_payment_gbp: 117398 },
+  ], ["USD"], rateFor);
+
+  const r = c.detail.find((d) => /Restated at the spot rate/.test(d.label));
+  assert.ok(r, "the restatement should be reported");
+  assert.match(r.value, /^1 drawing · \+£130,325$/);   // +, because the extract was LOW
+  assert.match(r.note, /different basis/);
+  assert.match(r.note, /widest implies 1\.78 per £1/);
+});
+
+test("facilityCheck says nothing about restatement when the extract agrees with spot", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  const c = facilityCheck([
+    { cost_driver: "Miniso LC", due_date: "2026-10-13", payment_amount: 1330, payment_currency: "USD", facility_payment_gbp: 1000 },
+  ], ["USD"], rateFor);
+  assert.equal(c.detail.find((d) => /Restated/.test(d.label)), undefined);
+  assert.equal(c.status, OK);
+});
