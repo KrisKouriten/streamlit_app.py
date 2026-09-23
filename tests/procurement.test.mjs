@@ -893,3 +893,57 @@ test("requestsVsBudget places a Miniso order by pickup date, as the budget table
   const out = requestsVsBudget(noPickup, months, awaitingFinance, { all: true });
   assert.ok(out.some((r) => r.ym === "2026-07" && r.awaiting === 498422));
 });
+
+// ---- Finance challenges reaching the team who raised the order ----
+import { financeChallenge, challengedOrders } from "../lib/procurement-rules.js";
+
+test("financeChallenge surfaces a challenge the approval lifecycle hides", () => {
+  // THE FAULT THIS PINS: a challenge writes finance_status only. The raise page
+  // reads approval_status, which still says APPROVED — so the order looked fine
+  // to the only people who could resolve it.
+  const o = {
+    approval_status: "APPROVED", finance_status: "CHALLENGED",
+    challenge_reasons: "SPEND_VS_BUDGET,SUPPLIER_TERMS",
+    challenge_note: "Takes Mar 2027 over — can this move?",
+    challenged_by: "kris@kouriten.com", challenged_at: "2026-09-23T09:00:00Z",
+  };
+  const c = financeChallenge(o);
+  assert.deepEqual(c.reasons, ["SPEND_VS_BUDGET", "SUPPLIER_TERMS"]);
+  assert.equal(c.note, "Takes Mar 2027 over — can this move?");
+  assert.equal(c.by, "kris@kouriten.com");
+});
+
+test("financeChallenge returns null when there is nothing to answer", () => {
+  assert.equal(financeChallenge({ approval_status: "APPROVED", finance_status: "APPROVED" }), null);
+  assert.equal(financeChallenge({ approval_status: "APPROVED", finance_status: "CLOSED" }), null);
+  assert.equal(financeChallenge({ approval_status: "PENDING" }), null);
+  // Finance re-approving or closing after a challenge settles it.
+  assert.equal(financeChallenge({ finance_status: "APPROVED", challenge_reasons: "LANDED_COST" }), null);
+  // A cancelled order is not a live question whatever Finance last recorded.
+  assert.equal(financeChallenge({ approval_status: "CANCELLED", finance_status: "CHALLENGED" }), null);
+  assert.equal(financeChallenge({}), null);
+  assert.equal(financeChallenge(), null);
+});
+
+test("financeChallenge copes with either shape of challenge_reasons, and no note", () => {
+  // Stored as a comma string; an array is accepted too rather than stringified.
+  assert.deepEqual(financeChallenge({ finance_status: "CHALLENGED", challenge_reasons: "OTHER" }).reasons, ["OTHER"]);
+  assert.deepEqual(financeChallenge({ finance_status: "CHALLENGED", challenge_reasons: ["OTHER", "INVOICE_VALUE"] }).reasons, ["OTHER", "INVOICE_VALUE"]);
+  // Blank / absent reasons must not become [""] — the UI would render an empty bullet.
+  assert.deepEqual(financeChallenge({ finance_status: "CHALLENGED", challenge_reasons: "" }).reasons, []);
+  assert.deepEqual(financeChallenge({ finance_status: "CHALLENGED" }).reasons, []);
+  // An empty or whitespace note reads as no note, not as an empty quotation.
+  assert.equal(financeChallenge({ finance_status: "CHALLENGED", challenge_note: "   " }).note, null);
+});
+
+test("challengedOrders counts only what the raising team must act on", () => {
+  const orders = [
+    { purchase_id: 1, approval_status: "APPROVED", finance_status: "CHALLENGED", challenge_reasons: "LANDED_COST" },
+    { purchase_id: 2, approval_status: "APPROVED", finance_status: "APPROVED" },
+    { purchase_id: 3, approval_status: "CANCELLED", finance_status: "CHALLENGED" },
+    { purchase_id: 4, approval_status: "PENDING", finance_status: "CHALLENGED", challenge_reasons: "OTHER" },
+  ];
+  assert.deepEqual(challengedOrders(orders).map((o) => o.purchase_id), [1, 4]);
+  assert.deepEqual(challengedOrders([]), []);
+  assert.deepEqual(challengedOrders(), []);
+});

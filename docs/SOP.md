@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 2.0 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 2.1 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -441,6 +441,15 @@ already over before it. Where a month has no room, the practical answer is usual
 **pickup or order date that pays in a month that does** — the budget is not moved to fit
 the order. A foreign-currency request is measured at the spot conversion; Finance
 re-strike it on approval.
+
+**A Finance challenge comes back here.** The two desks run different lifecycles over
+the same order — this page tracks the **approval** status (raise → head of department →
+Finance), the close desk tracks the **finance** status (approve → challenge → close) — so
+a challenge does not change the approval status. Challenged orders are called out at the
+top of **Orders** and badged in the row with Finance's reason and note. The team who
+raised it **amends or cancels**; Finance re-review once it changes. (Until this was
+added, a challenge wrote only the finance side and never reached the raise screen: the
+order still read *Approved* to the only people who could resolve it.)
 
 **Awaiting sign-off vs budget** (managers only) shows the requests still to be approved,
 by the month each falls due, and what approving them all would commit — plus any month
