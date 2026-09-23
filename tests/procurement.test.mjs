@@ -947,3 +947,51 @@ test("challengedOrders counts only what the raising team must act on", () => {
   assert.deepEqual(challengedOrders([]), []);
   assert.deepEqual(challengedOrders(), []);
 });
+
+// ---- The LC balance is what stays committed ----
+
+test("summarise nets the drawn LCs out of committed, so nothing is counted twice", () => {
+  // THE FAULT THIS PINS. A Miniso request worth £515,625 with £501,638 already
+  // drawn as LCs. Those drawings are on the trade facility, so the facility
+  // upload reports them as SPENT. Counting the whole order as committed as well
+  // charged the month twice for the same money — which is why every Miniso month
+  // read over.
+  const months = [{ source: "MINISO", ym: "2027-03", budget_gbp: 600000 }];
+  const order = {
+    source: "MINISO", supplier: "Miniso HQ", order_ym: "2026-09",
+    pickup_date: "2026-09-18", amount_gbp: 496241,
+    committed_gbp: 13987.5,                       // inventory 515,625 − drawn 501,637.50
+  };
+  const spend = { trade: { MINISO: { "2027-03": 501637.5 }, LOCAL: {} }, cash: { MINISO: {}, LOCAL: {} } };
+  const out = summarise([order], months, spend);
+  // 18 Sep 2026 + 180 days lands in March 2027 — the same month the facility
+  // reports the drawings in, so the two halves of this order meet.
+  const mar = out.MINISO.months.find((m) => m.ym === "2027-03");
+  assert.equal(mar.committed, 13987.5);           // the balance, not the whole order
+  assert.equal(out.MINISO.totalCommitted, 13987.5);
+  // Committed + the facility's own spend now equals the order once, not twice.
+  assert.equal(mar.committed + mar.tradeSpent, 515625);
+  // And the month is no longer over: 600,000 budget against 515,625 of activity.
+  assert.equal(mar.overBudget, false);
+  assert.equal(mar.variance, 600000 - 13987.5 - 501637.5);
+});
+
+test("summarise falls back to the order value when no balance is supplied", () => {
+  // A Local purchase, a Miniso request with no LCs drawn, or a foreign order
+  // whose costing rate is missing — all keep the old behaviour exactly.
+  const months = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 100000 }];
+  const local = { source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000 };
+  const out = summarise([local], months, {});
+  assert.equal(out.LOCAL.months.find((m) => m.ym === "2026-09").committed, 40000);
+  assert.equal(out.LOCAL.totalCommitted, 40000);
+});
+
+test("summarise: a zero balance commits nothing, and is not mistaken for absent", () => {
+  // Fully drawn — every pound is on the facility and reported as spent, so the
+  // month carries no commitment at all. `committed_gbp: 0` must not fall through
+  // to the order value, which is what `||` would have done.
+  const order = { source: "MINISO", supplier: "Miniso HQ", order_ym: "2026-09", pickup_date: "2026-09-18", amount_gbp: 496241, committed_gbp: 0 };
+  const out = summarise([order], [], {});
+  assert.equal(out.MINISO.totalCommitted, 0);
+  assert.equal(out.MINISO.months.find((m) => m.committed !== 0), undefined);
+});

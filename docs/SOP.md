@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 2.2 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 2.3 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -566,6 +566,35 @@ The move is **lossless**: figures are carried across untouched and no month is c
 destroyed, so **shifting back by the same number undoes it exactly** (provided no budget
 was edited in between). It runs in one transaction and is recorded in the audit log as
 `procurement.budget.shift` with the shift and the before/after month range.
+
+**LC drawdown and LC balance.** A Miniso request settles by letter of credit, drawn in
+stages, and each drawn LC appears on the HSBC trade facility. Two columns on the row make
+that visible:
+
+| | |
+| :--- | :--- |
+| **LC drawdown** | the LCs logged against this request |
+| **LC balance** | Inventory (£ cost FX) − LC drawdown — **this is what is still committed** |
+
+**The balance, not the order value, is what the budget counts as Committed.** Spent is
+left entirely to Treasury (the facility upload, cost driver *Miniso LC*), so each pound is
+counted once: the drawn part as spend, the balance as commitment.
+
+> This was the fault behind every Miniso month reading **over**. The drawn LCs were
+> reported as spend from the facility *and* sat inside the order's committed value, so the
+> variance netted off the same money twice.
+
+Both figures are struck at the **costing rate**, the same basis as the Inventory column
+beside them, so the row and the budget table agree. Committed therefore runs at the
+costing valuation rather than the cash cost — a deliberate choice, and for a USD order the
+difference is the *FX to P&L* amount shown on the same row. A foreign order with **no
+costing rate** shows "no costing rate" and keeps its full value as committed, which
+overstates rather than understates. An **over-drawn** request shows a negative balance in
+red rather than clamping to zero.
+
+Local purchases carry no LC reference, so nothing yet links a Local order to its facility
+drawing and the same subtraction cannot be made for them. Until that link exists a Local
+purchase commits its full value.
 
 **Documentary Credits and the open balance.** A Miniso request's LCs group under a DC,
 which carries the credit value they draw against. The **open balance** is `DC value −
