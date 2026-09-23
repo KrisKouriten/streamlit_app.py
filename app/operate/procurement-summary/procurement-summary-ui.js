@@ -583,16 +583,16 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   async function addDcRow(r) {
     const f = dcForm[r.purchase_id] || {};
     if (!(f.dc_reference || "").trim()) return;
-    await op(r.purchase_id, { op: "add-dc", dc_reference: f.dc_reference, dc_value: f.dc_value || null }, "DC added.");
-    setDcForm((s) => ({ ...s, [r.purchase_id]: { dc_reference: "", dc_value: "" } }));
+    await op(r.purchase_id, { op: "add-dc", dc_reference: f.dc_reference, dc_value: f.dc_value || null, expected_payment_date: f.expected_payment_date || null }, "DC added.");
+    setDcForm((s) => ({ ...s, [r.purchase_id]: { dc_reference: "", dc_value: "", expected_payment_date: "" } }));
   }
   function openEditDc(dc) {
-    setEditDc(editDc?.dc_id === dc.dc_id ? null : { dc_id: dc.dc_id, dc_reference: dc.dc_reference || "", dc_value: dc.dc_value != null ? String(dc.dc_value) : "" });
+    setEditDc(editDc?.dc_id === dc.dc_id ? null : { dc_id: dc.dc_id, dc_reference: dc.dc_reference || "", dc_value: dc.dc_value != null ? String(dc.dc_value) : "", expected_payment_date: (dc.expected_payment_date || "").slice(0, 7) });
   }
   const editDcField = (k, v) => setEditDc((s) => ({ ...s, [k]: v }));
   async function saveEditDc(r) {
     const f = editDc;
-    await op(r.purchase_id, { op: "update-dc", dc_id: f.dc_id, dc_reference: f.dc_reference, dc_value: f.dc_value || null }, "DC updated.");
+    await op(r.purchase_id, { op: "update-dc", dc_id: f.dc_id, dc_reference: f.dc_reference, dc_value: f.dc_value || null, expected_payment_date: f.expected_payment_date || null }, "DC updated.");
     setEditDc(null);
   }
   async function deleteDcRow(r, dc) {
@@ -881,6 +881,15 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                               <span style={labelSt}>{g.over ? "Over by " : "Remaining "}</span>{curMoney(Math.abs(g.remaining), r)}
                                             </span>
                                           )}
+                                          {/* The open balance is credit agreed but not yet drawn as an LC — a firm
+                                              commitment with no LC, and so no date, of its own. Its expected month is
+                                              what places it against a budget. */}
+                                          {!!g.openBalance && (
+                                            <span style={{ fontSize: 12, color: g.openNeedsMonth ? "var(--amber)" : "var(--muted)" }}>
+                                              <span style={labelSt}>Open, expected </span>
+                                              {g.openMonth ? ymLabel(g.openMonth) : "month not set"}
+                                            </span>
+                                          )}
                                           <span style={{ flex: 1 }} />
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => openEditDc(g)}>Edit</button>}
                                           {r.finance_status !== "CLOSED" && <button style={ghost} disabled={isBusy} onClick={() => deleteDcRow(r, g)}>Delete</button>}
@@ -889,6 +898,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", padding: "8px 12px", background: "var(--raise)", borderRadius: 8, marginBottom: 8 }}>
                                             <Field label="DC reference"><input style={{ ...inputSt, width: 180 }} value={editDc.dc_reference} onChange={(e) => editDcField("dc_reference", e.target.value)} /></Field>
                                             <Field label={`DC value (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: 140, textAlign: "right" }} value={editDc.dc_value} onChange={(e) => editDcField("dc_value", e.target.value)} /></Field>
+                                            <Field label="Expected payment month"><input type="month" style={{ ...inputSt, width: 150 }} value={editDc.expected_payment_date || ""} onChange={(e) => editDcField("expected_payment_date", e.target.value)} /></Field>
                                             <button style={btn("var(--accent)")} disabled={isBusy || !(editDc.dc_reference || "").trim()} onClick={() => saveEditDc(r)}>Save</button>
                                             <button style={ghost} onClick={() => setEditDc(null)}>Cancel</button>
                                           </div>
@@ -900,6 +910,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
                                       <Field label="Add DC reference"><input style={{ ...inputSt, width: 180 }} placeholder="e.g. DC UK1233788" value={dcForm[id]?.dc_reference || ""} onChange={(e) => setDcField(id, "dc_reference", e.target.value)} /></Field>
                                       <Field label={`DC value (${curSym(r)})`}><MoneyInput style={{ ...inputSt, width: 140, textAlign: "right" }} placeholder="0.00" value={dcForm[id]?.dc_value || ""} onChange={(e) => setDcField(id, "dc_value", e.target.value)} /></Field>
+                                      <Field label="Expected payment month"><input type="month" style={{ ...inputSt, width: 150 }} value={dcForm[id]?.expected_payment_date || ""} onChange={(e) => setDcField(id, "expected_payment_date", e.target.value)} /></Field>
                                       <button style={btn("var(--accent)")} disabled={isBusy || !(dcForm[id]?.dc_reference || "").trim()} onClick={() => addDcRow(r)}>Add DC</button>
                                     </div>
                                   )}

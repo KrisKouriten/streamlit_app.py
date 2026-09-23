@@ -182,3 +182,17 @@ test("every CRITICAL_COLUMNS migration exists and adds that column", async () =>
     assert.match(sql, new RegExp(`\\b${c.column}\\b`), `${c.migration} never mentions ${c.column}`);
   }
 });
+
+test("schemaCheck covers the LC and DC tables the Miniso desk needs", () => {
+  // A live database turned up with neither procurement_lc nor procurement_dc
+  // while Schema still read "all critical tables present" — because neither was
+  // on the list. Miniso settles by letter of credit, so their absence is not a
+  // cosmetic gap: the desk shows a request with no LCs and no DCs and looks
+  // merely empty.
+  const names = CRITICAL_TABLES.map((t) => t.table);
+  assert.ok(names.includes("procurement_lc"), "procurement_lc must be checked");
+  assert.ok(names.includes("procurement_dc"), "procurement_dc must be checked");
+  const c = schemaCheck(names.filter((t) => t !== "procurement_dc"));
+  assert.equal(c.status, FAIL);
+  assert.equal(c.detail[0].value, "093_procurement_dc.sql");
+});
