@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { convertToGbp, amountToGbp, findRate, fxVariance, resolveApprovalFx, isForeignCurrency, validRate, FX_RATE_TYPE_KEYS } from "../lib/fx-rules.js";
+import { convertToGbp, amountToGbp, findRate, fxVariance, resolveApprovalFx, isForeignCurrency, validRate, FX_RATE_TYPE_KEYS,
+  isValidCcyCode,
+  currenciesInRates,
+  normaliseCcy
+} from "../lib/fx-rules.js";
 
 test("validRate accepts only positive finite numbers", () => {
   assert.equal(validRate(1.27), 1.27);
@@ -77,4 +81,69 @@ test("resolveApprovalFx: missing rate yields null GBP figures", () => {
 
 test("FX rate type keys are SPOT/HEDGED/COSTING", () => {
   assert.deepEqual(FX_RATE_TYPE_KEYS, ["SPOT", "HEDGED", "COSTING"]);
+});
+
+// ---- More than one currency ----
+//
+// FX_CURRENCIES was a hard-coded ["USD"], so a EUR or CNY amount could not be
+// given a rate at all — and isForeignCurrency answered FALSE for it, meaning it
+// passed through as though already sterling. The rate table has always keyed on
+// (currency, rate_type); only the code held it to one currency.
+
+test("anything that is not sterling is foreign", () => {
+  assert.equal(isForeignCurrency("USD"), true);
+  assert.equal(isForeignCurrency("EUR"), true);
+  assert.equal(isForeignCurrency("CNY"), true);
+  assert.equal(isForeignCurrency("eur"), true);
+  assert.equal(isForeignCurrency(" USD "), true);
+  // Sterling, and nothing at all, are not.
+  assert.equal(isForeignCurrency("GBP"), false);
+  assert.equal(isForeignCurrency("gbp"), false);
+  assert.equal(isForeignCurrency(""), false);
+  assert.equal(isForeignCurrency(null), false);
+  assert.equal(isForeignCurrency(undefined), false);
+});
+
+test("a EUR amount converts instead of passing through as sterling", () => {
+  // The old behaviour: EUR was not in FX_CURRENCIES, so amountToGbp returned the
+  // euro figure unchanged and 31,642.80 EUR was reported as £31,642.80.
+  assert.equal(Math.round(amountToGbp(31642.80, "EUR", 1.15)), 27515);
+  assert.equal(amountToGbp(1000, "GBP", 1.15), 1000);        // sterling passes through
+  assert.equal(amountToGbp(1000, "EUR", null), null);        // no rate — no guess
+});
+
+test("isValidCcyCode takes three letters and refuses sterling", () => {
+  for (const c of ["USD", "EUR", "CNY", "usd", " eur "]) assert.equal(isValidCcyCode(c), true, c);
+  // Sterling has no rate against itself.
+  assert.equal(isValidCcyCode("GBP"), false);
+  assert.equal(isValidCcyCode("gbp"), false);
+  for (const c of ["", "US", "USDD", "US1", "$", "U.S", null, undefined, "EUR "]) {
+    if (c === "EUR ") continue;                              // trimmed, so valid
+    assert.equal(isValidCcyCode(c), false, String(c));
+  }
+});
+
+test("currenciesInRates lists what is on the desk, once each, sorted", () => {
+  const rates = [
+    { currency: "USD", rate_type: "SPOT", rate: 1.33 },
+    { currency: "USD", rate_type: "HEDGED", rate: 1.336 },
+    { currency: "eur", rate_type: "SPOT", rate: 1.15 },
+    { currency: "CNY", rate_type: "COSTING", rate: null },
+  ];
+  assert.deepEqual(currenciesInRates(rates), ["CNY", "EUR", "USD"]);
+  assert.deepEqual(currenciesInRates([]), []);
+  assert.deepEqual(currenciesInRates(), []);
+});
+
+test("an unset rate stays unusable rather than becoming a number", () => {
+  // A currency is added with NULL rates. Nothing may convert at one: a
+  // placeholder is a number, and a number gets used.
+  const rates = [
+    { currency: "EUR", rate_type: "SPOT", rate: null },
+    { currency: "EUR", rate_type: "HEDGED", rate: null },
+    { currency: "EUR", rate_type: "COSTING", rate: null },
+  ];
+  assert.equal(findRate(rates, "EUR", "SPOT"), null);
+  assert.equal(convertToGbp(1000, findRate(rates, "EUR", "SPOT")), null);
+  assert.equal(amountToGbp(1000, "EUR", findRate(rates, "EUR", "SPOT")), null);
 });
