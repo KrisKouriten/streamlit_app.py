@@ -343,12 +343,22 @@ function BudgetImport({ onErr, onDone }) {
 // have something pending.
 const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
 const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
-function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
+function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null }) {
   const [all, setAll] = useState(false);
   // A cancelled order commits nothing, so it must not weigh on a budget month.
   // (approval_status is absent on a database before migration 082 — an undefined
   // status simply isn't CANCELLED, so the row still counts, as it did before.)
-  const live = rows.filter((r) => r.approval_status !== "CANCELLED");
+  // Each row then carries the SAME committed value the budget tables use: the LC
+  // balance, not the whole order. The drawn part is reported as spend by
+  // Treasury, and this panel was still counting it as committed as well — so the
+  // close desk went on showing every Miniso month over after the budget tables
+  // had been corrected. Two rollups, one basis.
+  const live = rows
+    .filter((r) => r.approval_status !== "CANCELLED")
+    .map((r) => {
+      const bal = settlesByLc(r) ? lcBalanceGbp(r, costingRate) : null;
+      return bal == null ? r : { ...r, committed_gbp: bal };
+    });
   const sections = ["MINISO", "LOCAL"].map((src) => ({
     src,
     pipeline: requestsVsBudget(live.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
@@ -667,7 +677,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
       </StatRow>
 
       {/* ---- Budget pressure from the queue below ---- */}
-      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} />
+      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} costingRate={costingRate} />
 
       {/* ---- Messages ---- */}
       {error && <div style={{ color: "var(--red)", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
