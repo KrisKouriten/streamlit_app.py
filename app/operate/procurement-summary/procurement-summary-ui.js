@@ -404,7 +404,21 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null }) 
                   <td style={tdR}>{m.awaitingCount || <span style={{ color: "var(--faint)" }}>—</span>}</td>
                   <td style={tdR}>{m.awaiting ? money(m.awaiting) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
                   <td style={tdR}>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
-                  <td style={tdR}>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</td>
+                  <td style={tdR}>
+                    {m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}
+                    {/* What the figure is made of. Miniso stock settles two ways —
+                        a loan against a letter of credit, or the same stock on
+                        TradePay — so "spent" is two instruments added together,
+                        which one number cannot show. */}
+                    {m.spent > 0 && Object.keys(m.spentByDriver || {}).length > 1 && (
+                      <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4, fontFamily: "var(--sans)", whiteSpace: "normal", lineHeight: 1.4 }}>
+                        {Object.entries(m.spentByDriver)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([k, v]) => `${k} ${money(v, { compact: true })}`)
+                          .join(" · ")}
+                      </div>
+                    )}
+                  </td>
                   <td style={tdR}>{money(m.wouldCommit)}</td>
                   <td style={tdR}>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</td>
                   <td style={{ ...tdR, color: m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)" }}>

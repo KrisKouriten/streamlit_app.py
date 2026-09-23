@@ -1026,3 +1026,51 @@ test("requestsVsBudget still uses the order value when no balance is given", () 
   const [m] = requestsVsBudget(rows, months, AWAITING_FIN, { all: true });
   assert.equal(m.committed, 40000);
 });
+
+// ---- What a month's spend is made of ----
+import { facilityDriverOf } from "../lib/procurement-rules.js";
+
+test("facilityDriverOf names the instrument, absorbing the extract's drift", () => {
+  // The same instrument is typed several ways; it must report as one thing.
+  assert.equal(facilityDriverOf({ cost_driver: "Miniso LC" }), "Miniso LC");
+  assert.equal(facilityDriverOf({ cost_driver: "Miniso LC's" }), "Miniso LC");
+  assert.equal(facilityDriverOf({ cost_driver: "  MINISO   LCs " }), "Miniso LC");
+  assert.equal(facilityDriverOf({ cost_driver: "Miniso Facility" }), "Miniso Facility");
+  assert.equal(facilityDriverOf({ cost_driver: "Miniso Facilities" }), "Miniso Facility");
+  assert.equal(facilityDriverOf({ cost_driver: "Local Purchases" }), "Local Purchase");
+  // Still not procurement, and still must not be counted.
+  assert.equal(facilityDriverOf({ cost_driver: "Miniso Investment" }), null);
+  assert.equal(facilityDriverOf({ cost_driver: "Opex" }), null);
+  assert.equal(facilityDriverOf({}), null);
+});
+
+test("tradeSpendByMonth splits a month by instrument as well as totalling it", () => {
+  // Oct 2026 as it stands: £1,276,559 of Miniso spend that turned out to be two
+  // instruments, which one number could not show.
+  const spend = tradeSpendByMonth([
+    { cost_driver: "Miniso LC", due_date: "2026-10-13", facility_payment_gbp: 443000 },
+    { cost_driver: "Miniso Facility", due_date: "2026-10-21", facility_payment_gbp: 833559 },
+    { cost_driver: "Local Purchase", due_date: "2026-10-05", facility_payment_gbp: 117398 },
+  ]);
+  assert.equal(spend.MINISO["2026-10"], 1276559);
+  assert.deepEqual(spend.byDriver.MINISO["2026-10"], { "Miniso LC": 443000, "Miniso Facility": 833559 });
+  // The split always adds back to the total.
+  const parts = Object.values(spend.byDriver.MINISO["2026-10"]).reduce((a, b) => a + b, 0);
+  assert.equal(parts, spend.MINISO["2026-10"]);
+  assert.deepEqual(spend.byDriver.LOCAL["2026-10"], { "Local Purchase": 117398 });
+});
+
+test("summarise carries the split onto the month, with cash alongside", () => {
+  const spend = {
+    trade: {
+      MINISO: { "2027-03": 797072 }, LOCAL: {},
+      byDriver: { MINISO: { "2027-03": { "Miniso LC": 500000, "Miniso Facility": 297072 } }, LOCAL: {} },
+    },
+    cash: { MINISO: { "2027-03": 12000 }, LOCAL: {} },
+  };
+  const order = { source: "MINISO", supplier: "Miniso HQ", order_ym: "2026-09", pickup_date: "2026-09-18", amount_gbp: 100 };
+  const [m] = summarise([order], [], spend).MINISO.months.filter((x) => x.ym === "2027-03");
+  assert.deepEqual(m.spentByDriver, { "Miniso LC": 500000, "Miniso Facility": 297072, Cash: 12000 });
+  // Cash is spend ON TOP of the facility, so the parts still make the whole.
+  assert.equal(Object.values(m.spentByDriver).reduce((a, b) => a + b, 0), m.spent);
+});
