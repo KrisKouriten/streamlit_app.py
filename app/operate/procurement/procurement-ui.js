@@ -192,7 +192,7 @@ function AwaitingVsBudget({ rows = [], months = [] }) {
   if (!pipeline.length) return null;
   return (
     <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together. Open to buy is budget − committed − spent + FX for the month the cash leaves, where FX is the difference between holding a commitment at the costing rate and settling it at spot">
-      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Open to buy", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
+      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "FX", "Open to buy", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 0]}>
         {pipeline.map((m) => (
           <tr key={m.ym}>
             <Td>{monthLabel(m.ym)}</Td>
@@ -201,6 +201,9 @@ function AwaitingVsBudget({ rows = [], months = [] }) {
             <Td r>{m.committed ? money(m.committed) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
             <Td r>{money(m.wouldCommit)}</Td>
             <Td r>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
+            {/* Open to buy adds this back, so it has to be visible. A figure
+                that moves the headroom cannot live only in the note. */}
+            <Td r tone={m.fx ? "var(--muted)" : undefined}>{m.fx ? money(m.fx) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
             <Td r tone={m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)"}>
               {m.noBudget ? "—" : `${m.headroom < 0 ? "−" : ""}${money(Math.abs(m.headroom))}`}
             </Td>
@@ -352,7 +355,7 @@ function BudgetCheck({ impact }) {
     <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 8, border: `1px solid ${noBudget ? "var(--line)" : over ? "var(--red)" : "var(--line)"}`, background: "var(--raise)" }}>
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 9, lineHeight: 1.5 }}>
         This is paid in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — whether that month is still open to buy.
-        {!noBudget && <> Open to buy is budget &minus; committed &minus; spent &plus; FX, so a month the facility has already drawn from shows what is genuinely left to spend.{fx ? <> FX is the {money(fx)} by which this month&rsquo;s commitment is held above the cash it will cost, stock being costed at one rate and settled at another.</> : null}</>}
+        {!noBudget && <> Open to buy is budget &minus; committed &minus; spent + FX, so a month the facility has already drawn from shows what is genuinely left to spend.{fx ? <> FX is the {money(fx)} by which this month&rsquo;s commitment is held above the cash it will cost, stock being costed at one rate and settled at another.</> : null}</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(104px,1fr))", gap: 12 }}>
         <div style={cell}><span style={k}>Budget</span><span style={v} className="fos-num">{noBudget ? "—" : money(budget)}</span></div>

@@ -400,7 +400,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
           : <>Showing months with something awaiting a decision, plus any month already over on what is committed or spent.</>}{" "}
         Budgets are set on the <strong>Budgets</strong> tab above.
         <div style={{ marginTop: 6 }}>
-          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Open to buy</strong> is what the month has left to spend — budget &minus; committed &minus; spent &plus; FX — and <strong>If approved</strong> takes the awaiting value off as well. FX is there because a commitment is held at the rate stock is costed at while the cash goes out at spot; that difference is a valuation movement, not budget over-spend, so it does not count against the month.
+          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Open to buy</strong> is what the month has left to spend — budget &minus; committed &minus; spent + FX — and <strong>If approved</strong> takes the awaiting value off as well. FX is there because a commitment is held at the rate stock is costed at while the cash goes out at spot; that difference is a valuation movement, not budget over-spend, so it does not count against the month.
         </div>
       </div>
       {sections.map(({ src, pipeline }) => (
@@ -410,7 +410,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
             <thead><tr>
               <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
               <th style={thR}>Committed</th><th style={thR}>Spent</th>
-              <th style={thR}>Would commit</th><th style={thR}>Budget</th>
+              <th style={thR}>Would commit</th><th style={thR}>Budget</th><th style={thR}>FX</th>
               <th style={thR}>Open to buy</th><th style={thR}>If approved</th>
               <th style={{ ...th, textAlign: "center" }}>Status</th>
             </tr></thead>
@@ -438,6 +438,13 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
                   </td>
                   <td style={tdR}>{money(m.wouldCommit)}</td>
                   <td style={tdR}>{m.noBudget ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</td>
+                  {/* The valuation difference inside Committed — stock costed at
+                      one rate, cash settled at another. Named here because Open
+                      to buy adds it back, and a figure that moves the headroom
+                      should be visible rather than described in the note. */}
+                  <td style={{ ...tdR, color: m.fx ? "var(--muted)" : undefined }}>
+                    {m.fx ? money(m.fx) : <span style={{ color: "var(--faint)" }}>—</span>}
+                  </td>
                   <td style={{ ...tdR, color: m.noBudget ? undefined : m.over ? "var(--red)" : "var(--green)" }}>
                     {m.noBudget ? "—" : `${m.headroom < 0 ? "−" : ""}${money(Math.abs(m.headroom))}`}
                   </td>
