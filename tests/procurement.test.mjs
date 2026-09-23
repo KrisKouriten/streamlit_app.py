@@ -6,6 +6,12 @@ import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILI
   parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement, facilityImpliedRate,
   fxOnCommitment, phasingCheck } from "../lib/procurement-rules.js";
 
+// Many fixtures below pin `vat_rate: 0`. Migration 116 made a request's
+// committed value its GROSS amount, defaulting Local and Merch to 20%. These
+// tests are about cash-out months, the double count and budget arithmetic — not
+// about VAT — so their VAT is pinned and each asserts one thing. The grossing
+// itself is tested in tests/vat-rules.test.mjs.
+
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
   assert.equal(cashOutYm("2026-07", 30), "2026-08");   // 31 Jul + 30d = 30 Aug
@@ -30,7 +36,7 @@ test("summarise buckets committed spend into the cash-out month vs budget", () =
   const purchases = [
     { source: "MINISO", supplier: "HQ", order_ym: "2026-07", amount_gbp: 400000, terms_days: 60, status: "COMMITTED" },
     { source: "MINISO", supplier: "HQ", order_ym: "2026-08", amount_gbp: 100000, terms_days: 60, status: "PAID" },
-    { source: "LOCAL", supplier: "Design360", order_ym: "2026-07", amount_gbp: 42000, terms_days: 30, status: "COMMITTED" },
+    { source: "LOCAL", supplier: "Design360", order_ym: "2026-07", amount_gbp: 42000, terms_days: 30, status: "COMMITTED", vat_rate: 0 },
   ];
   const budgets = [
     { source: "MINISO", ym: "2026-09", budget_gbp: 300000 },
@@ -181,8 +187,8 @@ test("cashSpendByMonth counts only CASH rows — trade pay comes from the facili
 
 test("summarise splits spent into trade pay + cash against the budget", () => {
   const purchases = [
-    { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10" },
-    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-03", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12" },
+    { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10", vat_rate: 0 },
+    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-03", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12", vat_rate: 0 },
   ];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 60000 }];
   const spend = {
@@ -242,7 +248,7 @@ test("KNOWN: a cash-settled order is netted off the budget twice", () => {
   // commitment so committed + spent is the total with nothing counted twice.
   const purchases = [{
     source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60,
-    amount_gbp: 20000, status: "PAID", payment_method: "CASH", paid_date: "2026-09-10",
+    amount_gbp: 20000, status: "PAID", payment_method: "CASH", paid_date: "2026-09-10", vat_rate: 0,
   }];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
   const m = summarise(purchases, budgets, { cash: cashSpendByMonth(purchases) }).LOCAL.months[0];
@@ -257,7 +263,7 @@ test("no cash tagged means the overlap costs nothing", () => {
   // cashSpent is zero everywhere and the formula is exact.
   const purchases = [{
     source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60,
-    amount_gbp: 20000, status: "COMMITTED",
+    amount_gbp: 20000, status: "COMMITTED", vat_rate: 0,
   }];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 50000 }];
   const m = summarise(purchases, budgets, { cash: cashSpendByMonth(purchases) }).LOCAL.months[0];
@@ -358,9 +364,9 @@ const awaitingFinance = (r) => r.finance_status === "PENDING" || r.finance_statu
 
 test("requestsVsBudget: pending requests measured against the month's budget", () => {
   const rows = [
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 15000, approval_status: "PENDING" },
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 9000, approval_status: "HOD_APPROVED" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 15000, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 9000, approval_status: "HOD_APPROVED" },
   ];
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.equal(m.ym, "2026-09");          // 31 Jul + 60d
@@ -381,9 +387,9 @@ test("requestsVsBudget: pending requests measured against the month's budget", (
 test("requestsVsBudget: only months with something pending are returned", () => {
   const rows = [
     // Nothing pending here — settled only, so it is not a control problem.
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 40000, approval_status: "APPROVED" },
     // Pending, lands in a different month (31 Aug + 30d = Sep... use 0 terms).
-    { source: "LOCAL", order_ym: "2026-04", terms_days: 0, amount_gbp: 5000, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-04", terms_days: 0, amount_gbp: 5000, approval_status: "PENDING" },
   ];
   const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-10"]);
@@ -395,8 +401,8 @@ test("requestsVsBudget: only months with something pending are returned", () => 
 
 test("requestsVsBudget: a month already over before the pending requests", () => {
   const rows = [
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 70000, approval_status: "APPROVED" },
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 70000, approval_status: "APPROVED" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
   ];
   const [m] = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.equal(m.over, true);               // 70k approved against a 60k budget
@@ -424,8 +430,8 @@ test("requestsVsBudget: the finance lifecycle reads the same way", () => {
 test("requestsVsBudget: rows with no month to land in are skipped, empty input is safe", () => {
   const rows = [
     // A merch request carries no order month — nothing to bucket it by.
-    { source: "LOCAL", channel_code: "RETAIL", amount_gbp: 9999, approval_status: "PENDING" },
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", channel_code: "RETAIL", amount_gbp: 9999, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" },
   ];
   const out = requestsVsBudget(rows, PIPE_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-09"]);
@@ -601,7 +607,7 @@ const OVER_MONTHS = [
 test("requestsVsBudget lists an over-budget month even with nothing queued", () => {
   // Only 2026-09 has a pending request, but Finance still have to explain Oct
   // (over on commitment) and Nov (overspent).
-  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" }];
+  const rows = [{ vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 1000, approval_status: "PENDING" }];
   const out = requestsVsBudget(rows, OVER_MONTHS, awaitingApproval);
   assert.deepEqual(out.map((m) => m.ym), ["2026-09", "2026-10", "2026-11"]);
   // A quiet, within-budget month stays out.
@@ -626,7 +632,7 @@ test("requestsVsBudget takes spend from the budget table and commitment from the
   // Spend is settlement — the facility upload and cash — so it can only come
   // from the budget table. Commitment is the rows themselves, so that it and
   // `awaiting` partition the same population and actually add up.
-  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 12000, approval_status: "APPROVED" }];
+  const rows = [{ vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 12000, approval_status: "APPROVED" }];
   const out = requestsVsBudget(rows, OVER_MONTHS, awaitingApproval, { all: true });
   const sep = out.find((m) => m.ym === "2026-09");
   assert.equal(sep.committed, 12000);      // from the row, not the table's 50000
@@ -635,7 +641,7 @@ test("requestsVsBudget takes spend from the budget table and commitment from the
   // A month with no row in the budget table reads zero rather than undefined.
   const bare = requestsVsBudget(
     // Ordered Jul 2026 → 31 Jul + 180d = Jan 2027, outside OVER_MONTHS.
-    [{ source: "LOCAL", order_ym: "2026-07", terms_days: 0, amount_gbp: 500, approval_status: "PENDING" }],
+    [{ vat_rate: 0, source: "LOCAL", order_ym: "2026-07", terms_days: 0, amount_gbp: 500, approval_status: "PENDING" }],
     OVER_MONTHS, awaitingApproval);
   const jan = bare.find((m) => m.ym === "2027-01");
   assert.equal(jan.committed, 0);
@@ -648,8 +654,8 @@ test("requestsVsBudget: spent counts against headroom alongside committed", () =
   // budget is eaten by settlement is over even with a small order book.
   const months = [{ ym: "2026-09", committed: 0, spent: 55000, budget: 60000 }];
   const rows = [
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 8000, approval_status: "APPROVED" },
-    { source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 2000, approval_status: "PENDING" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 8000, approval_status: "APPROVED" },
+    { vat_rate: 0, source: "LOCAL", order_ym: "2026-03", terms_days: 60, amount_gbp: 2000, approval_status: "PENDING" },
   ];
   const [m] = requestsVsBudget(rows, months, awaitingApproval);
   assert.equal(m.spent, 55000);
@@ -765,7 +771,7 @@ test("Local cash-out is always the 180-day mark, whatever the supplier terms", (
   assert.equal(LOCAL_FACILITY_DAYS, 180);
   // 31 Jul 2026 + 180d = 27 Jan 2027, for every set of terms.
   for (const terms of [0, 14, 30, 60, 90, 120]) {
-    assert.equal(cashOutFor({ source: "LOCAL", order_ym: "2026-07", terms_days: terms }), "2027-01",
+    assert.equal(cashOutFor({ vat_rate: 0, source: "LOCAL", order_ym: "2026-07", terms_days: terms }), "2027-01",
       `terms of ${terms} days should not move the cash-out month`);
   }
   // Miniso is unchanged: pickup + 180.
@@ -1019,7 +1025,7 @@ test("summarise falls back to the order value when no balance is supplied", () =
   // A Local purchase, a Miniso request with no LCs drawn, or a foreign order
   // whose costing rate is missing — all keep the old behaviour exactly.
   const months = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 100000 }];
-  const local = { source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000 };
+  const local = { vat_rate: 0, source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000 };
   const out = summarise([local], months, {});
   assert.equal(out.LOCAL.months.find((m) => m.ym === "2026-09").committed, 40000);
   assert.equal(out.LOCAL.totalCommitted, 40000);
@@ -1061,9 +1067,14 @@ const AWAITING_FIN = (r) => r.finance_status === "PENDING" || r.finance_status =
 test("requestsVsBudget still uses the order value when no balance is given", () => {
   // A Local purchase, or a Miniso order with nothing drawn — unchanged.
   const months = [{ ym: "2026-09", committed: 0, spent: 0, budget: 100000 }];
-  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, finance_status: "APPROVED" }];
+  const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, vat_rate: 0, finance_status: "APPROVED" }];
   const [m] = requestsVsBudget(rows, months, AWAITING_FIN, { all: true });
   assert.equal(m.committed, 40000);
+  // With VAT unstated, a Local row commits its GROSS value (migration 116).
+  const gross = requestsVsBudget(
+    [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, finance_status: "APPROVED" }],
+    months, AWAITING_FIN, { all: true });
+  assert.equal(gross[0].committed, 48000);
 });
 
 // ---- What a month's spend is made of ----
@@ -1161,7 +1172,7 @@ test("summarise: no FX attached leaves variance exactly as it was", () => {
   // A GBP order, a Local purchase, or a foreign order with no spot rate set.
   // The formula must not move for anything that carries no FX.
   const months = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 100000 }];
-  const local = { source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000 };
+  const local = { source: "LOCAL", supplier: "RMS", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, vat_rate: 0 };
   const sep = summarise([local], months, {}).LOCAL.months.find((m) => m.ym === "2026-09");
   assert.equal(sep.fx, 0);
   assert.equal(sep.variance, 100000 - 40000);

@@ -6,6 +6,7 @@ import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders } from "../../../lib/procurement-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
+import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel } from "../../../lib/vat-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
 
@@ -228,7 +229,10 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
   const isMiniso = source === "MINISO";
   // Miniso HQ raises in USD; local suppliers in GBP.
   const defaultCcy = isMiniso ? "USD" : "GBP";
-  const empty = { supplier: "", category: "", order_ym: "", delivery_ym: "", amount_gbp: "", currency: defaultCcy, terms_days: "", pickup_date: "", status: "COMMITTED", reference: "" };
+  // vat_rate defaults by source: 20% for Local and Merch, none for Miniso —
+  // import VAT goes to HMRC at the border, not to the supplier, so it is not
+  // part of what the LC draws. Merch can change it either way.
+  const empty = { supplier: "", category: "", order_ym: "", delivery_ym: "", amount_gbp: "", currency: defaultCcy, terms_days: "", pickup_date: "", status: "COMMITTED", reference: "", vat_rate: String(defaultVatRate({ source })) };
   const [f, setF] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -251,7 +255,20 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
   // Where this request would land, and what it does to that month's budget. The
   // GBP value is the spot conversion for a foreign order (Finance re-strikes it
   // on approval, so this is provisional) and the entered amount for a GBP one.
-  const draftGbp = foreign ? gbpPreview : Number(f.amount_gbp) || 0;
+  /*
+   * Net in, gross committed.
+   *
+   * Merch enters the net value on the quote. What leaves the bank is the gross
+   * invoice — we pay the supplier VAT and reclaim it from HMRC later, on a
+   * different timetable — so the budget check and the commitment are struck on
+   * the gross. Both are shown, because a request Merch reads as £1,000 hitting
+   * a budget as £1,200 needs to say why on the form rather than in a variance.
+   */
+  const vatRate = vatRateOf({ source, vat_rate: f.vat_rate });
+  const draftNet = foreign ? gbpPreview : Number(f.amount_gbp) || 0;
+  const draftGross = grossFromNet(draftNet, vatRate);
+  const draftVat = draftGross == null ? null : draftGross - (draftNet || 0);
+  const draftGbp = draftGross ?? draftNet;
   // Miniso's month comes off the pickup date, Local's off the order month, so
   // wait for the field that actually decides it — guessing from a half-filled
   // form would point at the wrong month's budget.
@@ -291,7 +308,23 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
         <Field label="Currency"><select value={f.currency} onChange={set("currency")} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-        <Field label={`Amount (${CCY_SYMBOL[f.currency] || f.currency})`}><MoneyInput required value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        <Field label={`Net amount (${CCY_SYMBOL[f.currency] || f.currency})`}><MoneyInput required value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
+        {/* The gross is what the budget is charged, so the basis is a choice on
+            the form rather than an assumption behind it. */}
+        <Field label="VAT">
+          <select value={f.vat_rate} onChange={set("vat_rate")} style={inp}>
+            {VAT_TREATMENTS.map((t) => <option key={t.rate} value={String(t.rate)} title={t.hint}>{t.label}</option>)}
+          </select>
+        </Field>
+        <Field label={`Gross (${CCY_SYMBOL[f.currency] || f.currency})`}>
+          <input
+            readOnly
+            value={draftGross == null ? "" : draftGross.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            placeholder="—"
+            title={vatRate ? `Net plus ${Number((vatRate * 100).toFixed(2))}% VAT — this is what the budget is charged` : "No VAT — gross is the net amount"}
+            style={{ ...inp, textAlign: "right", background: "var(--raise)", color: "var(--muted)" }} className="fos-num"
+          />
+        </Field>
         {isMiniso ? (
           <>
             <Field label="Pickup date"><input required type="date" value={f.pickup_date} onChange={set("pickup_date")} style={inp} /></Field>

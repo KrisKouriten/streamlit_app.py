@@ -10,6 +10,7 @@ import {
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
+import { grossOf, vatLabel } from "../../../lib/vat-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -671,7 +672,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     // The export keeps Invoice no / net — they are still the record of what
     // Finance keyed, even though the screen now shows them only where they are
     // entered. Payment month rides alongside, on the cash-out basis.
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Gross value", "VAT basis", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -680,7 +681,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     for (const r of rows) {
       const sv = inventoryCostFx(r, costingRate), v = fxToPL(r);
       lines.push([
-        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r),
+        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r), grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"), vatLabel(r),
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
         reportBasis(r), r.report_gbp != null ? r.report_gbp : "",
         sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
@@ -768,7 +769,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Gross", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -791,6 +792,14 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                           {money(lineValue(r))}
                           {isForeignRow(r) && r.amount_ccy != null && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{ccyAmt(r.amount_ccy, r.currency)}{r.cost_rate_type ? ` @ ${r.cost_rate_type.toLowerCase()}` : ""}</div>}
                           {fs === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Committed {money(committedAmount(r))}</div>}
+                        </td>
+                        {/* Net is what Merch entered; GROSS is what leaves the
+                            bank and what the budget is charged. Both are shown
+                            because a request read as £1,000 hitting a budget as
+                            £1,200 has to say why here, not in a variance. */}
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                          {money(grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"))}
+                          <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{vatLabel(r)}</div>
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {

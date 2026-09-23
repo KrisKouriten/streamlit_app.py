@@ -4,7 +4,8 @@ import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reporte
   normTradePayRef,
   tradePayRefError,
   tradePayMatch,
-  outstandingCommitment
+  outstandingCommitment,
+  committedAmountNet
 } from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
@@ -136,9 +137,19 @@ test("lineValue prefers landed cost, falls back to order amount", () => {
   assert.equal(lineValue({ landed_cost: 0, amount_gbp: 9000 }), 9000);
 });
 
-test("committedAmount prefers the invoice net", () => {
-  assert.equal(committedAmount({ invoice_amount: 8800, landed_cost: 12000 }), 8800);
-  assert.equal(committedAmount({ landed_cost: 12000 }), 12000);
+test("committedAmount prefers the invoice net, and grosses it", () => {
+  // Both figures it chooses between are NET — invoice_amount is the invoice net
+  // Finance key in, landed_cost the net landed value. What leaves the bank is
+  // the gross, so the choice is unchanged and the grossing is applied after it.
+  assert.equal(committedAmount({ invoice_amount: 8800, landed_cost: 12000, vat_rate: 0 }), 8800);
+  assert.equal(committedAmount({ landed_cost: 12000, vat_rate: 0 }), 12000);
+  // At the standard rate (the Local / Merch default).
+  assert.equal(committedAmount({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 10560);
+  assert.equal(committedAmount({ source: "LOCAL", landed_cost: 12000 }), 14400);
+  // Miniso is an import — VAT goes to HMRC at the border, not to the supplier.
+  assert.equal(committedAmount({ source: "MINISO", landed_cost: 12000 }), 12000);
+  // The net figure stays available for showing the two side by side.
+  assert.equal(committedAmountNet({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 8800);
 });
 
 test("challengeReasonLabels maps codes back to labels", () => {
@@ -412,7 +423,9 @@ test("tradePayMatch: an unreadable facility is unknown, not unmatched", () => {
 // committed charges the month twice for the same money, the exact double count
 // that made every Miniso month read over.
 
-const local = (extra = {}) => ({ source: "LOCAL", amount_gbp: 5000, ...extra });
+// vat_rate pinned to 0 so these assert the SETTLEMENT rule and nothing else.
+// Grossing is migration 116's job and is tested in tests/vat-rules.test.mjs.
+const local = (extra = {}) => ({ source: "LOCAL", amount_gbp: 5000, vat_rate: 0, ...extra });
 
 test("outstandingCommitment: an unsettled Local order commits its full value", () => {
   const oc = outstandingCommitment(local());
