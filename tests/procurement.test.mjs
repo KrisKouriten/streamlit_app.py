@@ -4,7 +4,7 @@ import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILI
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
   parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement, facilityImpliedRate,
-  fxOnCommitment, phasingCheck } from "../lib/procurement-rules.js";
+  fxOnCommitment, phasingCheck, monthsWithActivity, consolidateSummary } from "../lib/procurement-rules.js";
 
 // Many fixtures below pin `vat_rate: 0`. Migration 116 made a request's
 // committed value its GROSS amount, defaulting Local and Merch to 20%. These
@@ -1398,4 +1398,141 @@ test("facilityImpliedRate says nothing where there is nothing to imply", () => {
   assert.equal(facilityImpliedRate({}), null);
   // loan_currency absent falls back to payment_currency, as the upload does.
   assert.equal(facilityImpliedRate({ loan_amount: 228802.02, payment_currency: "USD", facility_payment_gbp: 171259 }).toFixed(4), "1.3360");
+});
+
+// ---- Which months are worth reading first ----
+
+test("monthsWithActivity keeps the months that have something in them", () => {
+  const months = [
+    { ym: "2026-07", budget: 900000, committed: 0 },
+    { ym: "2026-08", budget: 900000, committed: 0 },
+    { ym: "2026-11", budget: 512676, committed: 0, tradeSpent: 385183 },
+    { ym: "2026-12", budget: 100000, committed: 6960 },
+    { ym: "2027-01", budget: 100000, committed: 0, cashSpent: 500 },
+  ];
+  assert.deepEqual(monthsWithActivity(months).map((m) => m.ym), ["2026-11", "2026-12", "2027-01"]);
+});
+
+test("monthsWithActivity keeps an over-budget month even with nothing in it", () => {
+  // A month flagged over has to be explained whether or not it carries a figure
+  // on this particular basis — hiding it is how a problem goes unseen.
+  const months = [
+    { ym: "2026-07", budget: 900000, committed: 0 },
+    { ym: "2027-03", budget: 234279, committed: 0, overBudget: true },
+  ];
+  assert.deepEqual(monthsWithActivity(months).map((m) => m.ym), ["2027-03"]);
+});
+
+test("monthsWithActivity returns everything when nothing has activity", () => {
+  // An empty table would read as "no data". A budget with nothing committed
+  // against it IS the information at that point.
+  const months = [
+    { ym: "2026-07", budget: 900000, committed: 0 },
+    { ym: "2026-08", budget: 900000, committed: 0 },
+  ];
+  assert.deepEqual(monthsWithActivity(months).map((m) => m.ym), ["2026-07", "2026-08"]);
+  assert.deepEqual(monthsWithActivity([]), []);
+  assert.deepEqual(monthsWithActivity(), []);
+  assert.deepEqual(monthsWithActivity(null), []);
+});
+
+// ---- Every source added together (the Merchandising dashboard) ----
+
+// The per-source shape summarise() returns, cut down to the fields consolidation
+// reads. Built from purchases so the fixture cannot drift from the real thing.
+const twoSources = () => summarise(
+  [
+    { source: "MINISO", supplier: "MINISO HQ", order_ym: "2026-05", pickup_date: "2026-05-20", terms_days: 180, amount_gbp: 400000, vat_rate: 0 },
+    { source: "LOCAL", supplier: "Design360", order_ym: "2026-05", terms_days: 180, amount_gbp: 100000, vat_rate: 0 },
+  ],
+  [
+    { source: "MINISO", ym: "2026-11", budget_gbp: 500000 },
+    { source: "LOCAL", ym: "2026-11", budget_gbp: 150000 },
+    { source: "LOCAL", ym: "2026-12", budget_gbp: 80000 },
+  ]);
+
+test("consolidateSummary adds the sources together, month by month", () => {
+  const c = consolidateSummary(twoSources());
+  const nov = c.months.find((m) => m.ym === "2026-11");
+  assert.equal(nov.committed, 500000);          // 400k Miniso + 100k Local
+  assert.equal(nov.budget, 650000);             // 500k + 150k, the sum of the source budgets
+  assert.equal(nov.variance, 150000);
+  assert.equal(nov.overBudget, false);
+  // And it reconciles to the parts it was built from.
+  assert.equal(nov.bySource.MINISO.committed, 400000);
+  assert.equal(nov.bySource.LOCAL.committed, 100000);
+});
+
+test("consolidateSummary reconciles to the sum of the per-source totals", () => {
+  const s = twoSources();
+  const c = consolidateSummary(s);
+  assert.equal(c.totalCommitted, s.MINISO.totalCommitted + s.LOCAL.totalCommitted);
+  assert.equal(c.totalBudget, s.MINISO.totalBudget + s.LOCAL.totalBudget);
+  assert.equal(c.totalSpent, s.MINISO.totalSpent + s.LOCAL.totalSpent);
+  // Every month either source knows about is present exactly once.
+  assert.deepEqual(c.months.map((m) => m.ym), ["2026-11", "2026-12"]);
+  assert.deepEqual(c.sources, ["MINISO", "LOCAL"]);
+});
+
+test("consolidateSummary re-strikes over-budget rather than adding the flags up", () => {
+  // Miniso 60k over its 500k; Local 100k under its 150k. Each source flags its
+  // own month, but together the month is within budget — and that is the figure
+  // the dashboard is asked for.
+  const s = summarise(
+    [
+      { source: "MINISO", supplier: "MINISO HQ", order_ym: "2026-05", pickup_date: "2026-05-20", terms_days: 180, amount_gbp: 560000, vat_rate: 0 },
+      { source: "LOCAL", supplier: "Design360", order_ym: "2026-05", terms_days: 180, amount_gbp: 50000, vat_rate: 0 },
+    ],
+    [
+      { source: "MINISO", ym: "2026-11", budget_gbp: 500000 },
+      { source: "LOCAL", ym: "2026-11", budget_gbp: 150000 },
+    ]);
+  assert.equal(s.MINISO.months[0].overBudget, true);
+  assert.equal(s.LOCAL.months[0].overBudget, false);
+  const nov = consolidateSummary(s).months[0];
+  assert.equal(nov.committed, 610000);
+  assert.equal(nov.budget, 650000);
+  assert.equal(nov.overBudget, false);
+  assert.equal(nov.variance, 40000);
+});
+
+test("consolidateSummary keeps a month nobody budgeted as null, not zero", () => {
+  const s = summarise(
+    [{ source: "LOCAL", supplier: "Design360", order_ym: "2026-05", terms_days: 180, amount_gbp: 20000, vat_rate: 0 }],
+    []);
+  const nov = consolidateSummary(s).months[0];
+  assert.equal(nov.budget, null);
+  assert.equal(nov.variance, null);
+  assert.equal(nov.overBudget, false);
+});
+
+test("consolidateSummary carries the budget through when only one source has one", () => {
+  const s = summarise([], [{ source: "MINISO", ym: "2026-11", budget_gbp: 500000 }]);
+  const nov = consolidateSummary(s).months[0];
+  assert.equal(nov.budget, 500000);
+  assert.equal(nov.bySource.MINISO.budget, 500000);
+});
+
+test("consolidateSummary merges a supplier that trades through both sources", () => {
+  const s = summarise(
+    [
+      { source: "MINISO", supplier: "Shared Co", order_ym: "2026-05", pickup_date: "2026-05-20", terms_days: 180, amount_gbp: 30000, vat_rate: 0 },
+      { source: "LOCAL", supplier: "Shared Co", order_ym: "2026-05", terms_days: 180, amount_gbp: 20000, vat_rate: 0 },
+    ], []);
+  const sup = consolidateSummary(s).suppliers;
+  assert.equal(sup.length, 1);
+  assert.equal(sup[0].supplier, "Shared Co");
+  assert.equal(sup[0].committed, 50000);
+  assert.equal(sup[0].orders, 2);
+  assert.deepEqual(sup[0].sources, ["MINISO", "LOCAL"]);
+});
+
+test("consolidateSummary is safe on nothing at all", () => {
+  for (const empty of [undefined, null, {}]) {
+    const c = consolidateSummary(empty);
+    assert.deepEqual(c.months, []);
+    assert.deepEqual(c.suppliers, []);
+    assert.equal(c.totalCommitted, 0);
+    assert.equal(c.totalBudget, 0);
+  }
 });

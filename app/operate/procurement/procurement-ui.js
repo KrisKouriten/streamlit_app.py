@@ -1,9 +1,9 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity } from "../../../lib/procurement-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel } from "../../../lib/vat-rules";
@@ -62,6 +62,20 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
   const isMerch = tab === "MERCH";
   const isFx = tab === "FX";
   const s = data[tab];
+  /*
+   * Miniso settles on POST-SHIPMENT BUYER LOANS against a letter of credit.
+   * Those are drawings on the HSBC trade facility, but they are not TradePay —
+   * TradePay is the product Local buys on. Calling the column "Trade pay" under
+   * Miniso named the wrong instrument for every row in it.
+   */
+  const tradeLabel = tab === "MINISO" ? "Trade facility" : "Trade pay";
+  // Months with nothing in them are budget rows waiting for activity. Useful to
+  // see, but not while reading a month that is actually moving — so the table
+  // opens on the months that have something in them.
+  const [allMonths, setAllMonths] = useState(false);
+  const monthsShown = useMemo(
+    () => (allMonths ? (s?.months || []) : monthsWithActivity(s?.months)),
+    [s, allMonths]);
 
   return (
     <>
@@ -96,15 +110,28 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
 
-      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − trade pay − cash + FX">
+      <Panel
+        title="Monthly cash budget vs committed"
+        note={`everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, ${tradeLabel.toLowerCase()} in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − ${tradeLabel.toLowerCase()} − cash + FX`}
+        right={s.months.length > monthsShown.length || allMonths ? (
+          <button className="fos-btn-ghost" onClick={() => setAllMonths((x) => !x)}>
+            {allMonths ? "Months with activity" : `All months (${s.months.length})`}
+          </button>
+        ) : null}
+      >
+        {!allMonths && s.months.length > monthsShown.length && (
+          <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 10 }}>
+            Showing {monthsShown.length} of {s.months.length} months — the rest carry a budget but no committed orders or spend yet.
+          </div>
+        )}
         {s.unvaluedDrawings > 0 && (
           <div style={{ fontSize: 12, color: "var(--amber)", marginBottom: 10, lineHeight: 1.5 }}>
-            {s.unvaluedDrawings} facility drawing{s.unvaluedDrawings === 1 ? " is" : "s are"} not counted in Trade pay — no GBP amount on the upload, and no spot rate set for the drawing&rsquo;s currency. Set the rate on <strong>Exchange rates</strong>, or add a GBP column to the facility extract.
+            {s.unvaluedDrawings} facility drawing{s.unvaluedDrawings === 1 ? " is" : "s are"} not counted in {tradeLabel.toLowerCase()} — no GBP amount on the upload, and no spot rate set for the drawing&rsquo;s currency. Set the rate on <strong>Exchange rates</strong>, or add a GBP column to the facility extract.
           </div>
         )}
         {s.months.length === 0 ? <Empty>No purchases or budgets for this section yet.</Empty> : (
-          <Table head={["Cash-out month", "Committed", "Trade pay", "Cash", "Spent", "Budget", "FX", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 0]}>
-            {s.months.map((m) => (
+          <Table head={["Cash-out month", "Committed", tradeLabel, "Cash", "Spent", "Budget", "FX", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 0]}>
+            {monthsShown.map((m) => (
               <tr key={m.ym}>
                 <Td>{monthLabel(m.ym)}</Td>
                 <Td r>{money(m.committed)}</Td>
@@ -692,12 +719,13 @@ function Tile({ label, value, sub, tone }) {
     </div>
   );
 }
-function Panel({ title, note, children }) {
+function Panel({ title, note, right, children }) {
   return (
     <section style={{ marginBottom: 26 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 11 }}>
         <span style={{ fontSize: 14.5, fontWeight: 650 }}>{title}</span>
-        {note && <span style={{ fontSize: 11.5, color: "var(--faint)" }}>· {note}</span>}
+        {note && <span style={{ fontSize: 11.5, color: "var(--faint)", flex: 1 }}>· {note}</span>}
+        {right && <span style={{ marginLeft: "auto", flexShrink: 0 }}>{right}</span>}
       </div>
       {children}
     </section>
