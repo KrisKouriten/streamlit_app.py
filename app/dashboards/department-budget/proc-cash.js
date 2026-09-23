@@ -27,8 +27,22 @@ const monthLabel = (ym) => {
 const dash = <span style={{ color: "var(--faint)" }}>—</span>;
 const orDash = (v) => (v ? money(v) : dash);
 
+// What each source put into one figure of a consolidated month, e.g.
+// "Miniso purchases £12k · Local purchases £6k". Sources with nothing in that
+// figure are left out, so a line never lists a source only to say £0.
+function sourceSplit(m, field) {
+  const parts = Object.entries(m.bySource || {}).filter(([, v]) => v[field]);
+  if (!parts.length) return null;
+  return (
+    <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, whiteSpace: "normal", lineHeight: 1.4 }}>
+      {parts.map(([k, v]) => `${SOURCES[k] || k} ${money(v[field], { compact: true })}`).join(" · ")}
+    </div>
+  );
+}
+
 // A month row's columns. `split` adds the per-source make-up under the
-// consolidated committed figure, so the total can be taken apart in place.
+// consolidated committed and spent figures, so a total can be taken apart in
+// place.
 function monthColumns({ split = false } = {}) {
   return [
     { label: "Cash-out month", render: (m) => monthLabel(m.ym) },
@@ -36,18 +50,18 @@ function monthColumns({ split = false } = {}) {
       label: "Committed", align: "right", render: (m) => (
         <div>
           <div>{money(m.committed)}</div>
-          {split && m.bySource && Object.keys(m.bySource).length > 1 && (
-            <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, whiteSpace: "normal", lineHeight: 1.4 }}>
-              {Object.entries(m.bySource)
-                .filter(([, v]) => v.committed)
-                .map(([k, v]) => `${SOURCES[k] || k} ${money(v.committed, { compact: true })}`)
-                .join(" · ")}
-            </div>
-          )}
+          {split && sourceSplit(m, "committed")}
         </div>
       ),
     },
-    { label: "Spent", align: "right", render: (m) => orDash(m.spent) },
+    {
+      label: "Spent", align: "right", render: (m) => (
+        <div>
+          <div>{orDash(m.spent)}</div>
+          {split && m.spent ? sourceSplit(m, "spent") : null}
+        </div>
+      ),
+    },
     { label: "Budget", align: "right", render: (m) => (m.budget == null ? dash : money(m.budget)) },
     // The commitment is held at the costing rate and the cash goes out at spot.
     // That gap is valuation, not budget performance, so it is shown on its own
