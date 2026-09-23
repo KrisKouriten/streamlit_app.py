@@ -5,17 +5,9 @@ import LiveStamp from "../live-stamp";
    no client JS. Currency follows Miniso UK house style: £ with comma thousands
    separators; compact (£m / £k) for headline tiles, full pounds in tables. */
 
-export function money(n, { compact = false } = {}) {
-  if (n === null || n === undefined || n === "") return "—";
-  const v = Number(n);
-  const sign = v < 0 ? "−" : "";
-  const abs = Math.abs(v);
-  if (compact) {
-    if (abs >= 1_000_000) return `${sign}£${(abs / 1_000_000).toFixed(1)}m`;
-    if (abs >= 1_000) return `${sign}£${Math.round(abs / 1000).toLocaleString("en-GB")}k`;
-  }
-  return `${sign}£${Math.round(abs).toLocaleString("en-GB")}`;
-}
+// Money formatting lives in lib/money-rules.js so it can be unit-tested — this
+// file imports next/link and cannot be loaded by the test runner.
+export { money, currencyPrefix, CCY_SYMBOL } from "../../lib/money-rules.js";
 
 export function pct(n, dp = 1) {
   if (n === null || n === undefined) return "—";
