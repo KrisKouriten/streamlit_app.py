@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
-  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement,
+  parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement, facilityImpliedRate,
   fxOnCommitment, phasingCheck } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
@@ -1366,4 +1366,25 @@ test("phasingCheck prefers the smaller move when two shifts score the same", () 
   const months = [];
   for (let i = 1; i <= 6; i += 1) months.push({ ym: `2026-${String(i).padStart(2, "0")}`, budget: 100000, committed: 100000 });
   assert.equal(phasingCheck(months).best, 0);
+});
+
+test("facilityImpliedRate: the rate the bank actually dealt at", () => {
+  // Arithmetic on two columns the bank supplied, not an inference. On the real
+  // September 2026 extract every USD row comes out at 1.3360 — the HEDGED rate,
+  // not spot, which is worth being able to see per drawing.
+  const r = (loan, gbp) => facilityImpliedRate({ loan_amount: loan, loan_currency: "USD", facility_payment_gbp: gbp });
+  assert.equal(r(228802.02, 171259).toFixed(4), "1.3360");
+  assert.equal(r(225484.18, 168776).toFixed(4), "1.3360");
+  assert.equal(r(291660.38, 218309).toFixed(4), "1.3360");
+  assert.equal(r(207300.26, 155165).toFixed(4), "1.3360");
+});
+
+test("facilityImpliedRate says nothing where there is nothing to imply", () => {
+  // A sterling loan has no rate, and a row missing either side cannot have one.
+  assert.equal(facilityImpliedRate({ loan_amount: 42089.67, loan_currency: "GBP", facility_payment_gbp: 42090 }), null);
+  assert.equal(facilityImpliedRate({ loan_amount: 228802, loan_currency: "USD" }), null);
+  assert.equal(facilityImpliedRate({ loan_currency: "USD", facility_payment_gbp: 171259 }), null);
+  assert.equal(facilityImpliedRate({}), null);
+  // loan_currency absent falls back to payment_currency, as the upload does.
+  assert.equal(facilityImpliedRate({ loan_amount: 228802.02, payment_currency: "USD", facility_payment_gbp: 171259 }).toFixed(4), "1.3360");
 });
