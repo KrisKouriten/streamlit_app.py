@@ -179,13 +179,22 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
   const [product, setProduct] = useState("");
 
   // Upload a fresh HSBC extract (replace-mode). Reads the chosen CSV and posts it.
+  const [ignored, setIgnored] = useState([]);
+
   async function onUpload(e) {
     const file = e.target.files?.[0];
     e.target.value = "";                         // allow re-selecting the same file
     if (!file) return;
     if (rows.length && !window.confirm(`Replace the whole facility register (${rows.length} drawing${rows.length === 1 ? "" : "s"}) with the contents of “${file.name}”? This cannot be undone.`)) return;
     const csv = await file.text();
-    await op({ op: "upload-facility", csv }, "Bank trade facility updated.");
+    const res = await op({ op: "upload-facility", csv }, "Bank trade facility updated.");
+    // Columns the parser did not recognise. It drops them, which is usually
+    // right — an extract carries plenty the register has no use for — but it
+    // used to drop them in silence, and a GBP column spelled a way the header
+    // list did not know went with them. The register then showed no GBP, the
+    // desk converted at spot instead, and a month read six figures light.
+    if (res?.ignored?.length) setIgnored(res.ignored);
+    else setIgnored([]);
   }
   function downloadTemplate() {
     const csv = FACILITY_UPLOAD_COLUMNS.join(",") + "\n";
@@ -254,6 +263,19 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
             )}
           </div>
         </div>
+        {ignored.length > 0 && (
+          <div style={{ border: "1px solid var(--amber)", borderRadius: 9, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, lineHeight: 1.55 }}>
+            <strong style={{ color: "var(--amber)" }}>
+              {ignored.length} column{ignored.length === 1 ? "" : "s"} in that file {ignored.length === 1 ? "was" : "were"} not read.
+            </strong>{" "}
+            <span style={{ fontFamily: "var(--mono)", fontSize: 11.5 }}>{ignored.join(" · ")}</span>
+            <div style={{ color: "var(--muted)", marginTop: 5 }}>
+              Usually harmless — an extract carries more than the register needs. But if one of those holds the sterling
+              amount, the desk will convert the foreign figure at spot instead of using it. Check against the{" "}
+              <strong style={{ color: "var(--ink)" }}>Template</strong> column names, or tell me the header and I will map it.
+            </div>
+          </div>
+        )}
         {canManage && !rows.length && (
           <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 12, lineHeight: 1.5 }}>
             No facility drawings loaded. Download the <strong>Template</strong>, paste your HSBC extract into it (one drawing per row — <span style={{ fontFamily: "var(--mono)" }}>reference</span> is the bank drawing ref, e.g. LAIUK…), then <strong>Upload HSBC extract</strong>. Uploading replaces the whole register.

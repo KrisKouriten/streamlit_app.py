@@ -241,3 +241,57 @@ test("parseFacilityCsv reports the true file line when the header is offset", ()
   assert.ok(errors.some((e) => e.startsWith("Line 5:") && /missing reference/.test(e)));
   assert.ok(errors.some((e) => e.startsWith("Line 6:") && /duplicate/.test(e)));
 });
+
+// ---- A dropped column is never silent again ----
+//
+// THE FAULT THIS PINS. The header list mapped a fixed set of spellings and
+// dropped everything else without a word. An upload that DID carry sterling —
+// headed "Loan Amount (GBP)" — lost that column, the register showed no GBP,
+// the desk converted the USD figure at spot instead, and November read six
+// figures light. Nothing on any screen said a column had been lost.
+
+test("parseFacilityCsv reads a sterling column however it is headed", () => {
+  const variants = [
+    "Loan Amount (GBP)", "Loan amount GBP", "Payment Amount (GBP)", "Amount (GBP)",
+    "GBP equivalent", "GBP Equivalent Amount", "Equivalent in GBP", "Sterling amount",
+    "Settlement GBP", "GBP Value", "Facility payment GBP",
+  ];
+  for (const h of variants) {
+    const csv = `Reference,Cost driver,Currency,Payment amount,${h},Due date\nLAIUK1,Miniso LC,USD,171259,128000,23/11/2026\n`;
+    const { rows, errors, ignored } = parseFacilityCsv(csv);
+    assert.equal(errors.length, 0, `${h}: ${errors.join(" ")}`);
+    assert.equal(rows[0].facility_payment_gbp, 128000, `"${h}" was not read as the GBP column`);
+    assert.equal(ignored.length, 0, `"${h}" should not be reported as ignored`);
+  }
+});
+
+test("parseFacilityCsv reports the columns it did not read", () => {
+  const csv = "Reference,Cost driver,Currency,Payment amount,Nostro account,Interest rate,Due date\n"
+            + "LAIUK1,Miniso LC,USD,171259,12345678,4.2,23/11/2026\n";
+  const { rows, errors, ignored } = parseFacilityCsv(csv);
+  assert.equal(errors.length, 0);
+  assert.equal(rows.length, 1);
+  // Reported, not rejected — an extract carries plenty the register has no use
+  // for, and a failed upload would be worse than a noted one.
+  assert.deepEqual(ignored, ["Nostro account", "Interest rate"]);
+});
+
+test("parseFacilityCsv reports nothing when every column is understood", () => {
+  const csv = "Reference,Cost driver,Payment currency,Payment amount,GBP equivalent,Due date\n"
+            + "LAIUK1,Miniso LC,USD,171259,128000,23/11/2026\n";
+  const { ignored } = parseFacilityCsv(csv);
+  assert.deepEqual(ignored, []);
+});
+
+test("parseFacilityCsv reads a loan currency stated separately from the payment currency", () => {
+  // The two are different money on a post-shipment buyer loan, so a file that
+  // states both must not have one overwrite the other.
+  const csv = "Reference,Cost driver,Loan currency,Loan amount,Payment currency,Payment amount,Due date\n"
+            + "LAIUK1,Miniso LC,GBP,128000,USD,171259,23/11/2026\n";
+  const { rows, ignored } = parseFacilityCsv(csv);
+  assert.equal(ignored.length, 0);
+  assert.equal(rows[0].loan_currency, "GBP");
+  assert.equal(rows[0].loan_amount, 128000);
+  assert.equal(rows[0].payment_currency, "USD");
+  assert.equal(rows[0].payment_amount, 171259);
+});
