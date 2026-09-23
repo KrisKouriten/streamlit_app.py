@@ -8,9 +8,10 @@ const TONE = { OK: "green", WARN: "amber", FAIL: "red" };
 const WORD = { OK: "Passing", WARN: "Attention", FAIL: "Broken" };
 const BAR = { OK: "var(--green)", WARN: "var(--amber)", FAIL: "var(--red)" };
 
-export default function DataQualityUI({ checks = [], status = "OK" }) {
+export default function DataQualityUI({ checks = [], status = "OK", repairs = [], applyAction = null }) {
   return (
     <>
+      {repairs.length > 0 && applyAction && <ApplyMissingColumns repairs={repairs} action={applyAction} />}
       <div style={{ ...card, borderLeft: `3px solid ${BAR[status]}` }}>
         <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>
           {status === "OK" ? "Every feed is landing." : status === "FAIL" ? "Something is broken, not just empty." : "Everything runs, but some data isn’t counted."}
@@ -63,6 +64,56 @@ function Check({ check }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/*
+ * Apply the missing columns, here, against the database the app is connected to.
+ *
+ * This panel exists because the SQL editor and the app disagreed about which
+ * Neon branch was in front of you — five runs reported success against a branch
+ * the app has never read, and nothing on either side could tell. The button runs
+ * through the same pool every reader uses, so the check that says a column is
+ * missing is the check that says it is fixed.
+ *
+ * The exact statement is shown rather than described. An admin should be able to
+ * read what they are about to run, and "trust me" is how the wrong branch got
+ * written to in the first place.
+ */
+function ApplyMissingColumns({ repairs, action }) {
+  return (
+    <div style={{ ...card, borderLeft: "3px solid var(--amber)" }}>
+      <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>
+        {repairs.length === 1 ? "One column can be added here." : `${repairs.length} columns can be added here.`}
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55, marginBottom: 12 }}>
+        This runs against the database above — the one the app is actually connected to — so it cannot land on
+        the wrong branch. Each statement is additive and idempotent: it adds a column if it is absent and does
+        nothing if it is already there. No data is written, nothing is dropped, and no deploy is needed.
+      </div>
+      <form action={action}>
+        {repairs.map((r) => (
+          <div key={r.key} style={{ marginBottom: 10 }}>
+            <input type="hidden" name="key" value={r.key} />
+            <div style={{ ...labelSt, color: "var(--red)" }}>finance.{r.table}.{r.column}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", margin: "3px 0 5px" }}>
+              <strong style={{ color: "var(--ink)" }}>{r.migration}</strong> · {r.feature}
+            </div>
+            <code style={{
+              display: "block", fontFamily: "var(--mono)", fontSize: 11, lineHeight: 1.5, color: "var(--muted)",
+              background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 6, padding: "7px 9px",
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+            }}>{r.sql}</code>
+          </div>
+        ))}
+        <button type="submit" style={{
+          marginTop: 4, fontSize: 12.5, fontWeight: 600, padding: "8px 14px", borderRadius: 8,
+          border: "1px solid var(--line)", background: "var(--ink)", color: "var(--surface)", cursor: "pointer",
+        }}>
+          {repairs.length === 1 ? "Add this column" : `Add these ${repairs.length} columns`}
+        </button>
+      </form>
     </div>
   );
 }
