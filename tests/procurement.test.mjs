@@ -4,7 +4,7 @@ import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILI
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
   parseMonthHeader, parseBudgetSource, parseBudgetGridCsv, BUDGET_CSV_TEMPLATE, findMonthHeaderRow, facilityGbp, facilityGbpRestatement,
-  fxOnCommitment } from "../lib/procurement-rules.js";
+  fxOnCommitment, phasingCheck } from "../lib/procurement-rules.js";
 
 test("cash-out month = order month-end + payment terms", () => {
   assert.equal(cashOutYm("2026-07", 60), "2026-09");   // 31 Jul + 60d = 29 Sep
@@ -1282,4 +1282,91 @@ test("tradeSpendByMonth values a month from the loan amounts", () => {
   ], rateFor);
   assert.equal(Math.round(out.MINISO["2026-11"]), 512293);
   assert.equal(out.unvalued.MINISO, 0);
+});
+
+// ---- Is a budget in the wrong months, or the wrong shape? ----
+//
+// The Local budget was keyed on supplier terms while Local settles at 180 days
+// on the facility, so every month is out by the same distance. Miniso's basis
+// never changed, so its months should have nothing to gain from a shift. This
+// is the test that tells those two apart, which is the difference between a
+// re-phasing and a variance to explain.
+
+const localShape = () => {
+  // Budget on the old basis: order month + 1 (30-day terms).
+  // Activity on the real basis: order month + 6 (180 days on the facility).
+  const months = new Map();
+  const put = (ym, k, v) => { const r = months.get(ym) || { ym, budget: null, committed: 0 }; r[k] = v; months.set(ym, r); };
+  for (let i = 1; i <= 12; i += 1) put(`2026-${String(i).padStart(2, "0")}`, "budget", 100000);
+  for (let i = 6; i <= 12; i += 1) put(`2026-${String(i).padStart(2, "0")}`, "committed", 100000);
+  for (let i = 1; i <= 5; i += 1) put(`2027-${String(i).padStart(2, "0")}`, "committed", 100000);
+  return [...months.values()].sort((a, b) => (a.ym < b.ym ? -1 : 1));
+};
+
+test("phasingCheck finds the uniform shift when a budget is keyed on the wrong basis", () => {
+  const r = phasingCheck(localShape());
+  assert.equal(r.ready, true);
+  assert.equal(r.best, 5);              // 180 days vs 30-day terms
+  assert.equal(r.residual, 0);          // and it aligns exactly
+  assert.ok(r.gain > 0.99);
+  assert.equal(r.uniform, true);        // so a re-phase IS the right tool
+  assert.equal(r.budgetCentre, "2026-07");
+  assert.equal(r.activityCentre, "2026-12");
+});
+
+test("phasingCheck reports nothing to gain when the budget is already aligned", () => {
+  const months = [];
+  for (let i = 1; i <= 6; i += 1) months.push({ ym: `2026-${String(i).padStart(2, "0")}`, budget: 100000, committed: 100000 });
+  const r = phasingCheck(months);
+  assert.equal(r.best, 0);
+  assert.equal(r.uniform, false);       // nothing to do — not a re-phasing case
+  assert.equal(r.residual, 0);
+  assert.equal(r.mismatchNow, 0);
+});
+
+test("phasingCheck refuses to call a mis-SHAPED plan a re-phasing", () => {
+  // Same total either side, but the activity is concentrated where the budget
+  // is flat. No single shift can align that, and moving it all by one number
+  // would dress the problem up as solved.
+  const months = [
+    { ym: "2026-01", budget: 100000, committed: 0 },
+    { ym: "2026-02", budget: 100000, committed: 0 },
+    { ym: "2026-03", budget: 100000, committed: 600000 },
+    { ym: "2026-04", budget: 100000, committed: 0 },
+    { ym: "2026-05", budget: 100000, committed: 0 },
+    { ym: "2026-06", budget: 100000, committed: 0 },
+  ];
+  const r = phasingCheck(months);
+  assert.ok(r.gain < 0.5, `a shift should not rescue this, gain was ${r.gain}`);
+  assert.equal(r.uniform, false);       // re-key, not re-phase
+});
+
+test("phasingCheck counts spend as activity, not just committed", () => {
+  // A month settled through the facility carries no commitment any more. If the
+  // check ignored spend it would call a fully-settled month empty and suggest
+  // shifting the budget off it.
+  const months = [
+    { ym: "2026-01", budget: 100000, committed: 0, tradeSpent: 0 },
+    { ym: "2026-06", budget: null, committed: 0, tradeSpent: 60000, cashSpent: 40000 },
+  ];
+  const r = phasingCheck(months);
+  assert.equal(r.best, 5);
+  assert.equal(r.activityTotal, 100000);
+});
+
+test("phasingCheck says why it cannot answer rather than guessing", () => {
+  assert.equal(phasingCheck([]).ready, false);
+  assert.match(phasingCheck([{ ym: "2026-01", committed: 5000 }]).reason, /No budget set/);
+  assert.match(phasingCheck([{ ym: "2026-01", budget: 5000 }]).reason, /No committed orders or spend/);
+  // And it never returns a shift it cannot stand behind.
+  assert.equal(phasingCheck([]).best, null);
+  assert.equal(phasingCheck([]).uniform, false);
+});
+
+test("phasingCheck prefers the smaller move when two shifts score the same", () => {
+  // A flat plan against flat activity can align several ways. Moving a budget is
+  // a real change to a cash plan, so a tie must never pick the bigger one.
+  const months = [];
+  for (let i = 1; i <= 6; i += 1) months.push({ ym: `2026-${String(i).padStart(2, "0")}`, budget: 100000, committed: 100000 });
+  assert.equal(phasingCheck(months).best, 0);
 });

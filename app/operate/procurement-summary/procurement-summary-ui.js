@@ -9,7 +9,7 @@ import {
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp,
 } from "../../../lib/procurement-close-rules";
-import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor } from "../../../lib/procurement-rules";
+import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 
@@ -192,6 +192,12 @@ function BudgetRephase({ months = {}, onErr, onDone }) {
   const n = Number(shift);
   const invalid = budgetShiftError(n);
   const plan = useMemo(() => shiftBudgetPlan(months[source] || [], n || 0), [months, source, n]);
+  // Measured, not inferred. plan.suggested compares the first budgeted month
+  // with the first month anything happens, which one stray early order moves by
+  // the whole gap. This scores every shift and reports how much of the mismatch
+  // the best one actually removes — which is what says whether re-phasing is
+  // even the right tool.
+  const phase = useMemo(() => phasingCheck(months[source] || []), [months, source]);
   const rows = plan.rows.filter((r) => r.budgetNow != null || r.budgetAfter != null || r.activity > 0);
 
   async function apply() {
@@ -240,12 +246,14 @@ function BudgetRephase({ months = {}, onErr, onDone }) {
         <button onClick={apply} disabled={busy || !!invalid || !plan.moved} style={{ ...btn("var(--accent)"), opacity: busy || invalid || !plan.moved ? 0.5 : 1 }}>
           {busy ? "Moving…" : "Apply shift"}
         </button>
-        {plan.suggested != null && plan.suggested !== n && (
-          <button onClick={() => { setShift(plan.suggested); setDone(""); }} style={ghost}>
-            Suggested: {plan.suggested > 0 ? "+" : ""}{plan.suggested}
+        {phase.ready && phase.best != null && phase.best !== 0 && phase.best !== n && (
+          <button onClick={() => { setShift(phase.best); setDone(""); }} style={ghost}>
+            Best fit: {phase.best > 0 ? "+" : ""}{phase.best}
           </button>
         )}
       </div>
+
+      {phase.ready && <PhasingVerdict phase={phase} source={source} />}
 
       {invalid && <div style={{ color: "var(--amber)", fontSize: 12.5, marginBottom: 12 }}>{invalid}</div>}
       {done && <div style={{ color: "var(--green)", fontSize: 12.5, marginBottom: 12 }}>{done}</div>}
@@ -1149,5 +1157,49 @@ function Field({ label, children }) {
       <span style={labelSt}>{label}</span>
       {children}
     </label>
+  );
+}
+
+/*
+ * Whether this budget is in the wrong MONTHS or the wrong SHAPE.
+ *
+ * The distinction matters because only one of them is fixable from this panel.
+ * A plan sitting in the wrong months is a re-phasing: every month is out by the
+ * same distance and one shift puts it right — the Local case, where the budget
+ * was keyed on supplier terms while Local settles at 180 days on the facility.
+ * A plan of the wrong shape is not: shifting it only moves the mismatch around,
+ * and the honest answer is to re-cut the forecast or explain the variance.
+ *
+ * So this says which, with the number behind it, rather than offering a shift
+ * and leaving the judgement unmade.
+ */
+function PhasingVerdict({ phase, source }) {
+  const pct = Math.round((phase.gain || 0) * 100);
+  const aligned = phase.best === 0;
+  const tone = aligned ? "var(--green)" : phase.uniform ? "var(--accent)" : "var(--amber)";
+  return (
+    <div style={{ border: `1px solid ${tone}`, borderRadius: 9, padding: "10px 12px", marginBottom: 12, fontSize: 12.5, lineHeight: 1.55 }}>
+      <strong style={{ color: tone }}>
+        {aligned
+          ? "Already phased against its activity."
+          : phase.uniform
+            ? `Out by ${Math.abs(phase.best)} month${Math.abs(phase.best) === 1 ? "" : "s"} — a re-phasing case.`
+            : "Shifting will not fix this."}
+      </strong>{" "}
+      {aligned ? (
+        <>No shift reduces the gap between budget and activity, so there is nothing to re-phase. Any variance here is real.</>
+      ) : phase.uniform ? (
+        <>
+          The budget sits around {ymLabel(phase.budgetCentre)} while the activity lands around {ymLabel(phase.activityCentre)}.
+          Moving it {phase.best > 0 ? "+" : ""}{phase.best} removes <strong style={{ color: "var(--ink)" }}>{pct}%</strong> of the mismatch, which means the plan is the right shape and simply keyed to the wrong dates.
+          {source === "LOCAL" && <> That is what you would expect: Local settles at 180 days on the facility, not on supplier terms.</>}
+        </>
+      ) : (
+        <>
+          The best shift available ({phase.best > 0 ? "+" : ""}{phase.best}) removes only <strong style={{ color: "var(--ink)" }}>{pct}%</strong> of the mismatch, so the budget is not merely sitting in the wrong months —
+          the money is spread differently from the activity. Moving it would relabel the problem rather than solve it. Re-cut the plan, or record the variance and explain it.
+        </>
+      )}
+    </div>
   );
 }
