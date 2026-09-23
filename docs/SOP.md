@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.9 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 2.0 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -419,15 +419,21 @@ mean paying the supplier after HSBC has already been repaid.
 
 **Raising a request** (*Add a purchase*). As soon as the field that decides the month
 is filled — **pickup date** for Miniso, **order month** for Local — a live **budget
-check** appears above the Add button. It answers one question: **does the month this is
-paid in have the budget left to carry it?** It shows that month's Budget, Committed,
-Spent, what is **Left before this**, what this request adds, and what is **Left after**
-or the amount it goes over by.
+check** appears above the Add button. It answers one question: **is the month this is paid
+in still open to buy?** It shows that month's Budget, Committed, Spent, what is **Open to
+buy**, what this request adds, and what is left (**OTB after this**) or the amount it goes
+over by.
 
-Headroom is the agreed variance — **budget − committed − spent** — so a month the trade
-facility has already drawn from shows what is genuinely left, not the whole budget. (It
-previously showed Spent and then left it out of the arithmetic, so a month already drawn
-down reported full headroom and the request that used it up looked affordable.)
+**Open to buy on this desk means available to spend, on a cash-out basis** — the agreed
+variance, **budget − committed − spent**, for the month the money leaves. So a month the
+trade facility has already drawn from shows what is genuinely left, not the whole budget.
+(It previously showed Spent and then left it out of the arithmetic, so a month already
+drawn down reported full headroom and the request that used it up looked affordable.)
+
+> Not to be confused with the **merchandising OTB model** (PLAN → Open to Buy, `merch`
+> schema), which runs on selling periods and governs merch requests. The cash-tracker desk
+> buys against the cash plan, and the cash plan is the constraint — so the check here is on
+> the **payment month**, not the delivery month.
 
 It **informs, it does not block**: an over-budget request still submits and says it will
 be reviewed, and the wording distinguishes a month *this* request tips over from one
@@ -476,8 +482,8 @@ counted once**: a request is either **Awaiting** a decision or **Committed** (ap
 closed) — never both — and **Would commit** is simply the two added together, i.e. what
 the month becomes if the whole queue is approved.
 
-**Headroom** is the agreed variance on what is already decided — *budget − committed −
-spent* — and **If approved** takes the awaiting value off as well. The badge follows:
+**Open to buy** is what the month has left to spend on what is already decided — *budget −
+committed − spent* — and **If approved** takes the awaiting value off as well. The badge follows:
 **Over** (the month is over on decided commitment and spend alone), **Would go over**
 (inside budget today, but approving the queue breaks it), or **Within**. Months with
 nothing pending are hidden unless they are already over; **Show all months** drops the

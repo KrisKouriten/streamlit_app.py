@@ -171,8 +171,8 @@ function AwaitingVsBudget({ rows = [], months = [] }) {
   const pipeline = requestsVsBudget(live, months, AWAITING_APPROVAL);
   if (!pipeline.length) return null;
   return (
-    <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together">
-      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Headroom", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
+    <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together. Open to buy is budget − committed − spent for the month the cash leaves">
+      <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Open to buy", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
         {pipeline.map((m) => (
           <tr key={m.ym}>
             <Td>{monthLabel(m.ym)}</Td>
@@ -310,10 +310,18 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
   );
 }
 
-// Where a request in progress lands against that month's budget. Shown live as
-// the form is filled so Merch see the position BEFORE submitting, rather than
-// finding out at Finance review. It informs, it does not block — Finance still
-// decides, and a genuinely needed purchase should still be raised.
+// Open to buy for the month this request is PAID in. Shown live as the form is
+// filled so Merch see the position BEFORE submitting, rather than finding out at
+// Finance review.
+//
+// "Open to buy" here is what is left to spend on a cash-out basis — budget minus
+// what is already committed and already gone — for the month the money leaves.
+// It is not the merchandising OTB model in the `merch` schema, which runs on
+// selling periods and governs merch requests; this desk buys against the cash
+// plan, and the cash plan is the constraint.
+//
+// It informs, it does not block — Finance still decides, and a genuinely needed
+// purchase should still be raised.
 function BudgetCheck({ impact }) {
   const { ym, budget, committed, spent, add, newCommitted, headroom, headroomBefore, over, alreadyOver, noBudget } = impact;
   const tone = noBudget ? "var(--muted)" : over ? "var(--red)" : "var(--green)";
@@ -323,31 +331,31 @@ function BudgetCheck({ impact }) {
   return (
     <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 8, border: `1px solid ${noBudget ? "var(--line)" : over ? "var(--red)" : "var(--line)"}`, background: "var(--raise)" }}>
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 9, lineHeight: 1.5 }}>
-        This is paid in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — whether that month has the budget left to carry it.
-        {!noBudget && <> Headroom is budget &minus; committed &minus; spent, so a month the facility has already drawn from shows what is genuinely left.</>}
+        This is paid in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — whether that month is still open to buy.
+        {!noBudget && <> Open to buy is budget &minus; committed &minus; spent, so a month the facility has already drawn from shows what is genuinely left to spend.</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(104px,1fr))", gap: 12 }}>
         <div style={cell}><span style={k}>Budget</span><span style={v} className="fos-num">{noBudget ? "—" : money(budget)}</span></div>
         <div style={cell}><span style={k}>Committed</span><span style={v} className="fos-num">{money(committed)}</span></div>
         <div style={cell}><span style={k}>Spent</span><span style={v} className="fos-num">{spent ? money(spent) : "—"}</span></div>
         <div style={cell}>
-          <span style={k}>Left before this</span>
+          <span style={k}>Open to buy</span>
           <span style={{ ...v, color: noBudget ? undefined : headroomBefore < 0 ? "var(--red)" : "var(--green)" }} className="fos-num">
             {noBudget ? "—" : `${headroomBefore < 0 ? "−" : ""}${money(Math.abs(headroomBefore))}`}
           </span>
         </div>
         <div style={cell}><span style={k}>This request</span><span style={v} className="fos-num">{money(add)}</span></div>
         <div style={cell}>
-          <span style={k}>{over ? "Over by" : "Left after"}</span>
+          <span style={k}>{over ? "Over by" : "OTB after this"}</span>
           <span style={{ ...v, color: tone }} className="fos-num">{noBudget ? "—" : money(Math.abs(headroom))}</span>
         </div>
       </div>
-      {noBudget && <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 9 }}>No procurement budget is set for this month — Finance maintain these on the <strong>Budgets</strong> tab.</div>}
+      {noBudget && <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 9 }}>No procurement budget is set for this month, so there is nothing open to buy against — Finance maintain these on the <strong>Budgets</strong> tab.</div>}
       {over && (
         <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 9, lineHeight: 1.5 }}>
           {alreadyOver
-            ? <>{monthLabel(ym)} is already over budget on what is committed and spent, before this request. Expect Finance to challenge it.</>
-            : <>This request takes {monthLabel(ym)} over budget. You can still raise it — Finance will review it — but consider a pickup or order date that pays in a month with headroom.</>}
+            ? <>{monthLabel(ym)} has nothing open to buy — it is already over on what is committed and spent, before this request. Expect Finance to challenge it.</>
+            : <>This request is more than {monthLabel(ym)} has open to buy. You can still raise it — Finance will review it — but consider a pickup or order date that pays in a month with headroom.</>}
         </div>
       )}
     </div>

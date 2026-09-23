@@ -373,7 +373,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
           : <>Showing months with something awaiting a decision, plus any month already over on what is committed or spent.</>}{" "}
         Budgets are set on the <strong>Budgets</strong> tab above.
         <div style={{ marginTop: 6 }}>
-          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Headroom</strong> is budget &minus; committed &minus; spent; <strong>If approved</strong> takes the awaiting value off as well.
+          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Open to buy</strong> is what the month has left to spend — budget &minus; committed &minus; spent — and <strong>If approved</strong> takes the awaiting value off as well.
         </div>
       </div>
       {sections.map(({ src, pipeline }) => (
@@ -384,7 +384,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {} }) {
               <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
               <th style={thR}>Committed</th><th style={thR}>Spent</th>
               <th style={thR}>Would commit</th><th style={thR}>Budget</th>
-              <th style={thR}>Headroom</th><th style={thR}>If approved</th>
+              <th style={thR}>Open to buy</th><th style={thR}>If approved</th>
               <th style={{ ...th, textAlign: "center" }}>Status</th>
             </tr></thead>
             <tbody>
