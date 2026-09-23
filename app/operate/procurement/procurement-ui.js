@@ -109,7 +109,19 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
                 <Td r>{money(m.committed)}</Td>
                 <Td r>{m.tradeSpent ? money(m.tradeSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
                 <Td r>{m.cashSpent ? money(m.cashSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
-                <Td r>{m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+                <Td r>
+                  {m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}
+                  {/* Miniso stock settles two ways — a loan against a letter of
+                      credit, or the same stock on TradePay — so spend is two
+                      instruments added together. Named, so the total does not
+                      have to be taken on trust. */}
+                  {m.spent > 0 && Object.keys(m.spentByDriver || {}).length > 1 && (
+                    <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4, whiteSpace: "normal", lineHeight: 1.4 }}>
+                      {Object.entries(m.spentByDriver).sort((a, b) => b[1] - a[1])
+                        .map(([k, v]) => `${k} ${money(v, { compact: true })}`).join(" · ")}
+                    </div>
+                  )}
+                </Td>
                 <Td r>{m.budget == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
                 <Td r>{m.budget ? <Bar value={m.committed + m.spent} max={m.budget} over={m.overBudget} /> : null}</Td>

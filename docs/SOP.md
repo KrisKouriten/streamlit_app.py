@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 2.3 · 23/09/2026 · Owner: Finance (Miniso UK)**
+**Version 2.4 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -485,6 +485,12 @@ be recorded.
 a **Paid via…** selector records **how it settled — Cash or Trade pay**. This is what
 drives the Spent split above, so it matters that it is set.
 
+**The budget panel follows the open tab** — Miniso under Miniso, Local under Local,
+Merch under Merch — so the budget above always describes the book in the table below.
+Miniso and Local are scoped by **source**, which deliberately includes any merch requests
+on that source: they draw on the same budget, and Spent comes from the facility feed by
+source and cannot be split, so committed and spent stay on one population.
+
 **Awaiting your decision vs budget** (top of the desk) shows what the pending and
 challenged purchases would commit against each month's budget. **Every purchase is
 counted once**: a request is either **Awaiting** a decision or **Committed** (approved or
@@ -566,6 +572,18 @@ The move is **lossless**: figures are carried across untouched and no month is c
 destroyed, so **shifting back by the same number undoes it exactly** (provided no budget
 was edited in between). It runs in one transaction and is recorded in the audit log as
 `procurement.budget.shift` with the shift and the before/after month range.
+
+**What Spent is made of.** Miniso stock reaches us two ways and the facility names them
+differently: **Miniso LC** is the post-shipment loan drawn against a letter of credit,
+**Miniso Facility** is the same stock settled on TradePay. Both are procurement, so Spent
+is the two added together — plus **Cash** where an invoice was settled directly. Each
+month's Spent figure carries that split beneath it, so a total never has to be taken on
+trust. (*Miniso Investment* is intercompany funding and is deliberately excluded.)
+
+> Both instruments are netted off Committed through the same mechanism: a TradePay drawing
+> carries the LC's reference, so it is already inside the LC drawdown. Dropping *Miniso
+> Facility* from Spent would therefore lose the money altogether — netted out of committed
+> and never counted as spent — and make a month look like it had headroom it does not.
 
 **LC drawdown and LC balance.** A Miniso request settles by letter of credit, drawn in
 stages, and each drawn LC appears on the HSBC trade facility. Two columns on the row make
