@@ -95,14 +95,14 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
 
-      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − trade pay − cash">
+      <Panel title="Monthly cash budget vs committed" note="everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, trade pay in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − trade pay − cash + FX">
         {s.unvaluedDrawings > 0 && (
           <div style={{ fontSize: 12, color: "var(--amber)", marginBottom: 10, lineHeight: 1.5 }}>
             {s.unvaluedDrawings} facility drawing{s.unvaluedDrawings === 1 ? " is" : "s are"} not counted in Trade pay — no GBP amount on the upload, and no spot rate set for the drawing&rsquo;s currency. Set the rate on <strong>Exchange rates</strong>, or add a GBP column to the facility extract.
           </div>
         )}
         {s.months.length === 0 ? <Empty>No purchases or budgets for this section yet.</Empty> : (
-          <Table head={["Cash-out month", "Committed", "Trade pay", "Cash", "Spent", "Budget", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
+          <Table head={["Cash-out month", "Committed", "Trade pay", "Cash", "Spent", "Budget", "FX", "Variance", "", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 0]}>
             {s.months.map((m) => (
               <tr key={m.ym}>
                 <Td>{monthLabel(m.ym)}</Td>
@@ -123,8 +123,15 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
                   )}
                 </Td>
                 <Td r>{m.budget == null ? <span style={{ color: "var(--faint)" }}>—</span> : money(m.budget)}</Td>
+                {/* The commitment is held at the costing rate and the cash goes
+                    out at spot, so part of what `committed` shows is valuation,
+                    not budget. Shown here rather than buried in variance, where
+                    it read as over-spend. */}
+                <Td r tone={m.fx ? "var(--muted)" : undefined}>{m.fx ? money(m.fx) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
                 <Td r tone={m.variance == null ? undefined : m.variance < 0 ? "var(--red)" : "var(--green)"}>{m.variance == null ? "—" : money(m.variance)}</Td>
-                <Td r>{m.budget ? <Bar value={m.committed + m.spent} max={m.budget} over={m.overBudget} /> : null}</Td>
+                {/* Same basis as overBudget and variance, so the bar, the badge
+                    and the number cannot disagree with one another. */}
+                <Td r>{m.budget ? <Bar value={m.committed + m.spent - (m.fx || 0)} max={m.budget} over={m.overBudget} /> : null}</Td>
                 <Td>{m.budget == null ? <span style={{ color: "var(--faint)" }}>no budget</span> : <Badge tone={m.overBudget ? "red" : "green"}>{m.overBudget ? "Over" : "Within"}</Badge>}</Td>
               </tr>
             ))}
@@ -184,7 +191,7 @@ function AwaitingVsBudget({ rows = [], months = [] }) {
   const pipeline = requestsVsBudget(live, months, AWAITING_APPROVAL);
   if (!pipeline.length) return null;
   return (
-    <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together. Open to buy is budget − committed − spent for the month the cash leaves">
+    <Panel title="Awaiting sign-off vs budget" note="every request counted once — awaiting is still to be signed off, approved is already committed, and would commit is the two together. Open to buy is budget − committed − spent + FX for the month the cash leaves, where FX is the difference between holding a commitment at the costing rate and settling it at spot">
       <Table head={["Cash-out month", "Requests", "Awaiting", "Approved", "Would commit", "Budget", "Open to buy", "If approved", "Status"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 0]}>
         {pipeline.map((m) => (
           <tr key={m.ym}>
@@ -336,7 +343,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
 // It informs, it does not block — Finance still decides, and a genuinely needed
 // purchase should still be raised.
 function BudgetCheck({ impact }) {
-  const { ym, budget, committed, spent, add, newCommitted, headroom, headroomBefore, over, alreadyOver, noBudget } = impact;
+  const { ym, budget, committed, spent, fx, add, newCommitted, headroom, headroomBefore, over, alreadyOver, noBudget } = impact;
   const tone = noBudget ? "var(--muted)" : over ? "var(--red)" : "var(--green)";
   const cell = { display: "flex", flexDirection: "column", gap: 2 };
   const k = { fontSize: 10.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)" };
@@ -345,7 +352,7 @@ function BudgetCheck({ impact }) {
     <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 8, border: `1px solid ${noBudget ? "var(--line)" : over ? "var(--red)" : "var(--line)"}`, background: "var(--raise)" }}>
       <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 9, lineHeight: 1.5 }}>
         This is paid in <strong style={{ color: "var(--ink)" }}>{monthLabel(ym)}</strong> — whether that month is still open to buy.
-        {!noBudget && <> Open to buy is budget &minus; committed &minus; spent, so a month the facility has already drawn from shows what is genuinely left to spend.</>}
+        {!noBudget && <> Open to buy is budget &minus; committed &minus; spent &plus; FX, so a month the facility has already drawn from shows what is genuinely left to spend.{fx ? <> FX is the {money(fx)} by which this month&rsquo;s commitment is held above the cash it will cost, stock being costed at one rate and settled at another.</> : null}</>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(104px,1fr))", gap: 12 }}>
         <div style={cell}><span style={k}>Budget</span><span style={v} className="fos-num">{noBudget ? "—" : money(budget)}</span></div>

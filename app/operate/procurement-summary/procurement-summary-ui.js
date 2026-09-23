@@ -400,7 +400,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
           : <>Showing months with something awaiting a decision, plus any month already over on what is committed or spent.</>}{" "}
         Budgets are set on the <strong>Budgets</strong> tab above.
         <div style={{ marginTop: 6 }}>
-          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Open to buy</strong> is what the month has left to spend — budget &minus; committed &minus; spent — and <strong>If approved</strong> takes the awaiting value off as well.
+          Every purchase is counted once: <strong>Awaiting</strong> is still to be decided, <strong>Committed</strong> has been approved or closed, and <strong>Would commit</strong> is the two added together — what the month becomes if the whole queue is approved. <strong>Open to buy</strong> is what the month has left to spend — budget &minus; committed &minus; spent &plus; FX — and <strong>If approved</strong> takes the awaiting value off as well. FX is there because a commitment is held at the rate stock is costed at while the cash goes out at spot; that difference is a valuation movement, not budget over-spend, so it does not count against the month.
         </div>
       </div>
       {sections.map(({ src, pipeline }) => (
