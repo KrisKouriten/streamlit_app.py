@@ -1,6 +1,6 @@
 # Miniso UK Finance Operating System — Standard Operating Procedure
 
-**Version 1.6 · 22/09/2026 · Owner: Finance (Miniso UK)**
+**Version 1.8 · 23/09/2026 · Owner: Finance (Miniso UK)**
 
 > Also available in-app: **Govern → SOP Library** (`/handbook`) renders this for the
 > signed-in team.
@@ -445,6 +445,12 @@ book**, with counts scoped to it; each tab badges what still needs Finance.
 
 **Lifecycle:** PENDING → APPROVED → (CHALLENGED) → CLOSED, plus re-open.
 
+**Invoice number and net** are entered in the **Actions** column, where Finance work,
+and are not repeated as read-only columns in the middle of the table. Miniso purchases
+take no invoice at all — they settle by **letter of credit**, handled under **Log LC /
+Manage LC** — so no invoice field appears against them. Both fields stay in the CSV
+export.
+
 **Challenge reasons:** Invoice value · Supplier terms · Landed cost · Spend vs budget ·
 OTB exceeded · **Other**. *Other* carries no meaning on its own, so it **requires the
 note** — enforced in the form and again in the API, so an unexplained challenge cannot
@@ -455,10 +461,29 @@ a **Paid via…** selector records **how it settled — Cash or Trade pay**. Thi
 drives the Spent split above, so it matters that it is set.
 
 **Awaiting your decision vs budget** (top of the desk) shows what the pending and
-challenged purchases would commit against each month's budget, alongside that month's
-Committed and Spent, badged **Within / Would go over / Already over / Overspent**. Months
-with nothing pending are hidden unless they are already over; **Show all months** drops
-the filter.
+challenged purchases would commit against each month's budget. **Every purchase is
+counted once**: a request is either **Awaiting** a decision or **Committed** (approved or
+closed) — never both — and **Would commit** is simply the two added together, i.e. what
+the month becomes if the whole queue is approved.
+
+**Headroom** is the agreed variance on what is already decided — *budget − committed −
+spent* — and **If approved** takes the awaiting value off as well. The badge follows:
+**Over** (the month is over on decided commitment and spend alone), **Would go over**
+(inside budget today, but approving the queue breaks it), or **Within**. Months with
+nothing pending are hidden unless they are already over; **Show all months** drops the
+filter. Cancelled orders are excluded — they commit nothing.
+
+Both the close desk and the Procurement Requests tables place a row in the month its
+**cash actually leaves**, on one basis: Miniso runs **180 days from the pickup date**,
+Local **180 days on the trade facility**, everything else **order month-end + supplier
+terms**. The **Payment month** column on each table shows that month and the rule behind
+it, so a line can be traced to the budget month it lands in.
+
+> The close desk previously read Committed from the budget table, where it means *every*
+> non-cancelled order — the awaiting ones included. Awaiting and Committed therefore showed
+> the same money twice, and Would commit tied to neither, because the desk placed a Miniso
+> order by order month while the budget table placed it by pickup date. Same order, two
+> months, side by side. Both are fixed; Payment month makes the basis visible.
 
 #### 5.9.3 Procurement budgets — Finance only
 Budgets live on the **close desk → Budgets tab**, not on Procurement Requests: only
@@ -488,6 +513,24 @@ Two behaviours to rely on: a **blank cell is skipped, not saved as zero** (a gap
 than replacing** — a file covering part of the horizon tops the forecast up instead of
 deleting the months it did not mention. Anything unreadable is reported back, never
 dropped, and the file lands in **one transaction**.
+
+**Re-phase a forecast** slides a whole source along the calendar when the shape of the
+budget is right but the timing has moved — goods slipping a quarter, a facility drawing
+later than planned. Pick the source and the number of months (negative moves it earlier)
+and the preview shows, per month, the **budget now**, the **budget after the shift** and
+what that month actually carries in **committed + spent**. Nothing is written until
+**Apply shift**.
+
+Read the preview for one thing above all: months the shift would leave carrying real
+commitment or settled spend with **no budget**. Those are highlighted and counted, because
+they read as *over* on every screen — a forecast moved too far is worse than one left
+alone. The **Suggested** button fills in the shift that lands the first budget month on
+the first month anything actually happens.
+
+The move is **lossless**: figures are carried across untouched and no month is created or
+destroyed, so **shifting back by the same number undoes it exactly** (provided no budget
+was edited in between). It runs in one transaction and is recorded in the audit log as
+`procurement.budget.shift` with the shift and the before/after month range.
 
 ### 5.10 Intercompany (OPERATE)
 A three-ledger tracker — **Bank Cash**, **Inventory & Recharges**, **Disbursements** —

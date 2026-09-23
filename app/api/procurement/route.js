@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget, importBudgetGrid, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder } from "../../../lib/procurement";
 import { setFxRate } from "../../../lib/fx";
 import { getApproverEmails } from "../../../lib/dept-budget";
 import { resolveBaseUrl } from "../../../lib/invite-rules";
@@ -75,6 +75,10 @@ export async function POST(request) {
         const d = deny(FIN, "Procurement budgets are maintained by Finance"); if (d) return d;
         if (!body.csv) return NextResponse.json({ error: "No file contents received" }, { status: 400 });
         return NextResponse.json(await importBudgetGrid(body.csv, actor));
+      }
+      case "budget-shift": {
+        const d = deny(FIN, "Procurement budgets are maintained by Finance"); if (d) return d;
+        return NextResponse.json(await shiftBudgetMonths({ source: body.source, shift: Number(body.shift) }, actor));
       }
       case "budget": {
         const d = deny(FIN, "Procurement budgets are maintained by Finance"); if (d) return d;
