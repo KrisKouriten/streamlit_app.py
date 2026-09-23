@@ -568,8 +568,19 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   // spend from the facility upload; cash is reported on top of it.
   const setPaymentMethod = (r, payment_method) => op(
     r.purchase_id,
-    { op: "set-payment-status", payment_status: r.payment_status, payment_method },
+    // The drawing reference rides with the method: switching to cash clears it,
+    // because a stale reference would reconcile against a drawing that paid for
+    // something else.
+    { op: "set-payment-status", payment_status: r.payment_status, payment_method, trade_pay_ref: payment_method === "TRADE_PAY" ? r.trade_pay_ref : null },
     payment_method ? `Paid via ${(paymentMethodOf({ payment_method })?.label || payment_method).toLowerCase()}.` : "Payment method cleared.",
+  );
+  // Which drawing a trade-pay row settled on — the bank's own reference, WC… on
+  // TradePay. Saved as typed and matched loosely against the facility: not found
+  // is flagged, never refused, because the extract is uploaded periodically.
+  const setTradePayRef = (r, trade_pay_ref) => op(
+    r.purchase_id,
+    { op: "set-payment-status", payment_status: r.payment_status, payment_method: r.payment_method, trade_pay_ref },
+    trade_pay_ref ? `Trade-pay reference saved.` : "Trade-pay reference cleared.",
   );
   const closeRow = (r) => {
     if (!window.confirm(`Close ${procRef(r)}? It will be reported as committed procurement spend.`)) return;
@@ -883,6 +894,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                         <option value="">Paid via…</option>
                                         {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
                                       </select>
+                                    )}
+                                    {/* Which drawing it settled on. Only on trade pay —
+                                        cash has no drawing to reconcile to. */}
+                                    {r.payment_status === "PAID" && r.payment_method === "TRADE_PAY" && (
+                                      <TradePayRef row={r} busy={isBusy} onSave={(v) => setTradePayRef(r, v)} />
                                     )}
                                   </>
                                 )}
@@ -1201,5 +1217,48 @@ function PhasingVerdict({ phase, source }) {
         </>
       )}
     </div>
+  );
+}
+
+/*
+ * The trade-pay drawing a paid purchase settled on (migration 115).
+ *
+ * Recording HOW a purchase was paid was not enough to reconcile anything —
+ * "trade pay" says which register the money is in, not which line of it. With
+ * the reference, a procurement order can be tied to its HSBC drawing and closed
+ * once that loan has been repaid in full.
+ *
+ * A reference the facility has never heard of is FLAGGED, not refused. The
+ * extract is uploaded periodically, so a genuine reference may simply not be
+ * loaded yet, and refusing it would stop Finance recording a payment that really
+ * happened. Same treatment the LC references already get.
+ */
+function TradePayRef({ row, busy, onSave }) {
+  const saved = row.trade_pay_ref || "";
+  const [v, setV] = useState(saved);
+  useEffect(() => { setV(row.trade_pay_ref || ""); }, [row.trade_pay_ref]);
+  const dirty = v.trim().toUpperCase() !== saved.toUpperCase();
+  const m = row.trade_pay || {};
+  const TONE = { green: "var(--green)", amber: "var(--amber)", muted: "var(--faint)" };
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <input
+        value={v} onChange={(e) => setV(e.target.value)} disabled={busy}
+        placeholder="WC…" maxLength={40} title={m.label || "The HSBC drawing reference this settled on"}
+        style={{ ...inputSt, width: 130, fontFamily: "var(--mono)", fontSize: 11.5, textTransform: "uppercase" }}
+      />
+      {dirty
+        ? <button style={ghost} disabled={busy} onClick={() => onSave(v.trim().toUpperCase() || null)}>Save ref</button>
+        : m.state && m.state !== "n/a" && (
+            <span title={m.label} style={{ fontSize: 15, lineHeight: 1, color: TONE[m.tone] || "var(--faint)", cursor: "help" }}>
+              {m.state === "matched" ? "✓" : m.state === "unknown" ? "·" : "!"}
+            </span>
+          )}
+      {/* The facility saying the loan is repaid is what makes this order
+          closable — the whole point of capturing the reference. */}
+      {!dirty && row.trade_pay_settled === true && (
+        <span style={{ fontSize: 10.5, color: "var(--green)" }} title="The facility reports this drawing fully repaid — this order can be closed">settled</span>
+      )}
+    </span>
   );
 }

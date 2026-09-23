@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp } from "../lib/procurement-close-rules.js";
+import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp,
+  normTradePayRef,
+  tradePayRefError,
+  tradePayMatch
+} from "../lib/procurement-close-rules.js";
 import {
   financeActionError, displayStatus, committedAmount, lineValue, challengeReasonLabels,
   paymentStatusOf, isProcChallengeReason, procRef, isMerchRequest, PROC_FINANCE_STATUSES,
@@ -329,4 +333,71 @@ test("lcBalanceGbp goes negative when more is drawn than the order is worth", ()
   // Over-drawn is a problem to surface, not to clamp away.
   const over = { currency: "GBP", amount_gbp: 10000, lcs: [{ lc_amount: 12000 }] };
   assert.equal(lcBalanceGbp(over, null), -2000);
+});
+
+// ---- Which drawing a trade-pay row settled on (migration 115) ----
+//
+// Migration 113 records HOW a purchase was paid. It does not record WHICH
+// drawing, so a row tagged TRADE_PAY could not be tied to the HSBC facility and
+// the two registers had to be reconciled by eye. The point of the link: close a
+// procurement order once the loan behind it is repaid in full.
+
+test("normTradePayRef ignores case and whitespace", () => {
+  assert.equal(normTradePayRef(" wctuka096701 "), "WCTUKA096701");
+  assert.equal(normTradePayRef("WCTUKA 096701"), "WCTUKA096701");
+  assert.equal(normTradePayRef(""), "");
+  assert.equal(normTradePayRef(null), "");
+  assert.equal(normTradePayRef(undefined), "");
+});
+
+test("tradePayRefError: a reference belongs only on a trade-pay row", () => {
+  assert.equal(tradePayRefError("TRADE_PAY", "WCTUKA096701"), null);
+  assert.equal(tradePayRefError("TRADE_PAY", "LAIUK1076002"), null);
+  assert.equal(tradePayRefError("TRADE_PAY", ""), null);          // optional
+  assert.equal(tradePayRefError("CASH", ""), null);
+  assert.equal(tradePayRefError(null, null), null);
+  // Cash has no drawing — a reference on it would reconcile against something
+  // that paid for a different purchase entirely.
+  assert.match(tradePayRefError("CASH", "WCTUKA096701"), /only applies/);
+  assert.match(tradePayRefError(null, "WCTUKA096701"), /only applies/);
+  // Shape.
+  assert.match(tradePayRefError("TRADE_PAY", "WC"), /too short/);
+  assert.match(tradePayRefError("TRADE_PAY", "W".repeat(41)), /too long/);
+  assert.match(tradePayRefError("TRADE_PAY", "WCTUK@096701"), /letters, digits/);
+});
+
+test("tradePayMatch: not found is a warning, never a refusal", () => {
+  const refs = new Set(["WCTUKA096701", "WCTUKA095259"]);
+  const of = (ref, method = "TRADE_PAY") => tradePayMatch({ payment_method: method, trade_pay_ref: ref }, refs);
+
+  assert.equal(of("WCTUKA096701").state, "matched");
+  assert.equal(of(" wctuka096701 ").state, "matched");           // normalised both sides
+  assert.match(of("WCTUKA096701").label, /Reconciles/);
+
+  // THE POINT. The HSBC extract is uploaded periodically, so a genuine reference
+  // may not be loaded yet. Flagged, not refused.
+  const miss = of("WCTUKA099999");
+  assert.equal(miss.state, "unmatched");
+  assert.equal(miss.tone, "amber");
+  assert.match(miss.label, /not on the facility register/);
+
+  // Trade pay with no reference at all cannot be reconciled, and says so.
+  assert.equal(of("").state, "missing");
+  assert.equal(of(null).state, "missing");
+
+  // Cash rows are not in this conversation.
+  assert.equal(of("WCTUKA096701", "CASH").state, "n/a");
+  assert.equal(of("", "CASH").state, "n/a");
+  assert.equal(of(null, null).state, "n/a");
+});
+
+test("tradePayMatch: an unreadable facility is unknown, not unmatched", () => {
+  // Before migration 077, or when the register cannot be read, a reference must
+  // not be reported as wrong — we simply cannot say.
+  const m = tradePayMatch({ payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA096701" }, null);
+  assert.equal(m.state, "unknown");
+  assert.equal(m.ref, "WCTUKA096701");
+  assert.match(m.label, /cannot be checked/);
+  // An empty register is different from an absent one: there it genuinely is not present.
+  assert.equal(tradePayMatch({ payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA096701" }, new Set()).state, "unmatched");
 });
