@@ -1219,3 +1219,67 @@ test("requestsVsBudget splits FX by decided vs awaiting, not off the month total
   assert.equal(row.over, false);
   assert.equal(row.wouldGoOver, true);
 });
+
+// ---- Labelling a foreign amount ----
+//
+// THE FAULT THIS PINS. The facility register printed USD payment amounts with a
+// £ sign. Three November drawings — $171,259 + $168,776 + $172,258 = $512,293 —
+// read as £512,293 against a desk showing £385,183, and that gap was chased as
+// an FX fault for hours. There was no rate wrong anywhere: $512,293 ÷ 1.33 IS
+// £385,183. The only thing wrong was the currency symbol.
+
+test("the November drawings: USD total converts to exactly what the desk shows", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  const nov = [
+    { cost_driver: "Miniso LC", due_date: "2026-11-23", payment_amount: 171259, payment_currency: "USD" },
+    { cost_driver: "Miniso LC", due_date: "2026-11-18", payment_amount: 168776, payment_currency: "USD" },
+    { cost_driver: "Miniso LC", due_date: "2026-11-18", payment_amount: 172258, payment_currency: "USD" },
+  ];
+  // The extract carries no GBP figure on any of them — facility_payment_gbp is
+  // absent, which is why the conversion runs at all.
+  assert.equal(nov.every((r) => r.facility_payment_gbp === undefined), true);
+  assert.equal(nov.reduce((t, r) => t + r.payment_amount, 0), 512293);   // USD, not GBP
+
+  const out = tradeSpendByMonth(nov, rateFor);
+  assert.equal(Math.round(out.MINISO["2026-11"]), 385183);
+  assert.equal(out.unvalued.MINISO, 0);
+});
+
+// ---- The loan amount is the drawing; the payment pair is the fallback ----
+//
+// The HSBC extract carries both. The payment pair is the settlement, and on a
+// post-shipment buyer loan that is not the same money as the drawing. Reading
+// the payment pair is what made November read £385,183 against a bank figure of
+// about £512,000.
+
+test("facilityGbp values from the loan amount when the extract carries one", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  // Loan in GBP, payment in USD — the two must not be confused, and the loan wins.
+  assert.equal(facilityGbp({ loan_amount: 512293, loan_currency: "GBP", payment_amount: 171259, payment_currency: "USD" }, rateFor), 512293);
+  // Loan in USD converts at spot, the payment pair is never reached.
+  assert.equal(Math.round(facilityGbp({ loan_amount: 512293, loan_currency: "USD", payment_amount: 999999, payment_currency: "GBP" }, rateFor)), 385183);
+  // No loan_currency on the file: upload copies payment_currency into it, and
+  // an older row without either still resolves through the payment currency.
+  assert.equal(Math.round(facilityGbp({ loan_amount: 512293, payment_currency: "USD" }, rateFor)), 385183);
+});
+
+test("facilityGbp falls back to the payment pair when there is no loan amount", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  // Every pre-existing row keeps behaving exactly as it did.
+  assert.equal(Math.round(facilityGbp({ payment_amount: 512293, payment_currency: "USD" }, rateFor)), 385183);
+  assert.equal(facilityGbp({ payment_amount: 13899.3, payment_currency: "GBP" }, rateFor), 13899.3);
+  assert.equal(facilityGbp({ loan_amount: 0, payment_amount: 5000, payment_currency: "GBP" }, rateFor), 5000);
+  assert.equal(facilityGbp({ loan_amount: null, payment_amount: 5000, payment_currency: "GBP" }, rateFor), 5000);
+});
+
+test("tradeSpendByMonth values a month from the loan amounts", () => {
+  const rateFor = (c) => (c === "USD" ? 1.33 : null);
+  // The three November drawings, with the loan pair in sterling.
+  const out = tradeSpendByMonth([
+    { cost_driver: "Miniso LC", due_date: "2026-11-23", loan_amount: 171259, loan_currency: "GBP", payment_amount: 171259, payment_currency: "USD" },
+    { cost_driver: "Miniso LC", due_date: "2026-11-18", loan_amount: 168776, loan_currency: "GBP", payment_amount: 168776, payment_currency: "USD" },
+    { cost_driver: "Miniso LC", due_date: "2026-11-18", loan_amount: 172258, loan_currency: "GBP", payment_amount: 172258, payment_currency: "USD" },
+  ], rateFor);
+  assert.equal(Math.round(out.MINISO["2026-11"]), 512293);
+  assert.equal(out.unvalued.MINISO, 0);
+});
