@@ -7,7 +7,7 @@ import {
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor } from "../../../lib/procurement-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
@@ -701,7 +701,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "LC drawdown", "LC balance", "Actions"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -767,6 +767,40 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           {settlesByLc(r) ? (() => { const lc = lcStatus(r); return <Badge tone={lc.tone}>{lc.label}</Badge>; })() : <Badge tone={pay.tone}>{pay.label}</Badge>}
+                        </td>
+                        {/* What has been drawn as an LC, and what is therefore still
+                            committed. The drawn part is reported as spent by Treasury
+                            from the facility upload, so leaving it in committed too
+                            counted the same money twice. Struck at the costing rate,
+                            the same basis as the Inventory column. */}
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                          {(() => {
+                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const drawn = lcDrawdownGbp(r, costingRate);
+                            if (drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
+                            if (!drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            return (
+                              <>
+                                {money(drawn)}
+                                <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{(r.lcs || []).length} LC{(r.lcs || []).length === 1 ? "" : "s"} · spent via Treasury</div>
+                              </>
+                            );
+                          })()}
+                        </td>
+                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                          {(() => {
+                            if (!settlesByLc(r)) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            const bal = lcBalanceGbp(r, costingRate);
+                            if (bal == null) return <span style={{ color: "var(--faint)" }}>—</span>;
+                            return (
+                              <>
+                                <span style={{ color: bal < 0 ? "var(--red)" : undefined, fontWeight: 600 }}>{money(bal)}</span>
+                                <div style={{ fontSize: 10.5, color: bal < 0 ? "var(--red)" : "var(--faint)", marginTop: 4 }}>
+                                  {bal < 0 ? "drawn over the order value" : "still committed"}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>

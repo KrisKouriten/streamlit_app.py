@@ -275,3 +275,58 @@ test("dcDrawdown: a fully drawn or over-drawn DC has no open balance", () => {
   assert.equal(novalue.openBalance, null);
   assert.equal(novalue.openNeedsMonth, false);
 });
+
+// ---- LC drawdown and the balance still committed ----
+import { lcDrawdownGbp, lcBalanceGbp } from "../lib/procurement-close-rules.js";
+
+// LC96 as it stands on the desk: $660,000 USD, costing rate 1.28 → £515,625
+// inventory, with four LCs logged totalling $642,096.
+const LC96 = {
+  currency: "USD", amount_ccy: 660000, amount_gbp: 496241,
+  lcs: [{ lc_amount: 209355 }, { lc_amount: 216109 }, { lc_amount: 214792 }, { lc_amount: 1840 }],
+};
+const COSTING = 660000 / 515625;   // the rate that gives the £515,625 on screen
+
+test("lcDrawdownGbp values the logged LCs at the costing rate, like Inventory", () => {
+  const drawn = lcDrawdownGbp(LC96, COSTING);
+  assert.equal(drawn, 501637.5);                        // $642,096 at the same rate
+  // Struck on the same basis as the Inventory column it sits beside, so the two
+  // subtract cleanly.
+  assert.equal(lcBalanceGbp(LC96, COSTING), round2ish(515625 - 501637.5));
+});
+
+function round2ish(n) { return Math.round(n * 100) / 100; }
+
+test("lcBalanceGbp: nothing drawn leaves the whole order committed", () => {
+  // LC97 — two DCs but no LC issued yet, so none of it is on the facility.
+  const lc97 = { currency: "USD", amount_ccy: 662900.89, amount_gbp: 498422, lcs: [] };
+  assert.equal(lcDrawdownGbp(lc97, COSTING), 0);
+  assert.equal(lcBalanceGbp(lc97, COSTING), lcBalanceGbp({ ...lc97, lcs: undefined }, COSTING));
+  // The balance is the full inventory value — exactly today's behaviour for a
+  // request with no LCs, so nothing moves until one is drawn.
+  assert.equal(lcBalanceGbp(lc97, COSTING), round2ish(662900.89 / COSTING));
+});
+
+test("lcBalanceGbp: a GBP order's LCs need no conversion", () => {
+  const gbp = { currency: "GBP", amount_gbp: 50000, lcs: [{ lc_amount: 20000 }] };
+  assert.equal(lcDrawdownGbp(gbp, null), 20000);
+  assert.equal(lcBalanceGbp(gbp, null), 30000);
+});
+
+test("lcDrawdownGbp reports null, not zero, when a foreign order cannot be valued", () => {
+  // Zero would read as "nothing drawn" and leave the whole order committed,
+  // which is a confident wrong answer. Null lets the screen say it doesn't know.
+  const noRate = { currency: "USD", amount_ccy: 660000, amount_gbp: 496241, lcs: [{ lc_amount: 209355 }] };
+  assert.equal(lcDrawdownGbp(noRate, null), null);
+  assert.equal(lcBalanceGbp(noRate, null), null);
+  assert.equal(lcDrawdownGbp(noRate, 0), null);
+  assert.equal(lcDrawdownGbp(noRate, -1), null);
+  // With no LCs at all there is nothing to value, so zero is honest.
+  assert.equal(lcDrawdownGbp({ currency: "USD", amount_ccy: 100, amount_gbp: 80, lcs: [] }, null), 0);
+});
+
+test("lcBalanceGbp goes negative when more is drawn than the order is worth", () => {
+  // Over-drawn is a problem to surface, not to clamp away.
+  const over = { currency: "GBP", amount_gbp: 10000, lcs: [{ lc_amount: 12000 }] };
+  assert.equal(lcBalanceGbp(over, null), -2000);
+});
