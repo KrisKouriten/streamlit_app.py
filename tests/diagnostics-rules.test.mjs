@@ -148,3 +148,37 @@ test("every CRITICAL_TABLES migration filename exists and creates that table", a
       `${t.migration} does not create finance.${t.table}`);
   }
 });
+
+// ---- Column-level gaps ----
+import { columnCheck, CRITICAL_COLUMNS } from "../lib/diagnostics-rules.js";
+
+const ALL_COLUMNS = CRITICAL_COLUMNS.map((c) => ({ table: c.table, column: c.column }));
+
+test("columnCheck names the missing column AND the migration that adds it", () => {
+  assert.equal(columnCheck(ALL_COLUMNS).status, OK);
+  // The exact failure this check was built for: 082 never applied, so the close
+  // desk's reader lost approval_status — and, through chained fallbacks, the FX
+  // columns with it. The table was present throughout, so schemaCheck passed.
+  const c = columnCheck(ALL_COLUMNS.filter((x) => x.column !== "approval_status"));
+  assert.equal(c.status, FAIL);
+  assert.equal(c.detail.length, 1);
+  assert.equal(c.detail[0].label, "finance.procurement_purchase.approval_status");
+  assert.equal(c.detail[0].value, "082_procurement_approval.sql");
+  assert.match(c.summary, /the table is there, so nothing errors/);
+  // An unreadable catalogue is a WARN, not a false all-clear.
+  assert.equal(columnCheck(null).status, WARN);
+  // Nothing present at all is a FAIL listing everything.
+  assert.equal(columnCheck([]).detail.length, CRITICAL_COLUMNS.length);
+});
+
+test("every CRITICAL_COLUMNS migration exists and adds that column", async () => {
+  // Same discipline as the table check: a filename that doesn't exist sends
+  // someone hunting, which is worse than naming none.
+  const fs = await import("node:fs");
+  for (const c of CRITICAL_COLUMNS) {
+    const path = `db/migrations/${c.migration}`;
+    assert.ok(fs.existsSync(path), `${c.migration} does not exist (named for ${c.column})`);
+    const sql = fs.readFileSync(path, "utf8");
+    assert.match(sql, new RegExp(`\\b${c.column}\\b`), `${c.migration} never mentions ${c.column}`);
+  }
+});
