@@ -50,8 +50,36 @@ test("facilityCheck names an unrecognised cost driver and how many it drops", ()
   ], []);
   assert.equal(c.status, WARN);
   const opex = c.detail.find((d) => /Opex/.test(d.label));
-  assert.equal(opex.value, "2 drawings");
+  // The count alone was not enough. A month reading light on the desk could not
+  // be tied to this warning without querying the table by hand, so the value the
+  // drawings carry, and the months they would have landed in, are reported too.
+  assert.equal(opex.value, "2 drawings · £1,887");
   assert.match(opex.note, /ignored/);
+  assert.match(opex.note, /would fall in 2026-10/);
+});
+
+test("facilityCheck reports the span when dropped drawings cross months", () => {
+  const c = facilityCheck([
+    { cost_driver: "Miniso LC", due_date: "2026-10", facility_payment_gbp: 100 },
+    { cost_driver: "Miniso L/C", due_date: "2026-11", facility_payment_gbp: 127493 },
+    { cost_driver: "Miniso L/C", due_date: "2027-01", facility_payment_gbp: 6000 },
+  ], []);
+  // "Miniso L/C" with a slash matches none of the patterns, so it is dropped
+  // everywhere — the shape of fault that makes one month read light.
+  const dropped = c.detail.find((d) => /Miniso L\/C/.test(d.label));
+  assert.equal(dropped.value, "2 drawings · £133,493");
+  assert.match(dropped.note, /would fall in 2026-11 to 2027-01, 2 months/);
+});
+
+test("facilityCheck counts a dropped drawing with no GBP figure without inventing one", () => {
+  const c = facilityCheck([
+    { cost_driver: "Miniso LC", due_date: "2026-10", facility_payment_gbp: 100 },
+    { cost_driver: "Opex", due_date: "2026-10", facility_payment_gbp: 500 },
+    { cost_driver: "Opex", due_date: "2026-10", payment_amount: 999, payment_currency: "USD" },
+  ], []);
+  const opex = c.detail.find((d) => /Opex/.test(d.label));
+  assert.equal(opex.value, "2 drawings · £500");     // the USD one is not guessed at
+  assert.match(opex.note, /1 with no GBP figure/);
 });
 
 test("facilityCheck flags drawings it cannot price, naming the currency", () => {
@@ -61,8 +89,11 @@ test("facilityCheck flags drawings it cannot price, naming the currency", () => 
   ], []);   // no SPOT rates at all
   assert.equal(c.status, WARN);
   const usd = c.detail.find((d) => /Unpriced \(USD\)/.test(d.label));
-  assert.equal(usd.value, "1");
+  // An unpriced row has no GBP by definition, so it is stated in its own
+  // currency. "1 drawing" alone left you no way to judge whether it mattered.
+  assert.equal(usd.value, "1 drawing · USD 191,040");
   assert.match(usd.note, /no SPOT rate for USD/);
+  assert.match(usd.note, /would fall in 2026-10/);
   assert.match(c.remedy, /SPOT rate|GBP column/);
   // With the rate set, the same data passes.
   const ok = facilityCheck([
