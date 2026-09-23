@@ -343,7 +343,7 @@ function BudgetImport({ onErr, onDone }) {
 // have something pending.
 const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
 const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
-function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null }) {
+function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, tab = "MINISO" }) {
   const [all, setAll] = useState(false);
   // A cancelled order commits nothing, so it must not weigh on a budget month.
   // (approval_status is absent on a database before migration 082 — an undefined
@@ -359,11 +359,28 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null }) 
       const bal = settlesByLc(r) ? lcBalanceGbp(r, costingRate) : null;
       return bal == null ? r : { ...r, committed_gbp: bal };
     });
-  const sections = ["MINISO", "LOCAL"].map((src) => ({
+  /*
+   * The panel follows the open tab: Miniso under Miniso, Local under Local,
+   * Merch under Merch. It used to print both sources on every tab, so the table
+   * below showed one book while the budget above it showed two.
+   *
+   * Miniso and Local are scoped by SOURCE, deliberately including any merch
+   * requests on that source. They draw on the same budget, and Spent comes from
+   * the facility feed by source and cannot be split — so committed and spent
+   * stay on one population rather than one merch-only figure sitting beside a
+   * source-wide one.
+   *
+   * The Merch tab is the merch requests themselves. There are none today; when
+   * there are, their cash also shows under Miniso or Local, because that is the
+   * budget it consumes.
+   */
+  const forTab = tab === "MERCH" ? live.filter(isMerchRequest) : live;
+  const wanted = tab === "MINISO" ? ["MINISO"] : tab === "LOCAL" ? ["LOCAL"] : ["MINISO", "LOCAL"];
+  const sections = wanted.map((src) => ({
     src,
-    pipeline: requestsVsBudget(live.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
+    pipeline: requestsVsBudget(forTab.filter((r) => r.source === src), budgetMonths[src] || [], AWAITING_FINANCE, { all }),
   })).filter((s) => s.pipeline.length);
-  if (!sections.length && !all) return null;
+  if (!sections.length) return null;
   const th = { ...labelSt, textAlign: "left", padding: "0 12px 7px" };
   const thR = { ...th, textAlign: "right" };
   const td = { padding: "9px 12px", borderBottom: "1px solid var(--line)", fontSize: 13 };
@@ -388,7 +405,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null }) 
       </div>
       {sections.map(({ src, pipeline }) => (
         <div key={src} style={{ marginBottom: 14 }}>
-          <div style={{ ...labelSt, marginBottom: 7 }}>{SRC_LABEL[src]}</div>
+          {sections.length > 1 && <div style={{ ...labelSt, marginBottom: 7 }}>{SRC_LABEL[src]}</div>}
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
               <th style={th}>Cash-out month</th><th style={thR}>Awaiting</th><th style={thR}>Value</th>
@@ -691,7 +708,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
       </StatRow>
 
       {/* ---- Budget pressure from the queue below ---- */}
-      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} costingRate={costingRate} />
+      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} costingRate={costingRate} tab={tab} />
 
       {/* ---- Messages ---- */}
       {error && <div style={{ color: "var(--red)", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}

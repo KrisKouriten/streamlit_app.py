@@ -485,6 +485,12 @@ be recorded.
 a **Paid via…** selector records **how it settled — Cash or Trade pay**. This is what
 drives the Spent split above, so it matters that it is set.
 
+**The budget panel follows the open tab** — Miniso under Miniso, Local under Local,
+Merch under Merch — so the budget above always describes the book in the table below.
+Miniso and Local are scoped by **source**, which deliberately includes any merch requests
+on that source: they draw on the same budget, and Spent comes from the facility feed by
+source and cannot be split, so committed and spent stay on one population.
+
 **Awaiting your decision vs budget** (top of the desk) shows what the pending and
 challenged purchases would commit against each month's budget. **Every purchase is
 counted once**: a request is either **Awaiting** a decision or **Committed** (approved or
