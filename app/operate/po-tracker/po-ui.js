@@ -5,6 +5,7 @@ import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
   invoiceOutcome, canSubmitForSignoff, displayStatus, canDeletePo, canEditPo, isChallenged, challengeReasonLabels,
   CHALLENGE_RETURN_ROUTES, termDaysFrom, dueDateFrom, MARKETING_BUDGET_LINKS, poRef,
+  isoDay,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
@@ -227,7 +228,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Could not load the P.O");
       const po = j.po || p;
-      const iso = (v) => (v ? String(v).slice(0, 10) : "");
+      const iso = (v) => isoDay(v) || "";
       setF({
         po_date: iso(po.po_date), supplier: po.supplier || "", payment_terms: po.payment_terms || "",
         payment_date: iso(po.payment_date), currency: po.currency || "GBP",
@@ -264,7 +265,7 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Could not load the P.O");
       const po = j.po || p;
-      const iso = (v) => (v ? String(v).slice(0, 10) : "");
+      const iso = (v) => isoDay(v) || "";
       setF({
         po_date: iso(po.po_date), supplier: po.supplier || "", payment_terms: po.payment_terms || "",
         payment_date: iso(po.payment_date), currency: po.currency || "GBP",
