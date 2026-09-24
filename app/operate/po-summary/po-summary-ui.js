@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay, invoiceChaseStatus, INVOICE_DUE_DAYS } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 import DateField from "../../finance-os/date-field";
 
@@ -31,7 +31,7 @@ const FILTERS = [
   { key: "ALL", label: "All", test: () => true },
 ];
 
-export default function PoSummaryUI({ initialPos, departments = [] }) {
+export default function PoSummaryUI({ initialPos, departments = [], chases = {} }) {
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
   const [dept, setDept] = useState("");
@@ -81,6 +81,13 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
       if (!res.ok) throw new Error(j.error || "Action failed");
       let msg = successMsg;
       if (j.recharge?.created) msg += ` ${j.recharge.created} recharge row${j.recharge.created === 1 ? "" : "s"} posted to Intercompany${j.recharge.unmatched ? ` (${j.recharge.unmatched} need an entity)` : ""}.`;
+      // A chase says who it reached — and says plainly when it could only be an
+      // in-app notice, so Finance are not waiting on an email that never went.
+      if (Array.isArray(j.recipients)) {
+        msg = j.recipients.length
+          ? `${msg} Sent to ${j.recipients.join(", ")}${j.emailed ? "" : " — in-app only, email is not configured"}.`
+          : `${msg} No department head or submitter email found — nobody was notified.`;
+      }
       setRowMsg((s) => ({ ...s, [poId]: msg }));
       router.refresh();
     } catch (e) { setRowErr((s) => ({ ...s, [poId]: e.message })); }
@@ -93,6 +100,12 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
     op(p.po_id, { op: "close" }, "Closed — now committed spend.");
   };
   const reopen = (p) => op(p.po_id, { op: "reopen-finance" }, "Re-opened.");
+  // Chase an invoice that has not arrived — emails the department head and the
+  // person who raised the P.O. Confirmed first: it goes to real people.
+  const chaseInvoice = (p) => {
+    if (!window.confirm(`Chase the invoice for ${poRef(p)}? This emails the ${p.department || "department"} head and the person who raised it.`)) return;
+    op(p.po_id, { op: "chase-invoice" }, "Invoice chased.");
+  };
 
   function openChallenge(p) {
     setChallengeFor(p.po_id);
@@ -282,6 +295,21 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                               {p.invoice_number ? p.invoice_number : "＋ Add invoice"}
                             </button>
                           ) : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
+                          {/* No invoice yet: when it was due (approval + 15 days),
+                              and when Finance last chased it. */}
+                          {(() => {
+                            const ch = invoiceChaseStatus(p);
+                            if (ch.state !== "waiting" && ch.state !== "overdue") return null;
+                            const last = chases[String(p.po_id)];
+                            return (
+                              <div style={{ fontSize: 10.5, marginTop: 4, lineHeight: 1.45 }}>
+                                {ch.state === "overdue"
+                                  ? <span style={{ color: "var(--red)", fontWeight: 600 }} title={`Expected within ${INVOICE_DUE_DAYS} days of approval`}>Overdue {ch.daysOver}d · due {ch.expectedBy.split("-").reverse().join("/")}</span>
+                                  : <span style={{ color: "var(--faint)" }} title={`Expected within ${INVOICE_DUE_DAYS} days of approval`}>Expected by {ch.expectedBy.split("-").reverse().join("/")}</span>}
+                                {last && <div style={{ color: "var(--faint)" }}>Chased {ukDate(last.at)}{last.times > 1 ? ` (×${last.times})` : ""}</div>}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {(p.invoice_due_date || p.payment_date)
@@ -296,6 +324,13 @@ export default function PoSummaryUI({ initialPos, departments = [] }) {
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {p.finance_status !== "CLOSED" && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closePo(p)}>Close</button>}
                               {p.finance_status !== "CLOSED" && <button style={btn("var(--red)")} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>}
+                              {(() => {
+                                const st = invoiceChaseStatus(p).state;
+                                if (st !== "waiting" && st !== "overdue") return null;
+                                return <button style={st === "overdue" ? btn("var(--amber)") : ghost} disabled={isBusy}
+                                  title="Email the department head and the person who raised this P.O that the invoice is outstanding"
+                                  onClick={() => chaseInvoice(p)}>Chase invoice</button>;
+                              })()}
                               {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={ghost} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
                             </div>
                           )}

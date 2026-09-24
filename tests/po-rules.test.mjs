@@ -538,3 +538,24 @@ test("isoDay sorts as dates, not as weekday names", () => {
   const days = [new Date(2026, 9, 9), new Date(2026, 9, 5)].map(isoDay).sort();
   assert.deepEqual(days, ["2026-10-05", "2026-10-09"]);
 });
+
+// ---- Chasing an invoice that has not arrived ----
+import { invoiceChaseStatus, INVOICE_DUE_DAYS } from "../lib/po-rules.js";
+
+const signedOff = (o = {}) => ({ status: "APPROVED", finance_status: "OPEN", approved_at: "2026-09-10T14:22:00Z", ...o });
+
+test("invoiceChaseStatus: overdue once 15 days pass after approval with no invoice", () => {
+  assert.equal(INVOICE_DUE_DAYS, 15);
+  assert.deepEqual(invoiceChaseStatus(signedOff(), "2026-09-25"), { state: "waiting", expectedBy: "2026-09-25", daysOver: 0 });
+  assert.deepEqual(invoiceChaseStatus(signedOff(), "2026-09-30"), { state: "overdue", expectedBy: "2026-09-25", daysOver: 5 });
+});
+
+test("invoiceChaseStatus: an invoice on the P.O ends the chase", () => {
+  assert.equal(invoiceChaseStatus(signedOff({ invoice_number: "INV68593" }), "2026-12-01").state, "received");
+});
+
+test("invoiceChaseStatus: nothing to chase before sign-off, once closed, or without an approval date", () => {
+  assert.equal(invoiceChaseStatus(signedOff({ status: "PENDING_SIGNOFF" }), "2026-12-01").state, "n/a");
+  assert.equal(invoiceChaseStatus(signedOff({ finance_status: "CLOSED" }), "2026-12-01").state, "n/a");
+  assert.equal(invoiceChaseStatus(signedOff({ approved_at: null }), "2026-12-01").state, "n/a");
+});

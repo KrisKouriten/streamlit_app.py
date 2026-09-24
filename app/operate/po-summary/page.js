@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
-import { listPos, getDepartments } from "../../../lib/purchase-orders";
+import { listPos, getDepartments, lastInvoiceChases } from "../../../lib/purchase-orders";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
 import PoSummaryUI from "./po-summary-ui";
 
@@ -20,9 +20,10 @@ export default async function PoSummaryClose() {
 
   const canManage = hasRole(session, "ADMIN", "FINANCE");
 
-  const [list, departments] = await Promise.all([
+  const [list, departments, chases] = await Promise.all([
     listPos({ limit: 500 }),
     getDepartments().catch(() => []),
+    lastInvoiceChases(),
   ]);
 
   return (
@@ -42,6 +43,7 @@ export default async function PoSummaryClose() {
         <PoSummaryUI
           initialPos={list.pos}
           departments={departments.map((d) => d.department_name)}
+          chases={chases}
         />
       )}
     </div>
