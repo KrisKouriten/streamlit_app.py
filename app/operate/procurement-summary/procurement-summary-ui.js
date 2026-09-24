@@ -7,7 +7,7 @@ import {
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment, settledCommitment,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
 import { grossOf, vatLabel } from "../../../lib/vat-rules";
@@ -365,7 +365,10 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
   const live = rows
     .filter((r) => r.approval_status !== "CANCELLED")
     .map((r) => {
-      const bal = settlesByLc(r) ? lcBalanceGbp(r, costingRate) : null;
+      // A paid Local order is spend on the facility (or gone in cash), not a
+      // commitment. Same rule the budget tables use — without it every paid
+      // order counted in Committed here and again in Spent.
+      const bal = settlesByLc(r) ? lcBalanceGbp(r, costingRate) : settledCommitment(r);
       return bal == null ? r : { ...r, committed_gbp: bal };
     });
   /*
