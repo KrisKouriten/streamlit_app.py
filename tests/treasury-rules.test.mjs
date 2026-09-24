@@ -4,7 +4,7 @@ import {
   facilitySummary, termLoanSummary, hedgingSummary, salesIncomeSummary,
   cashReconVariance, cashReconStatus, cashReconSummary, SALES_STREAMS, isSalesStream,
   reconcileDcFacility, facilityRefIndex, lcOnFacility, isRealLcRef, normRef,
-  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, unmatchedFacility, findFacilityHeaderRow,
+  parseFacilityCsv, FACILITY_UPLOAD_COLUMNS, unmatchedFacility, findFacilityHeaderRow, procurementLink, compactRef,
 } from "../lib/treasury-rules.js";
 
 test("lcOnFacility matches on the LC reference", () => {
@@ -382,3 +382,32 @@ test("no loan amount to compare against — the payment stands as sterling", () 
   const { rows } = parseFacilityCsv(facRow('WCTUKA4,Local Purchase,USD,,,"10,950",03/02/2027\n'));
   assert.equal(rows[0].facility_payment_gbp, 10950);
 });
+
+// ---- A trade-pay drawing reconciles through the WC reference on its purchase ----
+
+const tp = () => new Map([[compactRef("WCTUKA075867"), { purchase_ref: "PO-2087", supplier: "Digi East Wholesale LTD" }]]);
+
+test("procurementLink ties a TradePay drawing to the purchase that records its WC reference", () => {
+  const link = procurementLink({ reference: "WCTUKA075867", cost_driver: "Local Purchase", proc_source: "LOCAL" }, { tradePayByRef: tp() });
+  assert.deepEqual(link, { kind: "TRADE_PAY", purchase_ref: "PO-2087", supplier: "Digi East Wholesale LTD" });
+  // Case and spacing do not matter — the desk stores the reference compacted.
+  assert.equal(procurementLink({ reference: " wctuka 075867 ", proc_source: "LOCAL", cost_driver: "Local Purchase" }, { tradePayByRef: tp() }).kind, "TRADE_PAY");
+});
+
+test("procurementLink: an LC match still wins, Opex/Capex are not procurement, blank drivers stay unmatched", () => {
+  const lcByRef = new Map([["LAIUK1076002", { dc_reference: "DC1", purchase_ref: "PO-1" }]]);
+  assert.equal(procurementLink({ reference: "LAIUK1076002", cost_driver: "Miniso LC", proc_source: "MINISO" }, { lcByRef }).kind, "LC");
+  assert.deepEqual(procurementLink({ reference: "WCTUKA075565", cost_driver: "Opex", proc_source: null }), { kind: "NOT_PROCUREMENT", cost_driver: "Opex" });
+  assert.equal(procurementLink({ reference: "CILUKA091970", cost_driver: "", proc_source: null }), null);
+  assert.equal(procurementLink({ reference: "WCTUKA073700", cost_driver: "Local Purchase", proc_source: "LOCAL" }, { tradePayByRef: tp() }), null);
+});
+
+test("unmatchedFacility drops drawings reconciled by trade-pay reference and non-procurement drawings", () => {
+  const facility = [
+    { reference: "WCTUKA075867", cost_driver: "Local Purchase", proc_source: "LOCAL", beneficiary: "Digi East" },
+    { reference: "WCTUKA075565", cost_driver: "Opex", proc_source: null, beneficiary: "GXO" },
+    { reference: "WCTUKA073700", cost_driver: "Local Purchase", proc_source: "LOCAL", beneficiary: "A B Gee" },
+  ];
+  assert.deepEqual(unmatchedFacility([], facility, { tradePayByRef: tp() }).map((o) => o.reference), ["WCTUKA073700"]);
+});
+

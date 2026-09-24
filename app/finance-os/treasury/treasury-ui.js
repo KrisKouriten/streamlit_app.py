@@ -214,7 +214,7 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
     const head = ["Reference", "DC reference", "Beneficiary", "Loan currency", "Loan amount", "Payment currency", "Payment amount", "Facility GBP", "Counted GBP", "Implied rate", "Product", "Cost driver", "Start", "Due", "Days", "Settlement month", "Status"];
     const esc = (v) => { const x = v == null ? "" : String(v); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
     const lines = [head.join(",")];
-    for (const r of filtered) lines.push([r.reference, r.in_procurement ? (r.dc_reference || "") : "NOT IN PROCUREMENT", r.beneficiary, r.loan_currency || r.payment_currency, r.loan_amount, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.gbp_at_spot, r.implied_rate, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
+    for (const r of filtered) lines.push([r.reference, r.proc_link === "TRADE_PAY" ? `TRADE PAY ${r.proc_purchase_ref || ""}`.trim() : r.proc_link === "NOT_PROCUREMENT" ? "NOT PROCUREMENT" : r.in_procurement ? (r.dc_reference || "") : "NOT IN PROCUREMENT", r.beneficiary, r.loan_currency || r.payment_currency, r.loan_amount, r.payment_currency, r.payment_amount, r.facility_payment_gbp, r.gbp_at_spot, r.implied_rate, r.product_type, r.cost_driver, r.loan_start_date, r.due_date, r.loan_period_days, r.payment_month, r.status].map(esc).join(","));
     const a = document.createElement("a");
     a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(lines.join("\n"));
     a.download = `bank-trade-facility-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -295,9 +295,15 @@ function Facility({ facility, position, lifecycle, dcRecon, canManage, busy, op 
               {filtered.map((r) => (
                 <tr key={r.id}>
                   <td style={td}>{r.reference}</td>
-                  <td style={td}>{r.in_procurement
+                  <td style={td}>{r.proc_link === "TRADE_PAY"
+                    // Tied by the WC reference Finance recorded on the paid purchase.
+                    ? <span title={`Paid on trade pay — recorded against ${r.proc_purchase_ref || "a purchase"}${r.proc_supplier ? ` (${r.proc_supplier})` : ""} in Procurement Summary`}><Badge tone="green">Trade pay</Badge>{r.proc_purchase_ref && <span style={{ fontSize: 11, color: "var(--faint)", marginLeft: 6 }}>{r.proc_purchase_ref}</span>}</span>
+                    : r.proc_link === "NOT_PROCUREMENT"
+                    // Opex / Capex drawings: nothing in Procurement to match.
+                    ? <span title={`Cost driver ${r.cost_driver} — not procurement, so nothing to reconcile`} style={{ fontSize: 11.5, color: "var(--faint)" }}>not procurement</span>
+                    : r.in_procurement
                     ? (r.dc_reference || <span title={`LC logged (${r.dc_purchase_ref || "—"}) but not grouped under a DC`} style={{ color: "var(--faint)" }}>no DC</span>)
-                    : <span title="This drawing's LC reference isn't logged in Procurement — check for a mis-keyed LC reference or an extra LC on the facility."><Badge tone="amber">Not in procurement</Badge></span>}</td>
+                    : <span title="No LC is logged under this reference, and no paid purchase records it as its trade-pay drawing. Log the LC, or record the WC reference on the purchase in Procurement Summary."><Badge tone="amber">Not in procurement</Badge></span>}</td>
                   <td style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{r.beneficiary}</td>
                   <td style={td}>{r.product_type === "Post-shipment buyer loan" ? <Badge tone="accent">Buyer loan</Badge> : <Badge tone="muted">TradePay</Badge>}</td>
                   <td style={td}>{r.cost_driver}</td>
@@ -419,7 +425,7 @@ function DcFacilityRecon({ dcRecon }) {
             {orphans.length} facility drawing{orphans.length === 1 ? "" : "s"} not found in Procurement
           </div>
           <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
-            On the HSBC facility but no LC logged against the reference — add the missing DC/LC in Procurement to reconcile.
+            Procurement drawings on the HSBC facility with nothing logged against them — log the DC/LC for a Miniso drawing, or record the WC reference on the paid purchase in Procurement Summary. Opex and Capex drawings are not listed.
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
