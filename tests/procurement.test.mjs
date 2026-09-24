@@ -1536,3 +1536,12 @@ test("consolidateSummary is safe on nothing at all", () => {
     assert.equal(c.totalBudget, 0);
   }
 });
+
+test("canDeleteProcurement: Finance can delete a cancelled order, however far it got", () => {
+  for (const st of ["CANCELLED"]) {
+    assert.equal(canDeleteProcurement({ approval_status: st }, { isFinance: true }).ok, true);
+    assert.equal(canDeleteProcurement({ approval_status: st }, { isFinance: false }).ok, false);
+  }
+  // A live, not-yet-approved order still cannot be deleted — it is cancelled instead.
+  assert.equal(canDeleteProcurement({ approval_status: "PENDING" }, { isFinance: true }).ok, false);
+});

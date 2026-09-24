@@ -7,7 +7,7 @@ import {
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
   settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
-  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment, settledCommitment,
+  isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment, settledCommitment, paidOutsideLc,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
 import { grossOf, vatLabel } from "../../../lib/vat-rules";
@@ -368,7 +368,8 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
       // A paid Local order is spend on the facility (or gone in cash), not a
       // commitment. Same rule the budget tables use — without it every paid
       // order counted in Committed here and again in Spent.
-      const bal = settlesByLc(r) ? lcBalanceGbp(r, costingRate) : settledCommitment(r);
+      const settled = settledCommitment(r);
+      const bal = settled != null ? settled : settlesByLc(r) ? lcBalanceGbp(r, costingRate) : null;
       return bal == null ? r : { ...r, committed_gbp: bal };
     });
   /*
@@ -585,6 +586,29 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     r.purchase_id,
     { op: "set-payment-status", payment_status: r.payment_status, payment_method: r.payment_method, trade_pay_ref },
     trade_pay_ref ? `Trade-pay reference saved.` : "Trade-pay reference cleared.",
+  );
+  // Payment status, method and — on trade pay — the WC… drawing reference. The
+  // same controls for Local and for Miniso: a Miniso order paid on TradePay
+  // rather than an LC settles, and reconciles, the same way a Local one does.
+  const paymentControls = (r, pay, isBusy) => (
+    <>
+                                    <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
+                                      {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+                                    </select>
+                                    {r.payment_status === "PAID" && (
+                                      <select style={{ ...inputSt, width: 118 }} value={r.payment_method || ""} disabled={isBusy}
+                                        title="How this was paid — trade pay is reported as spend from the facility upload; cash is reported on top of it"
+                                        onChange={(e) => setPaymentMethod(r, e.target.value)}>
+                                        <option value="">Paid via…</option>
+                                        {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
+                                      </select>
+                                    )}
+                                    {/* Which drawing it settled on. Only on trade pay —
+                                        cash has no drawing to reconcile to. */}
+                                    {r.payment_status === "PAID" && r.payment_method === "TRADE_PAY" && (
+                                      <TradePayRef row={r} busy={isBusy} onSave={(v) => setTradePayRef(r, v)} />
+                                    )}
+                                  </>
   );
   const closeRow = (r) => {
     if (!window.confirm(`Close ${procRef(r)}? It will be reported as committed procurement spend.`)) return;
@@ -845,7 +869,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                           {fs === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(r.challenge_reasons).join(" · ")}</div>}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
-                          {settlesByLc(r) ? (() => { const lc = lcStatus(r); return <Badge tone={lc.tone}>{lc.label}</Badge>; })() : <Badge tone={pay.tone}>{pay.label}</Badge>}
+                          {settlesByLc(r) && !paidOutsideLc(r) ? (() => { const lc = lcStatus(r); return <Badge tone={lc.tone}>{lc.label}</Badge>; })() : <Badge tone={pay.tone}>{pay.label}</Badge>}
                         </td>
                         {/* What has been drawn as an LC, and what is therefore still
                             committed. The drawn part is reported as spent by Treasury
@@ -855,14 +879,14 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
                             const oc = outstandingCommitment(r, costingRate);
-                            if (settlesByLc(r) && oc.drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
+                            if (settlesByLc(r) && !paidOutsideLc(r) && oc.drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
                             if (!oc.drawn) return <span style={{ color: "var(--faint)" }}>—</span>;
                             const lcs = (r.lcs || []).length;
                             return (
                               <>
                                 {money(oc.drawn)}
                                 <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>
-                                  {settlesByLc(r)
+                                  {settlesByLc(r) && !paidOutsideLc(r)
                                     ? `${lcs} LC${lcs === 1 ? "" : "s"} · spent via Treasury`
                                     : r.payment_method === "CASH" ? "cash"
                                     : r.payment_method === "TRADE_PAY" ? (r.trade_pay?.ref || "trade pay")
@@ -895,33 +919,19 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                               <button style={btn("var(--green)")} disabled={isBusy} onClick={() => approve(r)}>Approve</button>
                             )}
                             {fs === "APPROVED" && settlesByLc(r) && (
-                              <button style={btn("var(--accent)")} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
+                              <>
+                                <button style={btn("var(--accent)")} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
+                                {/* Miniso stock that went on TradePay rather than an LC:
+                                    mark it paid via trade pay and record its WC… drawing. */}
+                                {financeActionError("payment", r) === null && paymentControls(r, pay, isBusy)}
+                              </>
                             )}
                             {fs === "APPROVED" && !settlesByLc(r) && (
                               <>
                                 <input style={{ ...inputSt, width: 110 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
                                 <MoneyInput style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
                                 {financeActionError("invoice", r) === null && <button style={ghost} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
-                                {financeActionError("payment", r) === null && (
-                                  <>
-                                    <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
-                                      {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-                                    </select>
-                                    {r.payment_status === "PAID" && (
-                                      <select style={{ ...inputSt, width: 118 }} value={r.payment_method || ""} disabled={isBusy}
-                                        title="How this was paid — trade pay is reported as spend from the facility upload; cash is reported on top of it"
-                                        onChange={(e) => setPaymentMethod(r, e.target.value)}>
-                                        <option value="">Paid via…</option>
-                                        {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
-                                      </select>
-                                    )}
-                                    {/* Which drawing it settled on. Only on trade pay —
-                                        cash has no drawing to reconcile to. */}
-                                    {r.payment_status === "PAID" && r.payment_method === "TRADE_PAY" && (
-                                      <TradePayRef row={r} busy={isBusy} onSave={(v) => setTradePayRef(r, v)} />
-                                    )}
-                                  </>
-                                )}
+                                {financeActionError("payment", r) === null && paymentControls(r, pay, isBusy)}
                               </>
                             )}
                             {fs === "CHALLENGED" && settlesByLc(r) && (

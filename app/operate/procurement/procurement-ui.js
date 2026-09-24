@@ -480,7 +480,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
   const financeApprove = (o) => (isForeignCurrency(o.currency) ? setFxApprove(fxApprove === o.purchase_id ? null : o.purchase_id) : act(o.purchase_id, "finance-approve"));
 
   return (
-    <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete once head-approved">
+    <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete, once head-approved or cancelled">
       {(() => {
         // A challenge is Finance handing the order back. It is the one state on
         // this page where somebody is waiting on the team who raised it, so it
@@ -546,7 +546,13 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
                     )}
                   </td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
-                    {cancelled ? <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span> : (
+                    {cancelled ? (
+                      <span style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                        <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span>
+                        {/* A cancelled order commits nothing — Finance can clear it off the list. */}
+                        {isFinance && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)", opacity: 1 }} onClick={() => del(o)}>Delete</button>}
+                      </span>
+                    ) : (
                       <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
                         {(isHod || isMerchApprover) && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
                         {canManage && o.approval_status === "PENDING" && <button disabled={busy} style={btn} title="Re-send the head-of-department sign-off request" onClick={() => act(o.purchase_id, "resubmit")}>Resubmit</button>}
