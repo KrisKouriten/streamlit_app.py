@@ -2,7 +2,7 @@ import { getSession } from "../../../../lib/auth";
 import { canExport } from "../../../../lib/reporting/report-access-rules";
 import { confidentialStamp } from "../../../../lib/reporting/watermark";
 import { posForExport } from "../../../../lib/purchase-orders";
-import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf } from "../../../../lib/po-rules";
+import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf, isoDay } from "../../../../lib/po-rules";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
@@ -28,14 +28,14 @@ export async function GET(request) {
   for (const p of pos) {
     const st = displayStatus(p);
     const base = {
-      "P.O number": poRef(p), "P.O date": p.po_date ? String(p.po_date).slice(0, 10) : "",
+      "P.O number": poRef(p), "P.O date": isoDay(p.po_date) || "",
       Supplier: p.supplier, Department: p.department, Category: p.po_category,
       Description: p.description || "",
       "Invoice entity": p.invoice_entity_name || "",
       "Net value": Number(p.payment_value) || 0, Currency: p.currency,
       Status: st.label,
-      Payment: paymentStatusOf(p).label, "Paid date": p.paid_date ? String(p.paid_date).slice(0, 10) : "",
-      "Invoice no": p.invoice_number || "", "Invoice due": (p.invoice_due_date || p.payment_date) ? String(p.invoice_due_date || p.payment_date).slice(0, 10) : "",
+      Payment: paymentStatusOf(p).label, "Paid date": isoDay(p.paid_date) || "",
+      "Invoice no": p.invoice_number || "", "Invoice due": isoDay(p.invoice_due_date || p.payment_date) || "",
       "Invoice net": p.invoice_amount != null ? Number(p.invoice_amount) : "",
       "Committed £": st.code === "CLOSED" ? committedAmount(p) : "",
       Challenge: p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons).join("; ") : "",

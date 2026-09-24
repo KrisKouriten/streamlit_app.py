@@ -512,3 +512,29 @@ test("describePoAuditEvent overrides show the route change and reason", () => {
   assert.match(o.detail, /line manager → self-approved/);
   assert.match(o.detail, /under limit/);
 });
+
+// ---- Dates from the database are Date objects, not text ----
+import { isoDay } from "../lib/po-rules.js";
+
+test("isoDay: a DATE column as the driver returns it becomes YYYY-MM-DD", () => {
+  // node-postgres builds a DATE as local midnight. The old String(d).slice(0, 10)
+  // turned this into "Fri Oct 09", which the P.O rollup then tried to save.
+  const d = new Date(2026, 9, 9);
+  assert.equal(String(d).slice(0, 10), "Fri Oct 09");   // the bug, as it was
+  assert.equal(isoDay(d), "2026-10-09");
+});
+
+test("isoDay: text, blanks and junk", () => {
+  assert.equal(isoDay("2026-10-09"), "2026-10-09");
+  assert.equal(isoDay("2026-10-09T00:00:00.000Z"), "2026-10-09");
+  assert.equal(isoDay(null), null);
+  assert.equal(isoDay(""), null);
+  assert.equal(isoDay("Fri Oct 09"), null);
+  assert.equal(isoDay(new Date("nope")), null);
+});
+
+test("isoDay sorts as dates, not as weekday names", () => {
+  // Sorted as String(Date), Friday 9 Oct came before Monday 5 Oct.
+  const days = [new Date(2026, 9, 9), new Date(2026, 9, 5)].map(isoDay).sort();
+  assert.deepEqual(days, ["2026-10-05", "2026-10-09"]);
+});

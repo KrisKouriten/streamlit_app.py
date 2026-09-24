@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 import DateField from "../../finance-os/date-field";
 
@@ -384,7 +384,7 @@ function InvoicesPanel({ p, state, nf, setField, onAdd, onSetStatus, onRemove, o
   const closed = p.finance_status === "CLOSED";
   const lbl = { fontFamily: "var(--mono)", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" };
   const canAdd = String(nf.number || "").trim() && Number(nf.amount) > 0;
-  const iso = (v) => (v ? String(v).slice(0, 10) : "");
+  const iso = (v) => isoDay(v) || "";
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Invoices — {p.xero_po_number || p.po_number} <span style={{ fontWeight: 400, color: "var(--faint)" }}>· P.O value {money(p.payment_value, p.currency)}</span></div>
