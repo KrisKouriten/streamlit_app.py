@@ -5,6 +5,7 @@ import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reporte
   tradePayRefError,
   tradePayMatch,
   outstandingCommitment,
+  settledCommitment,
   committedAmountNet
 } from "../lib/procurement-close-rules.js";
 import {
@@ -495,3 +496,37 @@ test("outstandingCommitment: Miniso keeps the LC balance it already had", () => 
   assert.equal(over.tone, "red");
   assert.match(over.note, /drawn over/);
 });
+
+// ---- A settled purchase commits nothing, on every budget view ----
+
+import { requestsVsBudget } from "../lib/procurement-rules.js";
+
+test("settledCommitment: a paid Local order commits nothing, however it was paid", () => {
+  for (const payment_method of ["TRADE_PAY", "CASH", null]) {
+    assert.equal(settledCommitment({ source: "LOCAL", payment_status: "PAID", payment_method, amount_gbp: 1000 }), 0);
+  }
+});
+
+test("settledCommitment: leaves unpaid and LC rows to their own rules", () => {
+  assert.equal(settledCommitment({ source: "LOCAL", payment_status: "UNPAID", amount_gbp: 1000 }), null);
+  assert.equal(settledCommitment({ source: "LOCAL", amount_gbp: 1000 }), null);
+  assert.equal(settledCommitment({ source: "MINISO", payment_status: "PAID", amount_gbp: 1000 }), null);
+});
+
+test("the close desk's budget panel no longer counts a paid order in Committed and Spent", () => {
+  // Dec 2026 as reported: approved Local orders paid on trade pay, whose drawing
+  // is already the month's spend. Built the way the panel builds its rows.
+  const paid = { source: "LOCAL", order_ym: "2026-06", terms_days: 180, amount_gbp: 1000, vat_rate: 0,
+    finance_status: "APPROVED", payment_status: "PAID", payment_method: "TRADE_PAY", trade_pay_ref: "WC1" };
+  const months = [{ ym: "2026-12", budget: 1000, committed: 0, spent: 1000, tradeSpent: 1000, cashSpent: 0, fx: 0 }];
+  const awaiting = (r) => r.finance_status === "PENDING";
+  const asPanel = (r) => { const bal = settledCommitment(r); return bal == null ? r : { ...r, committed_gbp: bal }; };
+
+  const before = requestsVsBudget([paid], months, awaiting, { all: true })[0];
+  assert.equal(before.committed, 1000);       // the double count, as shipped
+  const after = requestsVsBudget([paid].map(asPanel), months, awaiting, { all: true })[0];
+  assert.equal(after.committed, 0);
+  assert.equal(after.spent, 1000);
+  assert.equal(after.headroom, 0);            // on budget, not £1,000 over
+});
+
