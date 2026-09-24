@@ -7,9 +7,10 @@ import {
   resubmitChallenge, computeSelfApprovalDecision, overrideRoute,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
-import { canDeletePo, challengeReasonLabels } from "../../../../lib/po-rules";
+import { canDeletePo, challengeReasonLabels, invoiceChaseStatus, poRef } from "../../../../lib/po-rules";
 import { resolveBaseUrl } from "../../../../lib/invite-rules";
-import { notifyPoAwaitingSignoff, notifyPoDecision, notifyPoChallenge } from "../../../../lib/workflow-notify";
+import { notifyPoAwaitingSignoff, notifyPoDecision, notifyPoChallenge, notifyPoInvoiceChase } from "../../../../lib/workflow-notify";
+import { audit } from "../../../../lib/governance";
 
 export const dynamic = "force-dynamic";
 
@@ -173,6 +174,23 @@ export async function POST(request, { params }) {
         }
         if (body.op === "set-payment-status") return NextResponse.json(await setPaymentStatus(id, { payment_status: body.payment_status, paid_date: body.paid_date || null }, session));
         return NextResponse.json(await reopenFinance(id, session));
+      }
+
+      // Finance chasing an invoice that has not arrived: the department head(s)
+      // and whoever raised the P.O are told. Refused once an invoice is on it —
+      // there is nothing left to chase, and a stale reminder costs trust.
+      case "chase-invoice": {
+        if (!isFinance(session)) return NextResponse.json({ error: "Finance or admin only" }, { status: 403 });
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        const chase = invoiceChaseStatus(loaded.po);
+        if (chase.state === "received") return NextResponse.json({ error: "An invoice is already recorded on this P.O" }, { status: 400 });
+        if (chase.state === "n/a") return NextResponse.json({ error: "Only an open, signed-off P.O can be chased" }, { status: 400 });
+        const hodEmails = await getApproverEmails(loaded.po.department).catch(() => []);
+        const sent = await notifyPoInvoiceChase({ po: loaded.po, hodEmails, chase, actor: session, baseUrl: baseUrlOf(request) });
+        await audit({ actor: session, eventType: "po.invoice_chase", objectType: "purchase_order", objectRef: String(loaded.po.po_id),
+          detail: { ref: poRef(loaded.po), recipients: sent.recipients, days_over: chase.daysOver, emailed: sent.emailed } });
+        return NextResponse.json({ ok: true, ...sent, chasedAt: new Date().toISOString() });
       }
 
       default:
