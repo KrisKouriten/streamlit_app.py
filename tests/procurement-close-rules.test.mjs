@@ -530,3 +530,15 @@ test("the close desk's budget panel no longer counts a paid order in Committed a
   assert.equal(after.headroom, 0);            // on budget, not £1,000 over
 });
 
+
+// ---- A Miniso order paid on TradePay settles like a Local one ----
+
+test("a Miniso order paid on TradePay (or in cash) commits nothing; its LC rule no longer applies", () => {
+  const base = { source: "MINISO", amount_gbp: 413534, payment_status: "PAID" };
+  assert.equal(settledCommitment({ ...base, payment_method: "TRADE_PAY", trade_pay_ref: "WCTUKA071442" }), 0);
+  assert.equal(settledCommitment({ ...base, payment_method: "CASH" }), 0);
+  assert.equal(outstandingCommitment({ ...base, payment_method: "TRADE_PAY" }).balance, 0);
+  // Paid with no method, or not paid: still the LC balance rule.
+  assert.equal(settledCommitment({ ...base, payment_method: null }), null);
+  assert.equal(settledCommitment({ source: "MINISO", amount_gbp: 1, payment_status: "UNPAID", payment_method: "TRADE_PAY" }), null);
+});
