@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   exportDate, claimantName, storeFromTracking, parseExpenseCsv, deptKey, resolveDepartment, summariseExpenses, accountName,
   expenseTabs, pickExpenseTab, canSeeExpenses, CONSOLIDATED,
-  TEE_LINES, teeLineOf, teeLineName, parseTeeBudgetRows, teeTemplateRows, toCsv,
+  TEE_LINES, teeLineOf, teeLineName, parseTeeBudgetRows, teeTemplateRows, toCsv, pickTeeBudget,
 } from "../lib/expense-rules.js";
 import { teeBudgetAttention } from "../lib/hub-attention-rules.js";
 
@@ -199,4 +199,14 @@ test("summariseExpenses compares budget and claims line by line", () => {
   assert.deepEqual(bl.map((r) => [r.line, r.net, r.budgetYtd, r.budget]), [
     ["Mileage", 60, 40, 240], ["Subsistence", 40, null, null], ["Training", 0, 20, 120],
   ]);
+});
+
+test("pickTeeBudget: the T&E budget furthest through approval counts, then the newest", () => {
+  const b = (id, status, updated, type = "TEE") => ({ budget_id: id, status, updated_at: updated, budget_type: type });
+  assert.equal(pickTeeBudget([]), null);
+  assert.equal(pickTeeBudget([b(1, "DRAFT", "2026-09-01", "BUSINESS")]), null);
+  // An older submitted budget wins over a newer draft — so the upload must write to it, not the draft.
+  assert.equal(pickTeeBudget([b(1, "DRAFT", "2026-09-29"), b(2, "FINANCE_REVIEW", "2026-06-01")]).budget_id, 2);
+  assert.equal(pickTeeBudget([b(1, "LOCKED", "2026-01-01"), b(2, "SLT_APPROVAL", "2026-09-01")]).budget_id, 1);
+  assert.equal(pickTeeBudget([b(1, "DRAFT", "2026-01-01"), b(2, "DRAFT", "2026-09-01")]).budget_id, 2);
 });

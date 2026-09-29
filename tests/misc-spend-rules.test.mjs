@@ -43,3 +43,12 @@ test("miscTotals sums the total and breaks down by category", () => {
   assert.equal(t.byCategory["Travel & Mileage"], 40);
   assert.deepEqual(miscTotals([]), { total: 0, count: 0, byCategory: {} });
 });
+
+import { miscAllowedFor, MISC_BUDGET_TYPES } from "../lib/misc-spend-rules.js";
+test("Miscellaneous Spend is for project budgets only — BAU is claimed through expenses", () => {
+  assert.deepEqual(MISC_BUDGET_TYPES, ["PROJECT"]);
+  assert.equal(miscAllowedFor("PROJECT"), true);
+  assert.equal(miscAllowedFor("BUSINESS"), false);
+  assert.equal(miscAllowedFor("TEE"), false);
+  assert.equal(miscAllowedFor(null), false);          // no type = a Business budget
+});

@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay, invoiceChaseStatus, INVOICE_DUE_DAYS } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
+import DeptTabs from "../../dept-tabs";
+import { ALL_DEPTS, deptTabsFor, rowsForTab } from "../../../lib/dept-tabs-rules.js";
 import DateField from "../../finance-os/date-field";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
@@ -34,7 +36,9 @@ const FILTERS = [
 export default function PoSummaryUI({ initialPos, departments = [], chases = {} }) {
   const router = useRouter();
   const [filter, setFilter] = useState("ATTENTION");
-  const [dept, setDept] = useState("");
+  // Finance's desk: an "All departments" tab and one per department.
+  const deptTabs = useMemo(() => deptTabsFor({ seeAll: true, departments: [...departments, ...initialPos.map((p) => p.department)] }), [departments, initialPos]);
+  const [dept, setDept] = useState(ALL_DEPTS);
   const [selected, setSelected] = useState(() => new Set());
   const [challengeFor, setChallengeFor] = useState(null);
   const [chReasons, setChReasons] = useState(() => new Set());
@@ -49,14 +53,18 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
   const [invCache, setInvCache] = useState({});         // po_id -> { loading, invoices, error }
   const [invNew, setInvNew] = useState({});             // po_id -> { number, amount, paid }
 
+  const deptPos = useMemo(() => rowsForTab(initialPos, dept), [initialPos, dept]);
+  // Each department tab counts what needs Finance there.
+  const attention = FILTERS.find((x) => x.key === "ATTENTION") || FILTERS[0];
+  const deptCounts = useMemo(() => Object.fromEntries(deptTabs.map((t) => [t, rowsForTab(initialPos, t).filter((p) => attention.test(p)).length])), [initialPos, deptTabs, attention]);
   const rows = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filter) || FILTERS[FILTERS.length - 1];
-    return initialPos.filter((p) => f.test(p) && (!dept || p.department === dept));
-  }, [initialPos, filter, dept]);
+    return deptPos.filter((p) => f.test(p));
+  }, [deptPos, filter]);
 
   const counts = useMemo(() => {
     const c = {};
-    for (const f of FILTERS) c[f.key] = initialPos.filter((p) => f.test(p)).length;
+    for (const f of FILTERS) c[f.key] = deptPos.filter((p) => f.test(p)).length;
     return c;
   }, [initialPos]);
 
@@ -189,7 +197,10 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
 
   function download(all) {
     const base = "/api/purchase-orders/export";
-    const url = all || selected.size === 0 ? base : `${base}?ids=${[...selected].join(",")}`;
+    // "Download all" on a department tab downloads that department's P.Os.
+    const ids = all ? (dept === ALL_DEPTS ? null : deptPos.map((p) => p.po_id)) : [...selected];
+    if (all && ids && !ids.length) { window.alert(`No P.Os for ${dept} to download.`); return; }
+    const url = !ids || (!all && selected.size === 0) ? base : `${base}?ids=${ids.join(",")}`;
     window.location.href = url;
   }
 
@@ -197,6 +208,9 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
 
   return (
     <div>
+      {/* ---- Department tabs (count = needs Finance) ---- */}
+      <DeptTabs tabs={deptTabs} active={dept} onChange={(t) => { setDept(t); setSelected(new Set()); }} counts={deptCounts} />
+
       {/* ---- Controls ---- */}
       <div style={{ ...card, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
@@ -211,16 +225,10 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
             );
           })}
         </div>
-        {departments.length > 0 && (
-          <select style={inputSt} value={dept} onChange={(e) => setDept(e.target.value)}>
-            <option value="">All departments</option>
-            {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{selected.size} selected</span>
           <button style={ghost} disabled={selected.size === 0} onClick={() => download(false)}>Download selected (Excel)</button>
-          <button style={btn("var(--accent)")} onClick={() => download(true)}>Download all (Excel)</button>
+          <button style={btn("var(--accent)")} onClick={() => download(true)}>{dept === ALL_DEPTS ? "Download all (Excel)" : `Download ${dept} (Excel)`}</button>
         </div>
       </div>
 

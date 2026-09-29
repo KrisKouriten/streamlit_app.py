@@ -132,6 +132,7 @@ function TeeBudgetUpload() {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [replace, setReplace] = useState(false);
   const thisYear = new Date().getFullYear();
   async function onFile(e) {
     const f = e.target.files?.[0];
@@ -141,14 +142,15 @@ function TeeBudgetUpload() {
       const bytes = new Uint8Array(await f.arrayBuffer());
       let bin = "";
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      const res = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "tee-budgets", file: btoa(bin), filename: f.name }) });
+      const res = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "tee-budgets", file: btoa(bin), filename: f.name, replace }) });
       const r = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(r.error || "Upload failed");
       const part = (arr, word) => (arr.length ? `${word} ${arr.map((b) => `${b.department} ${b.year} (${money(b.total)})`).join(", ")}.` : "");
       setMsg([
         part(r.created, "Created"),
         part(r.updated, "Updated"),
-        r.skipped?.length ? `Left alone — not a draft: ${r.skipped.join(", ")}. Reopen on Departmental Budgets to load over it.` : "",
+        part(r.replaced || [], "Replaced the figures of"),
+        r.skipped?.length ? `Left alone — not a draft: ${r.skipped.join(", ")}. Tick "Replace budgets already submitted or approved" and upload again to load over them.` : "",
         r.unknown?.length ? `Departments not recognised: ${r.unknown.join(", ")}.` : "",
         r.rowErrors?.length ? `${r.rowErrors.length} row${r.rowErrors.length === 1 ? "" : "s"} skipped — e.g. ${r.rowErrors[0]}` : "",
       ].filter(Boolean).join(" ") || "Nothing to load.");
@@ -175,6 +177,13 @@ function TeeBudgetUpload() {
           </label>
         </div>
       </div>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.5, cursor: "pointer" }}>
+        <input type="checkbox" checked={replace} disabled={busy} onChange={(e) => setReplace(e.target.checked)} style={{ marginTop: 2 }} />
+        <span>
+          <strong>Replace budgets already submitted or approved.</strong> Without this, only drafts are filled and the rest are left alone.
+          With it, a budget further through approval has its figures replaced and keeps its status; its timeline on Departmental Budgets records the replacement.
+        </span>
+      </label>
       {msg && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5 }}>{msg}</div>}
     </div>
   );
