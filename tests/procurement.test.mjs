@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { vatRateByTradePayRef, drawingNetOfVat } from "../lib/procurement-rules.js";
 import { cashOutYm, cashOutFromDate, cashOutFor, MINISO_TERMS_DAYS, LOCAL_FACILITY_DAYS,
   tradeFacilitySplit, summarise, parseProcurementCsv,
   facilitySourceOf, tradeSpendByMonth, cashSpendByMonth, budgetImpact, requestsVsBudget,
@@ -151,7 +152,8 @@ test("tradeSpendByMonth sums the facility upload by source and DUE month", () =>
   ]);
   assert.equal(Math.round(spend.MINISO["2027-01"]), 226667);
   assert.equal(spend.MINISO["2026-12"], 113720);
-  assert.equal(spend.LOCAL["2027-01"], 22498.56);
+  // A GBP Local drawing with no WC reference to tie it: 20% VAT off.
+  assert.equal(spend.LOCAL["2027-01"], 18748.8);
   assert.equal(spend.LOCAL["2026-12"], undefined);
 });
 
@@ -166,7 +168,7 @@ test("tradeSpendByMonth: the due date wins over payment_month, which is only a f
   const fallback = tradeSpendByMonth([
     { cost_driver: "Local Purchase", due_date: null, payment_month: "2027-03", facility_payment_gbp: 10 },
   ]);
-  assert.equal(fallback.LOCAL["2027-03"], 10);
+  assert.equal(fallback.LOCAL["2027-03"], 8.33);   // net of 20% VAT
 });
 
 test("cashSpendByMonth counts only CASH rows — trade pay comes from the facility, not here", () => {
@@ -188,11 +190,13 @@ test("cashSpendByMonth counts only CASH rows — trade pay comes from the facili
 test("summarise splits spent into trade pay + cash against the budget", () => {
   const purchases = [
     { source: "LOCAL", supplier: "Korea Foods", order_ym: "2026-03", terms_days: 60, amount_gbp: 20000, status: "COMMITTED", payment_method: "CASH", paid_date: "2026-09-10", vat_rate: 0 },
-    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-03", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12", vat_rate: 0 },
+    { source: "LOCAL", supplier: "DKB Toys", order_ym: "2026-03", terms_days: 60, amount_gbp: 30000, status: "COMMITTED", payment_method: "TRADE_PAY", paid_date: "2026-09-12", vat_rate: 0, trade_pay_ref: "WCTUKA000001" },
   ];
   const budgets = [{ source: "LOCAL", ym: "2026-09", budget_gbp: 60000 }];
   const spend = {
-    trade: tradeSpendByMonth([{ cost_driver: "Local Purchase", due_date: "2026-09-29", facility_payment_gbp: 30000 }]),
+    // Tied to DKB Toys by its WC reference, so it takes that request's rate (0).
+    trade: tradeSpendByMonth([{ cost_driver: "Local Purchase", due_date: "2026-09-29", facility_payment_gbp: 30000, reference: "WCTUKA 000001" }],
+      null, { vatRateByRef: vatRateByTradePayRef(purchases) }),
     cash: cashSpendByMonth(purchases),
   };
   const m = summarise(purchases, budgets, spend).LOCAL.months.find((x) => x.ym === "2026-09");
@@ -676,7 +680,7 @@ test("tradeSpendByMonth counts both Miniso routes, and still not Miniso Investme
     { cost_driver: "Capex", due_date: "2026-10-21", facility_payment_gbp: 32343 },
   ]);
   assert.equal(spend.MINISO["2026-10"], 218309 + 168341);   // both routes, no Investment
-  assert.equal(spend.LOCAL["2026-10"], 117398);
+  assert.equal(spend.LOCAL["2026-10"], 97831.67);   // net of 20% VAT
 });
 
 // ---- Valuing a drawing when the extract carries no GBP figure ----
@@ -751,7 +755,7 @@ test("tradeSpendByMonth values from payment_amount and counts what it cannot pri
     { cost_driver: "Miniso LC", due_date: "2026-10-13", payment_amount: 5000, payment_currency: "EUR" },
   ], rateFor);
   assert.equal(spend.MINISO["2026-10"], 100000);
-  assert.equal(spend.LOCAL["2026-10"], 117398);
+  assert.equal(spend.LOCAL["2026-10"], 97831.67);   // GBP, untied: net of 20% VAT
   assert.deepEqual(spend.unvalued, { MINISO: 1, LOCAL: 0 });
 });
 
@@ -1070,11 +1074,11 @@ test("requestsVsBudget still uses the order value when no balance is given", () 
   const rows = [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, vat_rate: 0, finance_status: "APPROVED" }];
   const [m] = requestsVsBudget(rows, months, AWAITING_FIN, { all: true });
   assert.equal(m.committed, 40000);
-  // With VAT unstated, a Local row commits its GROSS value (migration 116).
-  const gross = requestsVsBudget(
+  // With VAT unstated a Local row still commits its NET value — the budget is ex-VAT.
+  const net = requestsVsBudget(
     [{ source: "LOCAL", order_ym: "2026-03", terms_days: 30, amount_gbp: 40000, finance_status: "APPROVED" }],
     months, AWAITING_FIN, { all: true });
-  assert.equal(gross[0].committed, 48000);
+  assert.equal(net[0].committed, 40000);
 });
 
 // ---- What a month's spend is made of ----
@@ -1107,7 +1111,7 @@ test("tradeSpendByMonth splits a month by instrument as well as totalling it", (
   // The split always adds back to the total.
   const parts = Object.values(spend.byDriver.MINISO["2026-10"]).reduce((a, b) => a + b, 0);
   assert.equal(parts, spend.MINISO["2026-10"]);
-  assert.deepEqual(spend.byDriver.LOCAL["2026-10"], { "Local Purchase": 117398 });
+  assert.deepEqual(spend.byDriver.LOCAL["2026-10"], { "Local Purchase": 97831.67 });
 });
 
 test("summarise carries the split onto the month, with cash alongside", () => {
@@ -1544,4 +1548,33 @@ test("canDeleteProcurement: Finance can delete a cancelled order, however far it
   }
   // A live, not-yet-approved order still cannot be deleted — it is cancelled instead.
   assert.equal(canDeleteProcurement({ approval_status: "PENDING" }, { isFinance: true }).ok, false);
+});
+
+// ---- Spend net of VAT, to compare with the ex-VAT budget ----
+
+test("drawingNetOfVat: tied by WC ref → that request's rate; untied GBP → 20%; foreign → as drawn; Miniso never", () => {
+  const byRef = vatRateByTradePayRef([
+    { source: "LOCAL", trade_pay_ref: "WCTUKA096701", vat_rate: 0 },        // zero-rated request
+    { source: "LOCAL", trade_pay_ref: "wctuka 096702" },                     // unstated → 20%
+  ]);
+  assert.deepEqual(drawingNetOfVat({ reference: "WCTUKA096701" }, 1000, "LOCAL", byRef), { net: 1000, vat: 0 });
+  assert.deepEqual(drawingNetOfVat({ reference: "WCTUKA096702" }, 1200, "LOCAL", byRef), { net: 1000, vat: 200 });
+  assert.deepEqual(drawingNetOfVat({ reference: "WCTUKA999999", payment_currency: "GBP" }, 1200, "LOCAL", byRef), { net: 1000, vat: 200 });
+  assert.deepEqual(drawingNetOfVat({ reference: "WCTUKA080493", payment_currency: "EUR" }, 27516, "LOCAL", byRef), { net: 27516, vat: 0 });
+  assert.deepEqual(drawingNetOfVat({ payment_currency: "GBP" }, 5000, "MINISO", byRef), { net: 5000, vat: 0 });
+});
+
+test("tradeSpendByMonth reports Local spend net and says how much VAT came off", () => {
+  const spend = tradeSpendByMonth([
+    { cost_driver: "Local Purchase", due_date: "2026-12-05", facility_payment_gbp: 1200, payment_currency: "GBP" },
+    { cost_driver: "Miniso Facility", due_date: "2026-12-05", facility_payment_gbp: 5000, payment_currency: "GBP" },
+  ]);
+  assert.equal(spend.LOCAL["2026-12"], 1000);
+  assert.equal(spend.MINISO["2026-12"], 5000);
+  assert.equal(spend.vat.LOCAL["2026-12"], 200);
+  const s = summarise([], [{ source: "LOCAL", ym: "2026-12", budget_gbp: 1000 }], { trade: spend });
+  const m = s.LOCAL.months.find((x) => x.ym === "2026-12");
+  assert.equal(m.spentVat, 200);
+  assert.equal(m.spentVariance, 0);                 // £1,000 ex-VAT budget, £1,000 net spend
+  assert.equal(s.LOCAL.totalSpentVat, 200);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, Badge } from "../../finance-os/ui";
 import { versionLabelFromFilename, compareForecasts } from "../../../lib/sales-forecast-rules";
@@ -123,6 +123,8 @@ export default function SalesForecastUI({ versions = [], shownId = null, detail 
         )}
       </div>
 
+      {shown && detail && <StoreCheck key={shown.id} id={shown.id} year={new Date().getFullYear()} canManage={canManage} busy={busy} setBusy={setBusy} post={post} onDone={(m) => { setMsg(m); router.refresh(); }} />}
+
       {shown && detail && (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
@@ -215,6 +217,55 @@ export default function SalesForecastUI({ versions = [], shownId = null, detail 
         </>
       )}
     </>
+  );
+}
+
+/*
+ * How this version's stores line up with the trading stores. Forecast on a
+ * store row the dashboards don't report never reaches them (the FY plan comes
+ * in light); a forecast store with no sales this year is either not open yet
+ * or named differently from the store it trades as.
+ */
+function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
+  const [c, setC] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/sales-forecast?id=${id}&check=${year}`)
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => { if (!live) return; if (ok) setC(j); else setErr(j.error || "Could not check the stores"); })
+      .catch(() => { if (live) setErr("Could not check the stores"); });
+    return () => { live = false; };
+  }, [id, year]);
+  async function rematch() {
+    setBusy(true);
+    try {
+      const r = await post({ action: "rematch", id });
+      onDone(r.moved?.length ? `Re-matched ${r.moved.length} store${r.moved.length === 1 ? "" : "s"}: ${r.moved.map((m) => m.store).join(", ")}.` : "Every store is already on the right store record.");
+    } catch (e) { onDone(e.message); } finally { setBusy(false); }
+  }
+  if (err) return <div style={{ ...card, fontSize: 12.5, color: "var(--faint)" }}>{err}</div>;
+  if (!c) return null;
+  const clean = !c.notReported.length && !c.noActuals.length;
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 14, fontWeight: 650 }}>Store matching · {year}</div>
+        {canManage && c.notReported.length > 0 && <button className="fos-btn" disabled={busy} onClick={rematch}>Re-match stores</button>}
+      </div>
+      {clean && <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 6 }}>Every forecast store is a reported store that has traded this year.</div>}
+      {c.notReported.length > 0 && (
+        <div style={{ fontSize: 12.5, color: "var(--red)", marginTop: 8, lineHeight: 1.55 }}>
+          <strong>{gbp(c.notReportedValue)}</strong> of the {year} forecast sits on {c.notReported.length} store record{c.notReported.length === 1 ? "" : "s"} the dashboards don&rsquo;t report (no operator, or marked Other), so it is missing from the FY plan and from vs forecast: {c.notReported.map((r) => `${r.store_name} (${gbp(r.fc_year)})`).join(", ")}.
+          {canManage ? " Re-match moves it onto the store record that trades under the same name." : ""}
+        </div>
+      )}
+      {c.noActuals.length > 0 && (
+        <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 8, lineHeight: 1.55 }}>
+          {c.noActuals.length} forecast store{c.noActuals.length === 1 ? " has" : "s have"} no {year} sales yet — not open, or named differently in the forecast from the store it trades as: {c.noActuals.map((r) => `${r.store_name} (${gbp(r.fc_year)})`).join(", ")}.
+        </div>
+      )}
+    </div>
   );
 }
 

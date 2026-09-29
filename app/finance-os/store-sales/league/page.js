@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../../lib/auth";
-import { getWindows, getStoreLeague } from "../../../../lib/store-sales";
+import { getWindows, getStoreLeague, getForecastOnlyStores } from "../../../../lib/store-sales";
 import { PageHeader, Panel, Table, SubNav, STORE_SALES_NAV, money, pct, dateLabel } from "../../ui";
 import PerspectivePanel from "../../../perspective-panel";
 
@@ -34,6 +34,7 @@ function derive(r) {
     yoy_trans: yoy(r.trans, r.py_trans),
     yoy_ff: yoy(r.footfall, r.py_footfall),
     yoy_atv: atv !== null && pyAtv ? atv / pyAtv - 1 : null,
+    vs_fc: Number(r.fc_net) ? Number(r.net) / Number(r.fc_net) - 1 : null,
   };
 }
 
@@ -56,7 +57,7 @@ export default async function StoreLeague() {
 
   const wins = await getWindows();
   if (!wins) return <AwaitingData crumb="Trading" title="Store League" />;
-  const [mtdRows, ytdRows] = await Promise.all([getStoreLeague(wins.mtd), getStoreLeague(wins.ytd)]);
+  const [mtdRows, ytdRows, forecastOnly] = await Promise.all([getStoreLeague(wins.mtd), getStoreLeague(wins.ytd), getForecastOnlyStores(wins.ytd).catch(() => [])]);
   const mtdBy = Object.fromEntries(mtdRows.map((r) => [r.store_code, derive(r)]));
   const rows = ytdRows.map((r, i) => ({ rank: i + 1, ytd: derive(r), mtd: mtdBy[r.store_code] }));
 
@@ -69,12 +70,14 @@ export default async function StoreLeague() {
       </div>
       <SubNav items={STORE_SALES_NAV} active="/finance-os/store-sales/league" />
 
-      <Panel title={`All stores (${rows.length})`} note="YTD figures with month-to-date alongside; YoY heatmap vs same dates last year">
+      <Panel title={`All stores (${rows.length})`} note="YTD figures with month-to-date alongside; heatmaps vs same dates last year and vs the live forecast (Plan – Finance → Sales Forecast)">
         <Table columns={[
           { label: "#", align: "right", render: (r) => r.rank },
           { label: "Store", render: (r) => <a href={`/finance-os/store-sales/store?store=${encodeURIComponent(r.ytd.store_code)}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{r.ytd.store_name}</a> },
           { label: "Operator", render: (r) => r.ytd.operator_name },
           { label: "YTD net", align: "right", render: (r) => money(r.ytd.net) },
+          { label: "YTD forecast", align: "right", render: (r) => (r.ytd.fc_net != null ? money(r.ytd.fc_net) : "—") },
+          { label: "vs forecast", align: "right", render: (r) => <HeatCell v={r.ytd.vs_fc} /> },
           { label: "Margin", align: "right", render: (r) => (Number(r.ytd.net) && r.ytd.gm != null ? pct(Number(r.ytd.gm) / Number(r.ytd.net)) : "—") },
           { label: "ATV", align: "right", render: (r) => (r.ytd.atv === null ? "—" : `£${r.ytd.atv.toFixed(2)}`) },
           { label: "Conv", align: "right", render: (r) => (r.ytd.conv === null ? "—" : pct(r.ytd.conv)) },
@@ -84,8 +87,18 @@ export default async function StoreLeague() {
           { label: "ATV YoY", align: "right", render: (r) => <HeatCell v={r.ytd.yoy_atv} /> },
           { label: "MTD net", align: "right", render: (r) => (r.mtd ? money(r.mtd.net) : "—") },
           { label: "MTD YoY", align: "right", render: (r) => <HeatCell v={r.mtd ? r.mtd.yoy_net : null} /> },
+          { label: "MTD vs fc", align: "right", render: (r) => <HeatCell v={r.mtd ? r.mtd.vs_fc : null} /> },
         ]} rows={rows} />
       </Panel>
+      {forecastOnly.length > 0 && (
+        <Panel title={`Forecast, no sales yet (${forecastOnly.length})`} note="stores the live forecast expects sales from year to date that have traded nothing — not open yet, or named differently in the forecast from the store they trade as">
+          <Table columns={[
+            { label: "Store (as in the forecast)", render: (r) => r.store_name },
+            { label: "Operator", render: (r) => r.operator_name },
+            { label: "YTD forecast", align: "right", render: (r) => money(r.net) },
+          ]} rows={forecastOnly} />
+        </Panel>
+      )}
       <div style={{ fontSize: 12, color: "var(--faint)" }}>
         Blank YoY cells mean the store wasn't trading in the comparison period last year. Company stores shown as Miniso UK.
       </div>

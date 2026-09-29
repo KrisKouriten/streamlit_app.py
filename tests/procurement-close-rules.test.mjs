@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { committedAmountGross, outstandingCommitment as ocNet, budgetCommitment as bcNet } from "../lib/procurement-close-rules.js";
 import assert from "node:assert/strict";
 import { isForeignRow, stockValue, fxToPL, inventoryCostFx, reportBasis, reportedGbp,
   normTradePayRef,
@@ -138,19 +139,26 @@ test("lineValue prefers landed cost, falls back to order amount", () => {
   assert.equal(lineValue({ landed_cost: 0, amount_gbp: 9000 }), 9000);
 });
 
-test("committedAmount prefers the invoice net, and grosses it", () => {
+test("committedAmount prefers the invoice net, and stays NET — the budget is ex-VAT", () => {
   // Both figures it chooses between are NET — invoice_amount is the invoice net
-  // Finance key in, landed_cost the net landed value. What leaves the bank is
-  // the gross, so the choice is unchanged and the grossing is applied after it.
+  // Finance key in, landed_cost the net landed value — and the procurement
+  // budgets are ex-VAT, so the commitment is compared net: like for like.
   assert.equal(committedAmount({ invoice_amount: 8800, landed_cost: 12000, vat_rate: 0 }), 8800);
   assert.equal(committedAmount({ landed_cost: 12000, vat_rate: 0 }), 12000);
-  // At the standard rate (the Local / Merch default).
-  assert.equal(committedAmount({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 10560);
-  assert.equal(committedAmount({ source: "LOCAL", landed_cost: 12000 }), 14400);
-  // Miniso is an import — VAT goes to HMRC at the border, not to the supplier.
-  assert.equal(committedAmount({ source: "MINISO", landed_cost: 12000 }), 12000);
-  // The net figure stays available for showing the two side by side.
+  assert.equal(committedAmount({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 8800);
+  assert.equal(committedAmount({ source: "LOCAL", landed_cost: 12000 }), 12000);
   assert.equal(committedAmountNet({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 8800);
+  // The gross — the cash that leaves — stays available to show alongside.
+  assert.equal(committedAmountGross({ source: "LOCAL", invoice_amount: 8800, landed_cost: 12000 }), 10560);
+  assert.equal(committedAmountGross({ source: "LOCAL", landed_cost: 12000 }), 14400);
+  // Miniso is an import — VAT goes to HMRC at the border, not to the supplier.
+  assert.equal(committedAmountGross({ source: "MINISO", landed_cost: 12000 }), 12000);
+});
+
+test("an unpaid Local order's Still committed balance is its NET value", () => {
+  const oc = ocNet({ source: "LOCAL", amount_gbp: 1000, payment_status: "UNPAID" });
+  assert.equal(oc.balance, 1000);
+  assert.equal(bcNet({ source: "LOCAL", amount_gbp: 1000 }).committed_gbp, 1000);
 });
 
 test("challengeReasonLabels maps codes back to labels", () => {

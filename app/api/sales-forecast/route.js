@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { uploadSalesForecast, setLiveSalesForecast, deleteSalesForecast, listSalesForecastVersions, getSalesForecastVersion } from "../../../lib/sales-forecast";
+import { uploadSalesForecast, setLiveSalesForecast, deleteSalesForecast, listSalesForecastVersions, getSalesForecastVersion, rematchSalesForecast, storeMatchCheck } from "../../../lib/sales-forecast";
 
 export const dynamic = "force-dynamic";
 // A version is ~90,000 store-days, loaded in one transaction.
@@ -12,6 +12,8 @@ export async function GET(request) {
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const id = Number(new URL(request.url).searchParams.get("id"));
   try {
+    const check = new URL(request.url).searchParams.get("check");
+    if (id && check) return NextResponse.json({ ok: true, ...(await storeMatchCheck(id, Number(check) || new Date().getFullYear())) });
     if (id) return NextResponse.json({ ok: true, ...(await getSalesForecastVersion(id)) });
     return NextResponse.json({ ok: true, ...(await listSalesForecastVersions()) });
   } catch (e) {
@@ -31,6 +33,7 @@ export async function POST(request) {
       return NextResponse.json(await uploadSalesForecast(Buffer.from(body.file, "base64"), { filename: body.filename || "", label: body.label || "" }, session));
     }
     if (body.action === "live") return NextResponse.json(await setLiveSalesForecast(Number(body.id), session));
+    if (body.action === "rematch") return NextResponse.json(await rematchSalesForecast(Number(body.id), session));
     if (body.action === "delete") return NextResponse.json(await deleteSalesForecast(Number(body.id), session));
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
