@@ -6,6 +6,7 @@ import { listOtbVersions } from "../../../lib/otb";
 import { listMerchRequests } from "../../../lib/otb-procurement";
 import { getApproverEmails } from "../../../lib/dept-budget";
 import { listSuppliers } from "../../../lib/suppliers";
+import { procurementAmendments } from "../../../lib/auto-workflow";
 import { OTB_CHANNELS, CHANNEL_LABEL } from "../../../lib/otb-rules";
 import { PageHeader } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
@@ -30,11 +31,12 @@ export default async function Procurement({ searchParams }) {
   const isMerchApprover = isAdmin || merchApprovers.includes((session.email || "").toLowerCase());
   const roles = { canManage, isMerchApprover, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin };
   const sp = (await searchParams) || {};
-  const [pr, otbVersions, fxRates, supplierList] = await Promise.all([
+  const [pr, otbVersions, fxRates, supplierList, amendments] = await Promise.all([
     getProcurement(),
     listOtbVersions().catch(() => []),
     getFxRates().catch(() => []),
     listSuppliers({ activeOnly: true }).catch(() => ({ suppliers: [] })),
+    procurementAmendments(),
   ]);
   // The approved / draft OTB versions a request can be raised against, newest first.
   const versions = (otbVersions || []).filter((v) => v.status !== "ARCHIVED");
@@ -52,7 +54,7 @@ export default async function Procurement({ searchParams }) {
         <PerspectivePanel pageId="procurement" pageName="Procurement" />
       </div>
       <ProcurementUI data={pr.summary} ready={pr.ready} loaded={pr.loaded} illustrative={pr.illustrative} canManage={canManage}
-        orders={pr.orders || []} roles={roles} fxRates={fxRates || []}
+        orders={pr.orders || []} roles={roles} fxRates={fxRates || []} amendments={amendments}
         otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts}
         supplierNames={(supplierList.suppliers || []).map((s) => s.name)}
         suppliers={(supplierList.suppliers || []).map((s) => ({ name: s.name, source_type: s.source_type, payment_days: s.payment_days }))} />

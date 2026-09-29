@@ -10,6 +10,7 @@ import {
   isoDay,
 } from "../../../lib/po-rules";
 import DateField from "../../finance-os/date-field";
+import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
 
@@ -75,7 +76,7 @@ const REQUEST_FILTERS = [
   { key: "ALL", label: "All", test: () => true },
   { key: "DRAFT", label: "Draft", test: (p) => p.status === "DRAFT" },
   { key: "OPEN", label: "Open", test: (p) => displayStatus(p).code === "OPEN" },
-  { key: "CHALLENGED", label: "Challenged", test: (p) => p.finance_status === "CHALLENGED" },
+  { key: "CHALLENGED", label: "Challenged", test: (p) => isChallenged(p) },
   { key: "CLOSED", label: "Closed", test: (p) => p.finance_status === "CLOSED" },
 ];
 
@@ -362,6 +363,7 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
             <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--red)" }}>Finance challenged this P.O — {challengeReasonLabels(editing.po.challenge_reasons).join(" · ")}</div>
             {editing.po.challenge_note && <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 4 }}>{editing.po.challenge_note}</div>}
             {returnRouteLabel(editing.po.challenge_return_route) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>On resubmit: {returnRouteLabel(editing.po.challenge_return_route)}</div>}
+            {lapseNote(challengeLapse(editing.po)) && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>{lapseNote(challengeLapse(editing.po))}.</div>}
           </div>
         )}
 
@@ -563,7 +565,8 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
                 {visiblePos.map((p) => {
                   const isOwner = (me || "").toLowerCase() === (p.created_by || "").toLowerCase();
                   const del = canDeletePo(p, { isAdmin, isOwner });
-                  const challengeLabels = p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons) : [];
+                  const challengeLabels = isChallenged(p) ? challengeReasonLabels(p.challenge_reasons) : [];
+                  const lapse = lapseNote(challengeLapse(p));
                   return (
                   <FragmentRow key={p.po_id}>
                   <tr>
@@ -587,6 +590,8 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
                       {challengeLabels.length > 0 && (
                         <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 200, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeLabels.join(" · ")}</div>
                       )}
+                      {lapse && <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 3, maxWidth: 200, whiteSpace: "normal", lineHeight: 1.4 }}>{lapse}</div>}
+                      {p.status === "CANCELLED" && p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, maxWidth: 200, whiteSpace: "normal", lineHeight: 1.4 }}>Not resubmitted within 5 working days of the challenge</div>}
                     </td>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -633,7 +638,7 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
           </>
         )}
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 12, lineHeight: 1.6 }}>
-          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, its submitter can use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose), or <strong>Delete</strong> it if it should not go ahead.
+          A department&rsquo;s sign-off approvers (or an admin) approve or reject a P.O awaiting sign-off. Once signed off, a P.O can only be deleted by an admin, and Finance takes it forward on <a href="/operate/po-summary" style={{ color: "var(--accent)" }}>P.O Summary + Close</a> — recording the invoice and closing it (→ committed spend) or raising a challenge, which shows here in red. When a P.O is challenged, its submitter can use <strong>Edit &amp; resubmit</strong> to fix it and send it back (to Finance or for a fresh sign-off, whichever Finance chose), or <strong>Delete</strong> it if it should not go ahead. A challenged P.O not resubmitted within 5 working days is cancelled automatically.
         </div>
       </div>
     </div>

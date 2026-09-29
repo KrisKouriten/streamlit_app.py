@@ -3,9 +3,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay, invoiceChaseStatus, INVOICE_DUE_DAYS } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
+import AutoFollowups from "../auto-followups";
 import DeptTabs from "../../dept-tabs";
 import { ALL_DEPTS, deptTabsFor, rowsForTab } from "../../../lib/dept-tabs-rules.js";
 import DateField from "../../finance-os/date-field";
+import { challengeLapse, lapseNote, autoChaseDue } from "../../../lib/auto-workflow-rules.js";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px", marginBottom: 20 };
 const labelSt = { fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--faint)" };
@@ -15,6 +17,11 @@ const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius
 const money = (v, c = "GBP") => (v == null || v === "" ? "—" : `${c === "GBP" ? "£" : c + " "}${Number(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`);
 const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
 const TONE_BG = { muted: "var(--raise)", red: "var(--red-bg)", amber: "var(--amber-bg)", green: "var(--green-bg)", accent: "var(--accent-bg)" };
+// The Actions column: a fixed width, buttons sharing a line evenly.
+const ACT_W = 196;
+const actCol = { display: "grid", gap: 6, width: ACT_W - 20 };
+const actRow = { display: "flex", gap: 6 };
+const actBtn = { flex: 1, padding: "6px 8px", fontSize: 12, textAlign: "center", whiteSpace: "nowrap" };
 
 function StatusPill({ po }) {
   const st = displayStatus(po);
@@ -28,8 +35,11 @@ function StatusPill({ po }) {
 const FILTERS = [
   { key: "ATTENTION", label: "Needs Finance", test: (p) => p.status === "APPROVED" && p.finance_status !== "CLOSED" },
   { key: "OPEN", label: "Open", test: (p) => displayStatus(p).code === "OPEN" },
-  { key: "CHALLENGED", label: "Challenged", test: (p) => p.finance_status === "CHALLENGED" },
+  { key: "CHALLENGED", label: "Challenged", test: (p) => p.status === "APPROVED" && p.finance_status === "CHALLENGED" },
   { key: "CLOSED", label: "Closed", test: (p) => p.finance_status === "CLOSED" },
+  // Challenged P.Os the department did not resubmit in time, cancelled
+  // automatically — kept for the record, counted nowhere.
+  { key: "CANCELLED", label: "Cancelled", test: (p) => p.status === "CANCELLED" },
   { key: "ALL", label: "All", test: () => true },
 ];
 
@@ -66,7 +76,7 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
     const c = {};
     for (const f of FILTERS) c[f.key] = deptPos.filter((p) => f.test(p)).length;
     return c;
-  }, [initialPos]);
+  }, [deptPos]);
 
   const setInvField = (poId, k, v) => setInv((s) => ({ ...s, [poId]: { ...s[poId], [k]: v } }));
 
@@ -232,6 +242,8 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
         </div>
       </div>
 
+      <AutoFollowups scope="PO" />
+
       {/* ---- Table ---- */}
       <div style={card}>
         {!rows.length ? (
@@ -278,6 +290,11 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                           <StatusPill po={p} />
                           {st.code === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--green)", marginTop: 4 }}>Committed {money(committedAmount(p), p.currency)}</div>}
                           {p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</div>}
+                          {(() => {
+                            const note = lapseNote(challengeLapse(p));
+                            return note && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{note}</div>;
+                          })()}
+                          {p.status === "CANCELLED" && p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>Not resubmitted after the challenge</div>}
                         </td>
                         <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
                           {!signed ? <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span> : p.invoice_amount != null ? (
@@ -315,6 +332,12 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                                   ? <span style={{ color: "var(--red)", fontWeight: 600 }} title={`Expected within ${INVOICE_DUE_DAYS} days of approval`}>Overdue {ch.daysOver}d · due {ch.expectedBy.split("-").reverse().join("/")}</span>
                                   : <span style={{ color: "var(--faint)" }} title={`Expected within ${INVOICE_DUE_DAYS} days of approval`}>Expected by {ch.expectedBy.split("-").reverse().join("/")}</span>}
                                 {last && <div style={{ color: "var(--faint)" }}>Chased {ukDate(last.at)}{last.times > 1 ? ` (×${last.times})` : ""}</div>}
+                                {/* After the first chase by hand, the app chases again
+                                    every 5 working days until the invoice is in. */}
+                                {(() => {
+                                  const next = autoChaseDue(p, last);
+                                  return next.nextOn && <div style={{ color: "var(--faint)" }}>Auto-reminder {next.due ? "due at the next run" : ukDate(next.nextOn)}</div>;
+                                })()}
                               </div>
                             );
                           })()}
@@ -325,21 +348,28 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                             : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", textAlign: "right" }}>{p.invoice_amount != null ? money(p.invoice_amount, p.currency) : "—"}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {/* A fixed-width column: the decision on one line, the
+                            chase and re-open each on their own, so the buttons
+                            line up row to row instead of wrapping ragged. */}
+                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", width: ACT_W, minWidth: ACT_W }}>
                           {!signed ? (
-                            <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Awaiting department sign-off</span>
+                            <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{p.status === "CANCELLED" ? "Cancelled" : "Awaiting department sign-off"}</span>
                           ) : (
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              {p.finance_status !== "CLOSED" && <button style={btn("var(--green)")} disabled={isBusy} onClick={() => closePo(p)}>Close</button>}
-                              {p.finance_status !== "CLOSED" && <button style={btn("var(--red)")} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>}
+                            <div style={actCol}>
+                              {p.finance_status !== "CLOSED" && (
+                                <div style={actRow}>
+                                  <button style={{ ...btn("var(--green)"), ...actBtn }} disabled={isBusy} onClick={() => closePo(p)}>Close</button>
+                                  <button style={{ ...btn("var(--red)"), ...actBtn }} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>
+                                </div>
+                              )}
                               {(() => {
                                 const st = invoiceChaseStatus(p).state;
                                 if (st !== "waiting" && st !== "overdue") return null;
-                                return <button style={st === "overdue" ? btn("var(--amber)") : ghost} disabled={isBusy}
+                                return <button style={{ ...(st === "overdue" ? btn("var(--amber)") : ghost), ...actBtn }} disabled={isBusy}
                                   title="Email the department head and the person who raised this P.O that the invoice is outstanding"
                                   onClick={() => chaseInvoice(p)}>Chase invoice</button>;
                               })()}
-                              {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={ghost} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
+                              {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={{ ...ghost, ...actBtn }} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
                             </div>
                           )}
                           {rowMsg[p.po_id] && <div style={{ color: "var(--green)", fontSize: 11.5, marginTop: 4 }}>{rowMsg[p.po_id]}</div>}
