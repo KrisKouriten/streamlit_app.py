@@ -96,6 +96,8 @@ export default function ExpenseTools({ uploads = [], unmapped = [], departments 
         )}
       </div>
 
+      <TeeBudgetUpload />
+
       {unmapped.length > 0 && (
         <div style={{ ...card, borderColor: "color-mix(in srgb, var(--amber) 40%, var(--line))" }}>
           <div style={{ fontSize: 14, fontWeight: 650 }}>Departments to map</div>
@@ -116,5 +118,64 @@ export default function ExpenseTools({ uploads = [], unmapped = [], departments 
         </div>
       )}
     </>
+  );
+}
+
+/*
+ * Finance's T&E budget upload: download the template for a year (every
+ * department × the 15 lines, with claims to date for reference), fill it in,
+ * upload it back. Draft budgets are created or replaced; submitted, approved
+ * or locked ones are left alone and named.
+ */
+function TeeBudgetUpload() {
+  const router = useRouter();
+  const input = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const thisYear = new Date().getFullYear();
+  async function onFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBusy(true); setMsg(`Reading ${f.name}…`);
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const res = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "tee-budgets", file: btoa(bin), filename: f.name }) });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(r.error || "Upload failed");
+      const part = (arr, word) => (arr.length ? `${word} ${arr.map((b) => `${b.department} ${b.year} (${money(b.total)})`).join(", ")}.` : "");
+      setMsg([
+        part(r.created, "Created"),
+        part(r.updated, "Updated"),
+        r.skipped?.length ? `Left alone — not a draft: ${r.skipped.join(", ")}. Reopen on Departmental Budgets to load over it.` : "",
+        r.unknown?.length ? `Departments not recognised: ${r.unknown.join(", ")}.` : "",
+        r.rowErrors?.length ? `${r.rowErrors.length} row${r.rowErrors.length === 1 ? "" : "s"} skipped — e.g. ${r.rowErrors[0]}` : "",
+      ].filter(Boolean).join(" ") || "Nothing to load.");
+      router.refresh();
+    } catch (x) { setMsg(x.message); }
+    finally { setBusy(false); if (input.current) input.current.value = ""; }
+  }
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 650 }}>Travel, Expenses &amp; Entertainment budgets</div>
+          <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 3, lineHeight: 1.5 }}>
+            Download the template, fill in each department&rsquo;s budget by line and month (net of VAT), and upload it. Each department gets a draft T&amp;E budget on Departmental Budgets to submit and approve as usual.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {[thisYear, thisYear + 1].map((y) => (
+            <a key={y} className="fos-btn-ghost" href={`/api/expenses/template?year=${y}`} style={{ textDecoration: "none" }}>Template {y}</a>
+          ))}
+          <label className="fos-btn" style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>
+            {busy ? "Loading…" : "Upload budgets"}
+            <input ref={input} type="file" accept=".csv,.xlsx,.xls" disabled={busy} onChange={onFile} style={{ display: "none" }} />
+          </label>
+        </div>
+      </div>
+      {msg && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5 }}>{msg}</div>}
+    </div>
   );
 }

@@ -209,9 +209,33 @@ function DepartmentView({ r, department, through }) {
         ...(dept.budgetMonths ? [{ label: <span style={{ color: "var(--muted)" }}>T&amp;E budget</span>, values: dept.budgetMonths }] : []),
       ]} />
 
+      {!who && <BudgetLines dept={dept} through={through} />}
       <Breakdowns s={s} showClaimants={!who} />
       <Lines r={r} showDepartment={false} />
     </>
+  );
+}
+
+// Budget against claims on each of the T&E budget lines.
+function BudgetLines({ dept, through }) {
+  const rows = dept.budgetLines || [];
+  if (!rows.length) return null;
+  const tot = rows.reduce((t, r) => ({ net: t.net + r.net, ytd: t.ytd + (r.budgetYtd || 0), bud: t.bud + (r.budget || 0) }), { net: 0, ytd: 0, bud: 0 });
+  const hasBudget = rows.some((r) => r.budget != null);
+  const vs = (b, n) => (b == null ? dash : `${n > b ? "−" : "+"}${money(Math.abs(b - n))}`);
+  return (
+    <Panel title="By budget line" note={`claims sorted onto the Travel, Expenses & Entertainment budget lines · budget to date = the budget's months to ${through || "date"}`}>
+      <Table columns={[
+        { label: "Line", render: (r) => r.label },
+        { label: "Claimed", align: "right", render: (r) => money(r.net) },
+        { label: "Budget to date", align: "right", render: (r) => (r.budgetYtd == null ? dash : money(r.budgetYtd)) },
+        { label: "vs budget to date", align: "right", tone: (r) => (r.budgetYtd == null ? undefined : r.net > r.budgetYtd ? "red" : "green"), render: (r) => vs(r.budgetYtd, r.net) },
+        { label: "Full-year budget", align: "right", render: (r) => (r.budget == null ? dash : money(r.budget)) },
+      ]} rows={[
+        ...rows.map((r) => ({ ...r, label: r.line })),
+        ...(rows.length > 1 ? [{ label: <strong>Total</strong>, net: tot.net, budgetYtd: hasBudget ? tot.ytd : null, budget: hasBudget ? tot.bud : null }] : []),
+      ]} />
+    </Panel>
   );
 }
 

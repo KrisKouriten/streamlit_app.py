@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   exportDate, claimantName, storeFromTracking, parseExpenseCsv, deptKey, resolveDepartment, summariseExpenses, accountName,
   expenseTabs, pickExpenseTab, canSeeExpenses, CONSOLIDATED,
+  TEE_LINES, teeLineOf, teeLineName, parseTeeBudgetRows, teeTemplateRows, toCsv,
 } from "../lib/expense-rules.js";
 import { teeBudgetAttention } from "../lib/hub-attention-rules.js";
 
@@ -138,4 +139,64 @@ test("Expense Claims tabs: Finance see Consolidated and every department; a head
 
   const nobody = expenseTabs({ isFinance: false, headed: [], departments: all });
   assert.equal(pickExpenseTab("Marketing", nobody), null);
+});
+
+test("teeLineOf sorts each claim onto a T&E budget line", () => {
+  assert.equal(teeLineOf({ account_code: "266", description: "Store visit SHAFTSBURY - Mileage" }), "Mileage");
+  assert.equal(teeLineOf({ account_code: "266", description: "Transport for London - Store visit" }), "Travel");
+  assert.equal(teeLineOf({ account_code: "266", description: "Premier Inn - Glasgow opening" }), "Accommodation");
+  assert.equal(teeLineOf({ account_code: "266", description: "Pret - lunch on store visit" }), "Subsistence");
+  assert.equal(teeLineOf({ account_code: "495", description: "costa - breakfast" }), "Subsistence");
+  assert.equal(teeLineOf({ account_code: "420", description: "Team drinks" }), "Staff Entertainment");
+  assert.equal(teeLineOf({ account_code: "420", description: "Dinner with client from Boots" }), "Client Entertainment");
+  assert.equal(teeLineOf({ account_code: "424", description: "Dinner" }), "Client Entertainment");
+  assert.equal(teeLineOf({ account_code: "425", description: "Stride Courier Services" }), "Postage/Courier");
+  assert.equal(teeLineOf({ account_code: "279", description: "AWS fees" }), "IT/Software");
+  assert.equal(teeLineOf({ account_code: "489", description: "Three PAYG Sim" }), "Telephone");
+  assert.equal(teeLineOf({ account_code: "400", description: "Amazon order for penpen on tour" }), "Marketing/Event Costs");
+  assert.equal(teeLineOf({ account_code: "461", description: "Toners" }), "Office Supplies");
+  assert.equal(teeLineOf({ account_code: "473", description: "Replacement LED lamps" }), "Store/Operational Purchases");
+  assert.equal(teeLineOf({ account_code: "484", description: "First aid training course" }), "Training");
+  assert.equal(teeLineOf({ account_code: "999", description: "Something" }), "Other");
+  assert.equal(TEE_LINES.length, 15);
+});
+
+test("teeLineName reads the line names loosely", () => {
+  assert.equal(teeLineName("postage / courier"), "Postage/Courier");
+  assert.equal(teeLineName("IT & Software"), "IT/Software");
+  assert.equal(teeLineName("Store / Operational Purchases"), "Store/Operational Purchases");
+  assert.equal(teeLineName("client entertaining"), "Client Entertainment");
+  assert.equal(teeLineName("Biscuits"), null);
+});
+
+test("parseTeeBudgetRows reads the template: a budget per department and year, lines by month", () => {
+  const rows = teeTemplateRows(2027, ["Marketing"], { Marketing: { Travel: 1234.5 } });
+  assert.equal(rows.length, 1 + TEE_LINES.length);
+  assert.equal(rows[1][15], 1234.5);                                   // reference column
+  rows[1].splice(3, 12, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, "£1,100");
+  rows[3].splice(3, 12, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  rows.push([2027, "HR", "Mileage", 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]);
+  rows.push([2027, "HR", "Biscuits", 10]);
+  const p = parseTeeBudgetRows(rows);
+  assert.equal(p.budgets.length, 2);
+  const mk = p.budgets.find((b) => b.department === "Marketing");
+  assert.equal(mk.year, 2027);
+  assert.deepEqual(mk.lines.find((l) => l.label === "Travel").months.slice(10), [100, 1100]);
+  assert.equal(mk.lines.length, TEE_LINES.length);
+  assert.equal(p.errors.length, 1);
+  assert.match(p.errors[0], /not one of the T&E budget lines/);
+  assert.match(toCsv([["a,b", 'q"x']]), /"a,b","q""x"/);
+});
+
+test("summariseExpenses compares budget and claims line by line", () => {
+  const lines = [
+    { department: "Marketing", claimant: "A", claim_date: "2026-01-10", net_amount: 60, tax_amount: 0, account_code: "266", description: "Mileage" },
+    { department: "Marketing", claimant: "A", claim_date: "2026-02-10", net_amount: 40, tax_amount: 0, account_code: "495", description: "lunch" },
+  ];
+  const months = (v) => Array(12).fill(v);
+  const s = summariseExpenses(lines, { year: 2026, budgets: { Marketing: { total: 360, months: months(30), lines: { Mileage: months(20), Training: months(10) } } } });
+  const bl = s.departments.find((d) => d.department === "Marketing").budgetLines;
+  assert.deepEqual(bl.map((r) => [r.line, r.net, r.budgetYtd, r.budget]), [
+    ["Mileage", 60, 40, 240], ["Subsistence", 40, null, null], ["Training", 0, 20, 120],
+  ]);
 });
