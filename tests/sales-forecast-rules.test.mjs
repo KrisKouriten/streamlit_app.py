@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   excelSerialToIso, parseDailySheet, parseSalesForecastWorkbook, storeKey, matchStores,
   forecastStoreCode, versionLabelFromFilename, consolidateForecast, compareForecasts,
-  suggestStore, parseStoreLinks,
+  suggestStore, parseStoreLinks, noSalesIssue,
 } from "../lib/sales-forecast-rules.js";
 
 // A two-store, two-day workbook in the real file's shape.
@@ -121,4 +121,11 @@ test("a saved link wins over the name match, for every later upload", () => {
   const { matched } = matchStores([{ store: "Westfield Stratford", channel: "COMPANY" }], master, links);
   assert.equal(matched.get("Westfield Stratford"), 6);
   assert.equal(parseStoreLinks("not json").size, 0);
+});
+
+test("noSalesIssue: a set-up store past its opening date with no sales stays flagged", () => {
+  assert.equal(noSalesIssue({ opening_date: null }, "2026-09-29"), "NO_SALES");
+  assert.equal(noSalesIssue({ opening_date: "2026-01-01" }, "2026-09-29"), "OPEN_NO_SALES");
+  assert.equal(noSalesIssue({ opening_date: "2026-09-29" }, "2026-09-29"), "OPEN_NO_SALES");
+  assert.equal(noSalesIssue({ opening_date: "2026-11-01" }, "2026-09-29"), "SET_UP");
 });
