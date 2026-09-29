@@ -51,13 +51,12 @@ const ymLabel = (ym) => {
 const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 650, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
 const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
 const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
-// The Actions column: a fixed width, one stacked control group per line, and
-// buttons that share a line evenly instead of wrapping ragged off the row.
-const ACT_W = 236;
-const actCol = { display: "grid", gap: 6, width: ACT_W - 20 };
-const actRow = { display: "flex", gap: 6 };
-const actField = { flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box" };
-const actBtn = { flex: 1, padding: "6px 8px", fontSize: 12, textAlign: "center", whiteSpace: "nowrap" };
+// The actions line under each row: labelled groups left to right, the decision
+// buttons pushed to the right-hand end.
+const strip = { display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" };
+const group = { display: "flex", gap: 6, alignItems: "center" };
+const groupLabel = { ...labelSt, marginRight: 2 };
+const stripBtn = { padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap" };
 
 // The desk splits by what is being bought, so Finance work one book at a time:
 // the two cash-tracker sources, the OTB-linked merch requests, and the budgets
@@ -607,24 +606,25 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   // rather than an LC settles, and reconciles, the same way a Local one does.
   const paymentControls = (r, pay, isBusy) => (
     <>
-                                  <div style={actRow}>
-                                    <select style={{ ...inputSt, ...actField, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
+                                  <div style={group}>
+                                    <span style={groupLabel}>Payment</span>
+                                    <select style={{ ...inputSt, width: 110, color: TONE_FG[pay.tone] }} value={pay.code} disabled={isBusy} onChange={(e) => setPayment(r, e.target.value)}>
                                       {PROC_PAYMENT_STATUSES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
                                     </select>
                                     {r.payment_status === "PAID" && (
-                                      <select style={{ ...inputSt, ...actField }} value={r.payment_method || ""} disabled={isBusy}
+                                      <select style={{ ...inputSt, width: 120 }} value={r.payment_method || ""} disabled={isBusy}
                                         title="How this was paid — trade pay is reported as spend from the facility upload; cash is reported on top of it"
                                         onChange={(e) => setPaymentMethod(r, e.target.value)}>
                                         <option value="">Paid via…</option>
                                         {PROC_PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
                                       </select>
                                     )}
-                                  </div>
                                     {/* Which drawing it settled on. Only on trade pay —
                                         cash has no drawing to reconcile to. */}
                                     {r.payment_status === "PAID" && r.payment_method === "TRADE_PAY" && (
                                       <TradePayRef row={r} busy={isBusy} onSave={(v) => setTradePayRef(r, v)} />
                                     )}
+                                  </div>
                                   </>
   );
   const closeRow = (r) => {
@@ -815,7 +815,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
               <thead><tr>
-                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Gross", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed", "Actions"].map((h) => (
+                {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Gross", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -829,12 +829,12 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                   return (
                     <FragmentRow key={id}>
                       <tr>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>{procRef(r)}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{r.source}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{isMerchRequest(r) ? "Merch request" : "Cash purchase"}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{r.supplier}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{channelCategory(r)}</td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top", whiteSpace: "nowrap" }}>{procRef(r)}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{r.source}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{isMerchRequest(r) ? "Merch request" : "Cash purchase"}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{r.supplier}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{channelCategory(r)}</td>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {money(lineValue(r))}
                           {isForeignRow(r) && r.amount_ccy != null && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{ccyAmt(r.amount_ccy, r.currency)}{r.cost_rate_type ? ` @ ${r.cost_rate_type.toLowerCase()}` : ""}</div>}
                           {fs === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Committed {money(committedAmount(r))}</div>}
@@ -842,11 +842,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                         {/* Net is what Merch entered and what the ex-VAT budget
                             is charged; GROSS is the cash that leaves the bank.
                             Both are shown so the two can be told apart. */}
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {money(grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"))}
                           <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{vatLabel(r)}</div>
                         </td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
                             const inv = inventoryCostFx(r, costingRate);
                             if (inv == null) return <span style={{ color: "var(--faint)" }}>—</span>;
@@ -865,7 +865,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             can be traced to the month it lands in above. Miniso runs
                             180 days from pickup, Local 180 on the facility, everything
                             else order month-end + terms. */}
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {(() => {
                             const ym = cashOutFor(r);
                             if (!ym) return <span style={{ color: "var(--faint)" }}>—</span>;
@@ -882,7 +882,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             );
                           })()}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           {live(r) ? <Badge tone={st.tone}>{st.label}</Badge> : <Badge tone="muted">Cancelled</Badge>}
                           {fs === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(r.challenge_reasons).join(" · ")}</div>}
                           {(() => {
@@ -891,7 +891,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                           })()}
                           {!live(r) && r.cancel_reason && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{r.cancel_reason}</div>}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           {settlesByLc(r) && !paidOutsideLc(r) ? (() => { const lc = lcStatus(r); return <Badge tone={lc.tone}>{lc.label}</Badge>; })() : <Badge tone={pay.tone}>{pay.label}</Badge>}
                         </td>
                         {/* What has been drawn as an LC, and what is therefore still
@@ -899,7 +899,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             from the facility upload, so leaving it in committed too
                             counted the same money twice. Struck at the costing rate,
                             the same basis as the Inventory column. */}
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
                             const oc = outstandingCommitment(r, costingRate);
                             if (settlesByLc(r) && !paidOutsideLc(r) && oc.drawn == null) return <span style={{ color: "var(--amber)", fontSize: 11.5 }}>no costing rate</span>;
@@ -919,7 +919,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             );
                           })()}
                         </td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
                             // A settled row commits nothing — cash has gone, and a
                             // trade-pay drawing is already reported as spend from
@@ -940,41 +940,43 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             );
                           })()}
                         </td>
-                        {/* One fixed-width column, in the order Finance work it:
-                            the LC or invoice, then payment, then the decision —
-                            each on its own line so nothing spills off the row. */}
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", width: ACT_W, minWidth: ACT_W }}>
-                          <div style={actCol}>
+                      </tr>
+                      {/* The actions sit on their own line under the row, left to
+                          right in the order Finance work it — the LC or invoice,
+                          then payment, then the decision — so the columns above
+                          keep their width. */}
+                      <tr>
+                        <td colSpan={13} style={{ padding: "0 10px 10px", borderBottom: "1px solid var(--hairline)" }}>
+                          <div style={strip}>
                             {(fs === "APPROVED" || fs === "CHALLENGED") && settlesByLc(r) && (
-                              <button style={{ ...btn("var(--accent)"), ...actBtn }} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
+                              <button style={{ ...btn("var(--accent)"), ...stripBtn }} disabled={isBusy} onClick={() => openLc(r)}>{r.lc_reference ? "Manage LC" : "Log LC"}</button>
                             )}
                             {fs === "APPROVED" && !settlesByLc(r) && (
-                              <>
-                                <div style={actRow}>
-                                  <input style={{ ...inputSt, ...actField }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
-                                  <MoneyInput style={{ ...inputSt, ...actField, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
-                                </div>
-                                {financeActionError("invoice", r) === null && <button style={{ ...ghost, ...actBtn }} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
-                              </>
+                              <div style={group}>
+                                <span style={groupLabel}>Invoice</span>
+                                <input style={{ ...inputSt, width: 140 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
+                                <MoneyInput style={{ ...inputSt, width: 120, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
+                                {financeActionError("invoice", r) === null && <button style={{ ...ghost, ...stripBtn }} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
+                              </div>
                             )}
                             {/* Miniso stock that went on TradePay rather than an LC is
                                 marked paid via trade pay with its WC… drawing, the same
                                 as Local. */}
                             {fs === "APPROVED" && financeActionError("payment", r) === null && paymentControls(r, pay, isBusy)}
-                            <div style={actRow}>
+                            <div style={{ ...group, marginLeft: "auto" }}>
                               {fs === "PENDING" && financeActionError("approve", r) === null && (
-                                <button style={{ ...btn("var(--green)"), ...actBtn }} disabled={isBusy} onClick={() => approve(r)}>Approve</button>
+                                <button style={{ ...btn("var(--green)"), ...stripBtn }} disabled={isBusy} onClick={() => approve(r)}>Approve</button>
                               )}
-                              {(fs === "CHALLENGED" || fs === "CLOSED") && financeActionError("reopen", r) === null && <button style={{ ...ghost, ...actBtn }} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>}
-                              {financeActionError("close", r) === null && <button style={{ ...btn("var(--green)"), ...actBtn }} disabled={isBusy} onClick={() => closeRow(r)}>Close</button>}
-                              {financeActionError("challenge", r) === null && <button style={{ ...btn("var(--red)"), ...actBtn }} disabled={isBusy} onClick={() => openChallenge(r)}>Challenge</button>}
+                              {(fs === "CHALLENGED" || fs === "CLOSED") && financeActionError("reopen", r) === null && <button style={{ ...ghost, ...stripBtn }} disabled={isBusy} onClick={() => reopen(r)}>Re-open</button>}
+                              {financeActionError("close", r) === null && <button style={{ ...btn("var(--green)"), ...stripBtn }} disabled={isBusy} onClick={() => closeRow(r)}>Close</button>}
+                              {financeActionError("challenge", r) === null && <button style={{ ...btn("var(--red)"), ...stripBtn }} disabled={isBusy} onClick={() => openChallenge(r)}>Challenge</button>}
                             </div>
                           </div>
                         </td>
                       </tr>
                       {lcFor === id && settlesByLc(r) && (
                         <tr>
-                          <td colSpan={14} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={13} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             {(() => {
                               const lcs = r.lcs || [];
                               const totalLogged = lcs.reduce((s, l) => s + (Number(l.lc_amount) || 0), 0);
@@ -1176,7 +1178,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                       )}
                       {challengeFor === id && (
                         <tr>
-                          <td colSpan={14} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={13} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Challenge {procRef(r)}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 8, marginBottom: 10 }}>
                               {PROC_CHALLENGE_REASONS.map((x) => (
@@ -1297,11 +1299,11 @@ function TradePayRef({ row, busy, onSave }) {
   const m = row.trade_pay || {};
   const TONE = { green: "var(--green)", amber: "var(--amber)", muted: "var(--faint)" };
   return (
-    <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
       <input
         value={v} onChange={(e) => setV(e.target.value)} disabled={busy}
         placeholder="WC…" maxLength={40} title={m.label || "The HSBC drawing reference this settled on"}
-        style={{ ...inputSt, flex: 1, minWidth: 0, fontFamily: "var(--mono)", fontSize: 11.5, textTransform: "uppercase" }}
+        style={{ ...inputSt, width: 150, fontFamily: "var(--mono)", fontSize: 11.5, textTransform: "uppercase" }}
       />
       {dirty
         ? <button style={ghost} disabled={busy} onClick={() => onSave(v.trim().toUpperCase() || null)}>Save ref</button>
