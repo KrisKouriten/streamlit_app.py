@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, Badge } from "../../finance-os/ui";
-import { versionLabelFromFilename, compareForecasts } from "../../../lib/sales-forecast-rules";
+import { versionLabelFromFilename, compareForecasts, noSalesIssue } from "../../../lib/sales-forecast-rules";
 
 /* Sales Forecast — upload versions of the 4-year sales forecast, choose the live
    one, and read any version consolidated by month and year, store by store. */
@@ -292,7 +292,7 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
   if (!c) return null;
   const rows = [
     ...c.notReported.map((r) => ({ ...r, issue: "NOT_REPORTED" })),
-    ...c.noActuals.map((r) => ({ ...r, issue: r.opening_date ? "SET_UP" : "NO_SALES" })),
+    ...c.noActuals.map((r) => ({ ...r, issue: noSalesIssue(r) })),
   ];
   const lbl = { display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: "var(--faint)" };
   const sel = { height: 30, fontSize: 12, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", maxWidth: 230 };
@@ -309,6 +309,11 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "4px 0 12px", lineHeight: 1.5 }}>
             {c.notReported.length > 0 && <><strong style={{ color: "var(--red)" }}>{gbp(c.notReportedValue)}</strong> of the {year} forecast is on store records the dashboards don&rsquo;t report, so it is missing from the FY plan. </>}
             Link a forecast store to the store it trades as, or — where the record has sales but was never set up — put it on the dashboards.
+            {(() => {
+              const open = rows.filter((r) => r.issue === "OPEN_NO_SALES");
+              if (!open.length) return null;
+              return <> <strong style={{ color: "var(--amber)" }}>{open.length} store{open.length === 1 ? " is" : "s are"} past {open.length === 1 ? "its" : "their"} opening date with no sales in the feed ({gbp(open.reduce((t, r) => t + (r.fc_year || 0), 0))} of {year} forecast)</strong> — get their sales into the feed, or correct the opening date.</>;
+            })()}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -324,9 +329,11 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
                       <td style={tdL}><strong>{r.store_name}</strong></td>
                       <td style={td}>{gbp(r.fc_year)}</td>
                       <td style={td}>{traded ? gbp(r.actual_year) : "—"}</td>
-                      <td style={{ ...tdL, color: r.issue === "NOT_REPORTED" ? "var(--red)" : r.issue === "SET_UP" ? "var(--green)" : "var(--amber)", whiteSpace: "normal", maxWidth: 260 }}>
+                      <td style={{ ...tdL, color: r.issue === "NOT_REPORTED" ? "var(--red)" : r.issue === "SET_UP" ? "var(--green)" : "var(--amber)", whiteSpace: "normal", maxWidth: 280 }}>
                         {r.issue === "NOT_REPORTED"
                           ? (traded ? "Trades, but the record has no operator / is marked Other — its sales and forecast are both left off the dashboards" : "On a record the dashboards don't report, with no sales — probably trades under another name")
+                          : r.issue === "OPEN_NO_SALES"
+                          ? `Opened ${ukDate(r.opening_date)}, but no sales in the feed yet — its forecast counts against nothing · ${r.ownership_type === "FRANCHISE" ? `franchise (${r.operator_name})` : "company"}${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)) ? ` · ${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)).name}` : ""}`
                           : r.issue === "SET_UP"
                           ? `Set up · ${r.ownership_type === "FRANCHISE" ? `franchise (${r.operator_name})` : "company"} · opens ${ukDate(r.opening_date)}${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)) ? ` · ${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)).name}` : ""}`
                           : "No sales this year — not open yet, or trades under another name"}
@@ -364,7 +371,7 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
                             {r.issue !== "NOT_REPORTED" && (
                               <>
                                 <span style={{ fontSize: 11, color: "var(--faint)" }}>or</span>
-                                <button className={r.issue === "SET_UP" ? "fos-btn-ghost" : "fos-btn"} disabled={busy} onClick={() => startSetup(r)}>{r.issue === "SET_UP" ? "Edit set-up" : "Set up new store"}</button>
+                                <button className={r.issue === "NO_SALES" ? "fos-btn" : "fos-btn-ghost"} disabled={busy} onClick={() => startSetup(r)}>{r.issue === "NO_SALES" ? "Set up new store" : "Edit set-up"}</button>
                               </>
                             )}
                           </div>
