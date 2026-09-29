@@ -125,7 +125,7 @@ export default async function StoreSalesExecutive() {
   if (!wins) return <AwaitingData crumb="Trading" title="Store Sales & KPI — All Stores" />;
   const [week, mtd, ytd, fyPlan, mkt] = await Promise.all([
     getPeriodSummary(wins.week), getPeriodSummary(wins.mtd), getPeriodSummary(wins.ytd),
-    getFyPlanTotal(), getMarketAssumptions(),
+    getFyPlanTotal(Number(String(wins.ytd.fromDate).slice(0, 4))), getMarketAssumptions(),
   ]);
   const fmt = (w) => `${new Date(w.fromDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${new Date(w.toDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 

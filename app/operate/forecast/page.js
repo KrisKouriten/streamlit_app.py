@@ -5,7 +5,7 @@ import { confidentialStamp } from "../../../lib/reporting/watermark";
 import Restricted from "../../restricted";
 import ScreenWatermark from "../../screen-watermark";
 import { getForecast } from "../../../lib/forecast";
-import { computeNominalPnl, SCOPES, consolidatedStoreSales } from "../../../lib/forecast-rules.js";
+import { computeNominalPnl, SCOPES } from "../../../lib/forecast-rules.js";
 import { PageHeader, RelatedRail } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
 import ForecastUI from "./forecast-ui";
@@ -24,7 +24,6 @@ export default async function OperateForecast({ searchParams }) {
 
   const sp = (await searchParams) || {};
   const requestedStore = typeof sp.store === "string" ? sp.store : null;
-  const requestedFranchise = typeof sp.fstore === "string" ? sp.fstore : null;
 
   const fc = await getForecast();
 
@@ -39,13 +38,6 @@ export default async function OperateForecast({ searchParams }) {
     const selectedStore = requestedStore && storeSet.has(requestedStore) ? requestedStore : null;
     const storePnl = selectedStore ? computeNominalPnl(fc.lines, { scope: "STORES", unit: selectedStore }) : null;
 
-    // Company + franchise store sales by month (the Summary tab's TOTAL), and
-    // the franchise store list for the Franchise tab's picker.
-    const consolidated = consolidatedStoreSales(fc.lines);
-    const franchiseSet = new Set(consolidated.franchiseStores.map((s) => s.store));
-    const selectedFranchiseStore = requestedFranchise && franchiseSet.has(requestedFranchise) ? requestedFranchise : null;
-    const franchisePnl = selectedFranchiseStore ? computeNominalPnl(fc.lines, { scope: "FRANCHISE", unit: selectedFranchiseStore }) : null;
-
     payload = {
       months: fc.base.months,
       group: fc.base.group,
@@ -54,10 +46,6 @@ export default async function OperateForecast({ searchParams }) {
       storePnl,
       selectedStore,
       storeSales: fc.storeSales.map(({ store, sales }) => ({ store, sales })),
-      consolidatedMonths: consolidated.months,
-      franchiseStores: consolidated.franchiseStores,
-      selectedFranchiseStore,
-      franchisePnl,
       counts: fc.counts,
     };
   }
