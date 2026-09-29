@@ -105,3 +105,17 @@ test("summariseExpenses keeps Head Office and Store Operations visible within Op
   assert.equal(ops.teams[0].months[2], 300);
   assert.deepEqual(s.departments.find((d) => d.department === "Marketing").teams, []);
 });
+
+test("the in-app table set-up is migration 117's own statements, and only creates", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync("lib/expenses.js", "utf8");
+  const mig = fs.readFileSync("db/migrations/117_expense_claims.sql", "utf8");
+  const block = src.slice(src.indexOf("EXPENSE_TABLES_SQL = ["), src.indexOf("];", src.indexOf("EXPENSE_TABLES_SQL = [")));
+  const stmts = [...block.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  assert.equal(stmts.length, 4);
+  const norm = (x) => x.replace(/\s+/g, " ").trim();
+  for (const st of stmts) {
+    assert.match(st, /^CREATE (TABLE|INDEX) IF NOT EXISTS /);
+    assert.ok(norm(mig).includes(norm(st)), `not in migration 117: ${st.slice(0, 60)}`);
+  }
+});

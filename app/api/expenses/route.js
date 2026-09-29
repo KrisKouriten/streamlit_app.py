@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { uploadExpenses, setDeptMapping, getExpenseReport } from "../../../lib/expenses";
+import { uploadExpenses, setDeptMapping, getExpenseReport, createExpenseTables } from "../../../lib/expenses";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -32,6 +32,7 @@ export async function POST(request) {
       if (!body.text) return NextResponse.json({ error: "No file content" }, { status: 400 });
       return NextResponse.json(await uploadExpenses(String(body.text), { filename: body.filename || "" }, session));
     }
+    if (body.action === "setup") return NextResponse.json(await createExpenseTables(session));
     if (body.action === "map") return NextResponse.json(await setDeptMapping(body.fileDept, body.appDept || null, session));
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {

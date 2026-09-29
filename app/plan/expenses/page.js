@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSession, hasRole, isAdmin } from "../../../lib/auth";
-import { getExpenseReport } from "../../../lib/expenses";
+import { getExpenseReport, expenseDbTarget } from "../../../lib/expenses";
 import { getUserDepartment } from "../../../lib/dept-budget";
 import { accountName, storeFromTracking } from "../../../lib/expense-rules.js";
 import { PageHeader, Panel, Table, StatRow, Stat, EmptyState, money, pct, Badge } from "../../finance-os/ui";
-import ExpenseTools from "./expenses-ui";
+import ExpenseTools, { CreateTables } from "./expenses-ui";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,10 @@ export default async function ExpensesPage({ searchParams }) {
       <div className="fos-shell">
         <PageHeader crumb="Plan — HO" title="Expense Claims" />
         <EmptyState title="One migration to run">
-          Expense Claims needs migration <span style={{ fontFamily: "var(--mono)" }}>117_expense_claims.sql</span> (idempotent). Run it, refresh, then upload the Xero expense-claims export.
+          Expense Claims needs migration <span style={{ fontFamily: "var(--mono)" }}>117_expense_claims.sql</span> (idempotent). The app can&rsquo;t see its tables on the database it reads
+          {(() => { const t = expenseDbTarget(); return t.host ? <> — <span style={{ fontFamily: "var(--mono)" }}>{t.host}</span>{t.database ? <> / <span style={{ fontFamily: "var(--mono)" }}>{t.database}</span></> : null}</> : null; })()}.
+          {" "}If you have run it in the SQL editor, it went to another branch.
+          {canLoad && <div style={{ marginTop: 14 }}><CreateTables /></div>}
         </EmptyState>
       </div>
     );
