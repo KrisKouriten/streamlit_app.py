@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "../../../lib/auth";
+import { getSession, isAdmin, hasRole } from "../../../lib/auth";
+import { getUserDepartment } from "../../../lib/dept-budget";
+import { deptTabsFor, rowsForViewer } from "../../../lib/dept-tabs-rules.js";
 import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
 import { listEntitiesForPicker } from "../../../lib/intercompany";
 import { getBusinessProjects } from "../../../lib/business-projects";
@@ -24,7 +26,7 @@ export default async function PurchaseOrderRequests() {
   const email = (session.email || "").toLowerCase();
 
   const [list, departments, stores, signoffs, marketingCampaigns, selfApproveLimit, projects, supplierList, entities] = await Promise.all([
-    listPos({ limit: 100 }),
+    listPos({ limit: 500 }),
     getDepartments(),
     getStoreList().catch(() => []),
     listSignoffs().catch(() => []),
@@ -46,6 +48,20 @@ export default async function PurchaseOrderRequests() {
     .filter((s) => (s.signoff_email || "").toLowerCase() === email)
     .map((s) => s.department);
 
+  /*
+   * One tab per department. Finance and admins see every department and an
+   * "All departments" tab; anyone else sees their own: the department on their
+   * profile, the ones they sign off for, and any they have raised a P.O under.
+   * The P.Os are filtered here, on the server, so another department's are
+   * never sent to the browser.
+   */
+  const seeAll = admin || hasRole(session, "FINANCE");
+  const myDept = seeAll ? null : await getUserDepartment(session.id).catch(() => null);
+  const me = String(session.email || session.name || "").toLowerCase();
+  const raisedIn = (list.pos || []).filter((p) => String(p.created_by || "").toLowerCase() === me).map((p) => p.department);
+  const deptTabs = deptTabsFor({ seeAll, departments: departments.map((d) => d.department_name), mine: [myDept, ...approverDepts, ...raisedIn] });
+  const visiblePos = rowsForViewer(list.pos || [], deptTabs);
+
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
       <PageHeader crumb="Plan — HO" title="Purchase Order Requests"
@@ -56,7 +72,8 @@ export default async function PurchaseOrderRequests() {
         </EmptyState>
       ) : (
         <PoUI
-          initialPos={list.pos}
+          initialPos={visiblePos}
+          deptTabs={deptTabs}
           departments={departments.map((d) => d.department_name)}
           stores={stores.map((s) => ({ store_code: s.store_code, store_name: s.store_name }))}
           me={session.email || session.name}

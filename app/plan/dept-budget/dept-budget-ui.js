@@ -191,7 +191,10 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
     }
   }
 
-  const TABS = [["overview", "Overview"], ["campaigns", "Tasks & activities"], ["financial", "Financial View"], ["review", "Review & Submit"]];
+  // A T&E budget is set on the 15 T&E drivers only — no tasks & activities
+  // (those generate their own cost lines), and no lines added or renamed.
+  const isTee = loaded?.budget?.budget_type === "TEE";
+  const TABS = [["overview", "Overview"], ...(isTee ? [] : [["campaigns", "Tasks & activities"]]), ["financial", "Financial View"], ["review", "Review & Submit"]];
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18, alignItems: "start" }}>
@@ -301,9 +304,10 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
 
             {tab === "overview" && <Overview lines={lines} monthly={monthly} groups={groups} movers={movers} issues={issues} summary={summary} events={loaded.events || []} approvers={loaded.approvers || []} onGoFinancial={() => setTab("financial")} />}
 
-            {tab === "campaigns" && (
+            {tab === "campaigns" && !isTee && (
               <>
-                <MiscTask misc={loaded.misc} lines={lines} />
+                {/* Miscellaneous Spend is for project budgets only — BAU is on Expense Claims. */}
+                {loaded.budget.budget_type === "PROJECT" && <MiscTask misc={loaded.misc} lines={lines} />}
                 <Initiatives initiatives={loaded.initiatives || []} editing={editing} busy={busy} department={loaded.budget.department}
                   budgetId={selId} api={api} reload={() => loadBudget(selId)} onGoFinancial={() => setTab("financial")}
                   objectives={objectives} onAddObjective={addObjectiveOpt} lineOptions={lineOptions} />
@@ -314,7 +318,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
               <FinancialView
                 lines={lines} groups={groups} monthly={monthly} editing={editing} viewMode={viewMode} setViewMode={setViewMode}
                 expanded={expanded} setExpanded={setExpanded} upd={upd} setAnnual={setAnnual} spread={spread} addLine={addLine} addCategory={addCategory} removeLine={removeLine}
-                dirty={dirty} busy={busy} onSave={save}
+                dirty={dirty} busy={busy} onSave={save} fixedLines={isTee}
                 lockedNote={!editing ? (loaded.canEdit ? "Locked while in review — return it to draft to edit." : "Read-only. You can view but not edit this department's budget.") : null}
               />
             )}
@@ -434,7 +438,7 @@ function Overview({ lines, monthly, groups, movers, issues, summary, events, app
   );
 }
 
-function FinancialView({ lines, groups, monthly, editing, viewMode, setViewMode, expanded, setExpanded, upd, setAnnual, spread, addLine, addCategory, removeLine, dirty, busy, onSave, lockedNote }) {
+function FinancialView({ lines, groups, monthly, editing, viewMode, setViewMode, expanded, setExpanded, upd, setAnnual, spread, addLine, addCategory, removeLine, dirty, busy, onSave, lockedNote, fixedLines = false }) {
   const VIEWS = [["annual", "Annual"], ["quarterly", "Quarterly"], ["monthly", "Monthly"]];
   const gTotal = grandTotal(lines);
   return (
@@ -448,6 +452,11 @@ function FinancialView({ lines, groups, monthly, editing, viewMode, setViewMode,
         {editing && <button onClick={onSave} disabled={busy || !dirty} style={btn(dirty ? "var(--accent)" : "var(--line)", dirty ? "#fff" : "var(--faint)")}>Save</button>}
       </div>
       {lockedNote && <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 10 }}>{lockedNote}</div>}
+      {fixedLines && (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10, lineHeight: 1.5 }}>
+          Set on the 15 Travel, Expenses &amp; Entertainment drivers — the same lines expense claims are sorted onto, so budget and actual compare line by line on Expense Claims. Net of VAT.
+        </div>
+      )}
 
       <div style={{ ...card, padding: 0, overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: viewMode === "monthly" ? 1080 : 640 }}>
@@ -464,7 +473,8 @@ function FinancialView({ lines, groups, monthly, editing, viewMode, setViewMode,
           <tbody>
             {groups.map((g) => (
               <CategoryBand key={g.category} group={g} viewMode={viewMode} editing={editing}
-                expanded={expanded} setExpanded={setExpanded} upd={upd} setAnnual={setAnnual} spread={spread} removeLine={removeLine} addLine={addLine} />
+                expanded={expanded} setExpanded={setExpanded} upd={upd} setAnnual={setAnnual} spread={spread} removeLine={removeLine} addLine={addLine}
+                fixedLines={fixedLines && g.category !== "Not a T&E driver — move onto a driver"} />
             ))}
             <tr style={{ borderTop: "2px solid var(--line)", background: "var(--raise)" }}>
               <td style={{ ...td, textAlign: "left", fontWeight: 800 }}>Grand total</td>
@@ -477,12 +487,12 @@ function FinancialView({ lines, groups, monthly, editing, viewMode, setViewMode,
           </tbody>
         </table>
       </div>
-      {editing && <button onClick={addCategory} style={ghost}>+ Add category</button>}
+      {editing && !fixedLines && <button onClick={addCategory} style={ghost}>+ Add category</button>}
     </div>
   );
 }
 
-function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, setAnnual, spread, removeLine, addLine }) {
+function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, setAnnual, spread, removeLine, addLine, fixedLines = false }) {
   const cols = viewMode === "monthly" ? 12 : viewMode === "quarterly" ? 4 : 3;
   const span = 2 + cols + (editing ? 1 : 0);
   return (
@@ -500,7 +510,8 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
             <tr style={{ borderBottom: open ? "none" : "1px solid var(--hairline)" }}>
               <td style={{ ...td, textAlign: "left" }}>
                 {lineEdit
-                  ? <input value={line.line_label} onChange={(e) => upd(line._key, "line_label", e.target.value)} placeholder="Cost line" style={{ ...inputSt, width: 172, padding: "4px 7px", fontSize: 12 }} />
+                  ? (fixedLines ? <span style={{ fontSize: 12.5 }}>{line.line_label}</span>
+                    : <input value={line.line_label} onChange={(e) => upd(line._key, "line_label", e.target.value)} placeholder="Cost line" style={{ ...inputSt, width: 172, padding: "4px 7px", fontSize: 12 }} />)
                   : <span style={{ fontSize: 12.5 }}>{line.line_label}</span>}
                 {String(line.commentary || "").trim() && <span title={line.commentary} style={{ marginLeft: 6, fontSize: 10, color: "var(--accent)" }}>✎</span>}
                 {fromInit && <span title="Generated from an initiative" style={{ marginLeft: 6, fontFamily: "var(--mono)", fontSize: 8, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--faint)", border: "1px solid var(--line)", borderRadius: 4, padding: "1px 4px" }}>from plan</span>}
@@ -535,7 +546,7 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
                     <span style={{ display: "inline-flex", gap: 3 }}>
                       <button title="Detail: months + commentary" onClick={() => setExpanded(open ? null : line._key)} style={{ ...ghost, padding: "2px 6px" }}>{open ? "▾" : "▸"}</button>
                       {viewMode !== "monthly" && <button title="Spread a full-year amount" onClick={() => spread(line._key)} style={{ ...ghost, padding: "2px 6px" }}>≡</button>}
-                      <button title="Remove line" onClick={() => removeLine(line._key)} style={{ ...ghost, padding: "2px 6px", color: "var(--red)" }}>×</button>
+                      {!fixedLines && <button title="Remove line" onClick={() => removeLine(line._key)} style={{ ...ghost, padding: "2px 6px", color: "var(--red)" }}>×</button>}
                     </span>
                   ) : <span style={{ fontSize: 10, color: "var(--faint)" }}>·</span>}
                 </td>
@@ -565,7 +576,7 @@ function CategoryBand({ group, viewMode, editing, expanded, setExpanded, upd, se
           </FragmentRow>
         );
       })}
-      {editing && (
+      {editing && !fixedLines && (
         <tr style={{ borderBottom: "1px solid var(--line)" }}>
           <td colSpan={span} style={{ ...td, textAlign: "left" }}>
             <button onClick={() => addLine(group.category)} style={{ ...ghost, padding: "2px 8px" }}>+ line in {group.category}</button>

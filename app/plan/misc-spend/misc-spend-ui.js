@@ -2,7 +2,7 @@
 import { budgetTypeLabel } from "../../../lib/dept-budget-rules";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MISC_CATEGORY_GROUPS, miscTotals } from "../../../lib/misc-spend-rules";
+import { MISC_CATEGORY_GROUPS, miscTotals, miscAllowedFor } from "../../../lib/misc-spend-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
 
@@ -41,13 +41,18 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
   const rows = initialRows || [];
   const totals = useMemo(() => miscTotals(rows), [rows]);
 
-  // Departments that actually have a budget (so the picker never dead-ends).
+  // Project budgets only — business-as-usual spend is claimed through expenses.
+  const projectBudgets = useMemo(() => budgets.filter((b) => miscAllowedFor(b.type)), [budgets]);
+  // Departments that actually have a project budget (so the picker never dead-ends).
   const deptsWithBudget = useMemo(() => {
-    const set = new Set(budgets.map((b) => b.department));
+    const set = new Set(projectBudgets.map((b) => b.department));
     return departments.filter((d) => set.has(d));
-  }, [budgets, departments]);
-  // Budgets for the chosen department.
-  const budgetsForDept = useMemo(() => budgets.filter((b) => b.department === f.department), [budgets, f.department]);
+  }, [projectBudgets, departments]);
+  // Entries already logged against a Business or T&E budget — these overlap
+  // the expense claims and should be moved to a project or removed.
+  const bauRows = useMemo(() => rows.filter((r) => r.budget_id && !miscAllowedFor(r.budget_type)), [rows]);
+  const bauTotal = bauRows.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+  const budgetsForDept = useMemo(() => projectBudgets.filter((b) => b.department === f.department), [projectBudgets, f.department]);
 
   async function post(body, note) {
     setBusy(true); setError(null); setMsg(null);
@@ -101,6 +106,19 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
       {error && <div style={{ color: "var(--red)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
       {msg && <div style={{ color: "var(--green)", fontSize: 13, marginBottom: 12 }}>{msg}</div>}
 
+      {/* What belongs here, and what doesn't. */}
+      <div style={{ ...card, background: "var(--raise)", fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55 }}>
+        <strong style={{ color: "var(--ink)" }}>Project spend only.</strong> Log small spend for a <strong>project</strong> budget here.
+        Business-as-usual travel, mileage, meals, entertainment and office costs are claimed through expenses and reported on{" "}
+        <a href="/plan/expenses" style={{ color: "var(--accent)" }}>Expense Claims</a>, against the department&rsquo;s Travel, Expenses &amp; Entertainment budget — logging them here too would count them twice.
+      </div>
+      {bauRows.length > 0 && (
+        <div style={{ ...card, borderColor: "color-mix(in srgb, var(--amber) 45%, var(--line))", fontSize: 12.5, color: "var(--amber)", lineHeight: 1.55 }}>
+          {bauRows.length} entr{bauRows.length === 1 ? "y is" : "ies are"} logged against a business-as-usual budget ({money(bauTotal)}). These overlap the expense claims:
+          move each to a project budget with <strong>Edit</strong>, or delete it if it was claimed through expenses.
+        </div>
+      )}
+
       {/* summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
         <div className="fos-card" style={{ padding: "12px 14px" }}>
@@ -120,13 +138,13 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
           <label style={field}><span style={labelSt}>Date</span><DateField value={f.spend_date} onChange={(iso) => setF((s) => ({ ...s, spend_date: iso }))} /></label>
           <label style={field}><span style={labelSt}>Department *</span>
             <select style={inputSt} value={f.department} onChange={(e) => setF((s) => ({ ...s, department: e.target.value, budget_id: "" }))}>
-              <option value="">— choose department —</option>
+              <option value="">{deptsWithBudget.length ? "— choose department —" : "No project budgets yet"}</option>
               {deptsWithBudget.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </label>
           <label style={field}><span style={labelSt}>Budget *</span>
             <select style={inputSt} value={f.budget_id} onChange={(e) => setF((s) => ({ ...s, budget_id: e.target.value }))} disabled={!f.department}>
-              <option value="">{!f.department ? "— choose a department first —" : budgetsForDept.length ? "— choose budget —" : "No budgets — create in Departmental Budgets"}</option>
+              <option value="">{!f.department ? "— choose a department first —" : budgetsForDept.length ? "— choose project budget —" : "No project budgets — create one in Departmental Budgets"}</option>
               {budgetsForDept.map((b) => <option key={b.id} value={b.id}>{budgetTypeLabel(b.type, b.project)} · {b.year} · {b.version}</option>)}
             </select>
           </label>

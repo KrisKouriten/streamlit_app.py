@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import DeptTabs from "../../dept-tabs";
+import { ALL_DEPTS, rowsForTab } from "../../../lib/dept-tabs-rules.js";
 import { useRouter } from "next/navigation";
 import {
   PO_CATEGORIES, CURRENCIES, rechargeTotal, rechargeError, equalSplit,
@@ -77,7 +79,7 @@ const REQUEST_FILTERS = [
   { key: "CLOSED", label: "Closed", test: (p) => p.finance_status === "CLOSED" },
 ];
 
-export default function PoUI({ initialPos, departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [] }) {
+export default function PoUI({ initialPos, deptTabs = [], departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [] }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -90,17 +92,19 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
   const [viewFor, setViewFor] = useState(null);        // po_id whose read-only detail is open
   const [viewCache, setViewCache] = useState({});      // po_id -> { loading, data, error }
   const [listFilter, setListFilter] = useState("ALL");  // created-P.Os status filter
-  const [listDept, setListDept] = useState("");          // created-P.Os department filter
+  const [listDept, setListDept] = useState(deptTabs[0] || ALL_DEPTS);   // department tab
   const [listSearch, setListSearch] = useState("");      // created-P.Os text search
+  const deptPos = useMemo(() => rowsForTab(initialPos, listDept), [initialPos, listDept]);
+  const deptCounts = useMemo(() => Object.fromEntries(deptTabs.map((t) => [t, rowsForTab(initialPos, t).length])), [initialPos, deptTabs]);
   const listCounts = useMemo(() => {
-    const c = {}; for (const flt of REQUEST_FILTERS) c[flt.key] = initialPos.filter(flt.test).length; return c;
-  }, [initialPos]);
+    const c = {}; for (const flt of REQUEST_FILTERS) c[flt.key] = deptPos.filter(flt.test).length; return c;
+  }, [deptPos]);
   const visiblePos = useMemo(() => {
     const flt = REQUEST_FILTERS.find((x) => x.key === listFilter) || REQUEST_FILTERS[0];
     const q = listSearch.trim().toLowerCase();
     const matches = (p) => !q || [poRef(p), p.description, p.supplier].some((v) => String(v || "").toLowerCase().includes(q));
-    return initialPos.filter((p) => flt.test(p) && (!listDept || p.department === listDept) && matches(p));
-  }, [initialPos, listFilter, listDept, listSearch]);
+    return deptPos.filter((p) => flt.test(p) && matches(p));
+  }, [deptPos, listFilter, listSearch]);
   const editingChallenged = !!editing && isChallenged(editing.po);
   const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
 
@@ -528,7 +532,8 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No purchase orders yet.</div>
         ) : (
           <>
-          {/* Filters — by status (Draft / Open / Challenged / Closed) and department */}
+          {/* One tab per department the viewer may see; status filters within. */}
+          <DeptTabs tabs={deptTabs} active={listDept} onChange={setListDept} counts={deptCounts} />
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
             <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
               {REQUEST_FILTERS.map((flt) => {
@@ -542,12 +547,6 @@ export default function PoUI({ initialPos, departments, stores, me, isAdmin = fa
                 );
               })}
             </div>
-            {departments.length > 0 && (
-              <select style={{ ...inputSt, minWidth: 0 }} value={listDept} onChange={(e) => setListDept(e.target.value)}>
-                <option value="">All departments</option>
-                {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            )}
             <input style={{ ...inputSt, minWidth: 220, flex: 1 }} value={listSearch} onChange={(e) => setListSearch(e.target.value)}
               placeholder="Search description, P.O number or supplier…" />
             {listSearch && <button style={ghost} onClick={() => setListSearch("")}>Clear</button>}
