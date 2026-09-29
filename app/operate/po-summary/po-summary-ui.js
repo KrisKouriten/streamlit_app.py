@@ -17,11 +17,8 @@ const ghost = { fontSize: 12, fontWeight: 500, padding: "6px 11px", borderRadius
 const money = (v, c = "GBP") => (v == null || v === "" ? "—" : `${c === "GBP" ? "£" : c + " "}${Number(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`);
 const TONE_FG = { muted: "var(--muted)", red: "var(--red)", amber: "var(--amber)", green: "var(--green)", accent: "var(--accent)" };
 const TONE_BG = { muted: "var(--raise)", red: "var(--red-bg)", amber: "var(--amber-bg)", green: "var(--green-bg)", accent: "var(--accent-bg)" };
-// The Actions column: a fixed width, buttons sharing a line evenly.
-const ACT_W = 196;
-const actCol = { display: "grid", gap: 6, width: ACT_W - 20 };
-const actRow = { display: "flex", gap: 6 };
-const actBtn = { flex: 1, padding: "6px 8px", fontSize: 12, textAlign: "center", whiteSpace: "nowrap" };
+// Buttons on the actions line under each row.
+const stripBtn = { padding: "6px 14px", fontSize: 12, whiteSpace: "nowrap" };
 
 function StatusPill({ po }) {
   const st = displayStatus(po);
@@ -255,7 +252,7 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                 <th style={{ padding: "8px 8px", borderBottom: "1px solid var(--line)" }}>
                   <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} />
                 </th>
-                {["P.O number", "Dept", "Supplier", "Net value", "Status", "Payment", "Invoice no", "Invoice due", "Invoice net (£)", "Actions"].map((h) => (
+                {["P.O number", "Dept", "Supplier", "Net value", "Status", "Payment", "Invoice no", "Invoice due", "Invoice net (£)"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
                 ))}
               </tr></thead>
@@ -267,10 +264,10 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                   return (
                     <FragmentRow key={p.po_id}>
                       <tr>
-                        <td style={{ padding: "8px 8px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 8px", verticalAlign: "top" }}>
                           <input type="checkbox" checked={selected.has(String(p.po_id))} onChange={(e) => toggleRow(p.po_id, e.target.checked)} />
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           <button onClick={() => toggleDetail(p)} title="Show P.O details" aria-expanded={detailFor === p.po_id}
                             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: detailFor === p.po_id ? "var(--accent)" : "var(--ink)", font: "inherit", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "underline", textDecorationColor: "var(--line-strong)", textUnderlineOffset: 3 }}>
                             <span style={{ display: "inline-block", transform: detailFor === p.po_id ? "rotate(90deg)" : "none", transition: "transform .15s", color: "var(--accent)" }}>▸</span>
@@ -283,10 +280,10 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{p.department}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>{p.supplier}</td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>{money(p.payment_value, p.currency)}</td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{p.department}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{p.supplier}</td>
+                        <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>{money(p.payment_value, p.currency)}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           <StatusPill po={p} />
                           {st.code === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--green)", marginTop: 4 }}>Committed {money(committedAmount(p), p.currency)}</div>}
                           {p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</div>}
@@ -296,7 +293,7 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                           })()}
                           {p.status === "CANCELLED" && p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 3, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>Not resubmitted after the challenge</div>}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           {!signed ? <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span> : p.invoice_amount != null ? (
                             <>
                               <span style={{ display: "inline-block", fontFamily: "var(--mono)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: TONE_FG[paymentStatusOf(p).tone], background: TONE_BG[paymentStatusOf(p).tone], border: "1px solid var(--line)", borderRadius: 6, padding: "3px 8px" }}>{paymentStatusOf(p).label}</span>
@@ -313,7 +310,7 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                             </>
                           )}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {signed ? (
                             <button onClick={() => toggleInvoices(p)} aria-expanded={invoicesFor === p.po_id}
                               style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", font: "inherit", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
@@ -342,50 +339,51 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                             );
                           })()}
                         </td>
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top", whiteSpace: "nowrap" }}>
                           {(p.invoice_due_date || p.payment_date)
                             ? <span style={{ fontSize: 12.5 }}>{ukDate(p.invoice_due_date || p.payment_date)}</span>
                             : <span style={{ fontSize: 11.5, color: "var(--faint)" }}>—</span>}
                         </td>
-                        <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", textAlign: "right" }}>{p.invoice_amount != null ? money(p.invoice_amount, p.currency) : "—"}</td>
-                        {/* A fixed-width column: the decision on one line, the
-                            chase and re-open each on their own, so the buttons
-                            line up row to row instead of wrapping ragged. */}
-                        <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top", width: ACT_W, minWidth: ACT_W }}>
-                          {!signed ? (
-                            <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{p.status === "CANCELLED" ? "Cancelled" : "Awaiting department sign-off"}</span>
-                          ) : (
-                            <div style={actCol}>
-                              {p.finance_status !== "CLOSED" && (
-                                <div style={actRow}>
-                                  <button style={{ ...btn("var(--green)"), ...actBtn }} disabled={isBusy} onClick={() => closePo(p)}>Close</button>
-                                  <button style={{ ...btn("var(--red)"), ...actBtn }} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>
-                                </div>
-                              )}
-                              {(() => {
-                                const st = invoiceChaseStatus(p).state;
-                                if (st !== "waiting" && st !== "overdue") return null;
-                                return <button style={{ ...(st === "overdue" ? btn("var(--amber)") : ghost), ...actBtn }} disabled={isBusy}
-                                  title="Email the department head and the person who raised this P.O that the invoice is outstanding"
-                                  onClick={() => chaseInvoice(p)}>Chase invoice</button>;
-                              })()}
-                              {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={{ ...ghost, ...actBtn }} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
+                        <td className="fos-num" style={{ padding: "8px 10px", verticalAlign: "top", textAlign: "right" }}>{p.invoice_amount != null ? money(p.invoice_amount, p.currency) : "—"}</td>
+                      </tr>
+                      {/* The actions sit on their own line under the row — any
+                          message on the left, the buttons at the right-hand end —
+                          so the columns above keep their width. */}
+                      <tr>
+                        <td colSpan={10} style={{ padding: "0 10px 10px", borderBottom: "1px solid var(--hairline)" }}>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 11.5, lineHeight: 1.4 }}>
+                              {!signed && <span style={{ color: "var(--faint)" }}>{p.status === "CANCELLED" ? "Cancelled" : "Awaiting department sign-off"}</span>}
+                              {rowMsg[p.po_id] && <span style={{ color: "var(--green)" }}>{rowMsg[p.po_id]}</span>}
+                              {rowErr[p.po_id] && <span style={{ color: "var(--red)" }}>{rowErr[p.po_id]}</span>}
                             </div>
-                          )}
-                          {rowMsg[p.po_id] && <div style={{ color: "var(--green)", fontSize: 11.5, marginTop: 4 }}>{rowMsg[p.po_id]}</div>}
-                          {rowErr[p.po_id] && <div style={{ color: "var(--red)", fontSize: 11.5, marginTop: 4 }}>{rowErr[p.po_id]}</div>}
+                            {signed && (
+                              <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                                {(() => {
+                                  const st = invoiceChaseStatus(p).state;
+                                  if (st !== "waiting" && st !== "overdue") return null;
+                                  return <button style={{ ...(st === "overdue" ? btn("var(--amber)") : ghost), ...stripBtn }} disabled={isBusy}
+                                    title="Email the department head and the person who raised this P.O that the invoice is outstanding"
+                                    onClick={() => chaseInvoice(p)}>Chase invoice</button>;
+                                })()}
+                                {(p.finance_status === "CLOSED" || p.finance_status === "CHALLENGED") && <button style={{ ...ghost, ...stripBtn }} disabled={isBusy} onClick={() => reopen(p)}>Re-open</button>}
+                                {p.finance_status !== "CLOSED" && <button style={{ ...btn("var(--green)"), ...stripBtn }} disabled={isBusy} onClick={() => closePo(p)}>Close</button>}
+                                {p.finance_status !== "CLOSED" && <button style={{ ...btn("var(--red)"), ...stripBtn }} disabled={isBusy} onClick={() => openChallenge(p)}>Challenge</button>}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       {detailFor === p.po_id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <PoDetail state={detail[p.po_id]} po={p} money={money} />
                           </td>
                         </tr>
                       )}
                       {invoicesFor === p.po_id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <InvoicesPanel
                               p={p} state={invCache[p.po_id]} nf={invNew[p.po_id] || { number: "", amount: "", invoice_status: "RECEIVED", due_date: "" }}
                               setField={(k, v) => setInvNewField(p.po_id, k, v)} onAdd={() => addInvoice(p)}
@@ -397,7 +395,7 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                       )}
                       {challengeFor === p.po_id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                          <td colSpan={10} style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                             <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 8 }}>Challenge P.O {p.xero_po_number}</div>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 8, marginBottom: 10 }}>
                               {CHALLENGE_REASONS.map((r) => (
