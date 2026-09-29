@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, isAdmin, hasRole } from "../../../lib/auth";
 import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
+import { deptExpensePosition } from "../../../lib/expenses";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
 import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
 import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment, isForeignRow as procForeign, reportBasis as procReportBasis } from "../../../lib/procurement-close-rules";
@@ -82,7 +83,9 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
   const year = Number(sp?.year) || thisYear;
   const years = [thisYear + 1, thisYear, thisYear - 1];
 
-  const d = department ? await getDepartmentDashboard(department, year) : { ready: true, hasBudget: false };
+  const [d, tee] = department
+    ? await Promise.all([getDepartmentDashboard(department, year), deptExpensePosition(department, year).catch(() => null)])
+    : [{ ready: true, hasBudget: false }, null];
 
   // Can this viewer sign off the department's P.Os? (approver for the dept, or admin)
   const approverEmails = department ? (await getApproverEmails(department).catch(() => [])).map((e) => (e || "").toLowerCase()) : [];
@@ -138,6 +141,9 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               <DeptApprovals pos={d.pos.awaiting} canApprove={canApprove} />
             </Panel>
           )}
+
+          {/* Travel, Expenses & Entertainment — expense claims against the T&E budget */}
+          {tee && (tee.hasData || tee.budget != null) && <TeePanel tee={tee} department={department} year={year} />}
 
           {/* Budget by category */}
           <Panel title="Budget by category" note={d.hasBudget ? `${STAGE_LABEL[d.budget.status] || d.budget.status} · ${d.budget.version_label}` : undefined}>
@@ -360,5 +366,58 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
         </>
       )}
     </div>
+  );
+}
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/*
+ * The department's expense claims (Xero, loaded on Expense Claims) against its
+ * Travel, Expenses & Entertainment budget: claimed so far, the budget for the
+ * same months, the full year, and where it went — by month, category and
+ * claimant. Net of VAT, the basis the budget is set on.
+ */
+function TeePanel({ tee, department, year }) {
+  const through = tee.lastMonth ? MONTHS_SHORT[tee.lastMonth - 1] : null;
+  const vsYtd = tee.budgetYtd == null ? null : tee.budgetYtd - tee.net;
+  const dash = <span style={{ color: "var(--faint)" }}>—</span>;
+  return (
+    <Panel title="Travel, Expenses & Entertainment" note={`expense claims, net of VAT${through ? ` · to ${through} ${year}` : ""}`}>
+      <StatRow>
+        <Stat label="Claimed" value={money(tee.net, { compact: true })}
+          sub={tee.teams?.length ? tee.teams.map((t) => `${t.key} ${money(t.net, { compact: true })}`).join(" · ") : `${tee.lines.toLocaleString("en-GB")} claim line${tee.lines === 1 ? "" : "s"}`} />
+        <Stat label={`Budget${through ? ` to ${through}` : ""}`} value={tee.budgetYtd == null ? "—" : money(tee.budgetYtd, { compact: true })}
+          sub={tee.budget == null ? "no T&E budget for this year" : `full year ${money(tee.budget, { compact: true })}`} />
+        <Stat label="vs budget to date" value={vsYtd == null ? "—" : `${vsYtd < 0 ? "−" : "+"}${money(Math.abs(vsYtd), { compact: true })}`}
+          tone={vsYtd == null ? undefined : vsYtd < 0 ? "red" : "green"} sub={vsYtd == null ? "set a T&E budget" : vsYtd < 0 ? "over budget" : "headroom"} />
+        <Stat label="Full-year remaining" value={tee.remaining == null ? "—" : money(tee.remaining, { compact: true })}
+          tone={tee.remaining != null && tee.remaining < 0 ? "red" : undefined} sub={tee.budget == null ? "" : "budget less claimed"} />
+      </StatRow>
+      <Table columns={[
+        { label: "", render: (r) => r.label },
+        ...MONTHS_SHORT.map((m, i) => ({ label: m, align: "right", render: (r) => (r.values?.[i] ? money(r.values[i], { compact: true }) : dash) })),
+        { label: "Total", align: "right", render: (r) => <strong>{money((r.values || []).reduce((t, v) => t + (v || 0), 0))}</strong> },
+      ]} rows={[
+        { label: tee.teams?.length ? <strong>Claimed</strong> : "Claimed", values: tee.months },
+        // The teams inside the department — Head Office and Store Operations
+        // within Operations — so both can be seen against the one budget.
+        ...(tee.teams || []).map((t) => ({ label: <span style={{ paddingLeft: 14, color: "var(--muted)" }}>{t.key}</span>, values: t.months })),
+        ...(tee.budgetMonths ? [{ label: <span style={{ color: "var(--muted)" }}>T&amp;E budget</span>, values: tee.budgetMonths }] : []),
+      ]} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 16 }}>
+        <Table columns={[
+          { label: "Category", render: (c) => c.key },
+          { label: "Claimed", align: "right", render: (c) => money(c.net) },
+        ]} rows={tee.categories} empty="No claims yet." />
+        <Table columns={[
+          { label: "Claimant", render: (c) => c.key },
+          { label: "Claimed", align: "right", render: (c) => money(c.net) },
+          { label: "Lines", align: "right", render: (c) => c.lines },
+        ]} rows={tee.claimants} empty="No claims yet." />
+      </div>
+      <div style={{ fontSize: 12, marginTop: 10 }}>
+        <a href={`/plan/expenses?dept=${encodeURIComponent(department)}&year=${year}`} style={{ color: "var(--accent)", textDecoration: "none" }}>Every claim line on Expense Claims →</a>
+      </div>
+    </Panel>
   );
 }

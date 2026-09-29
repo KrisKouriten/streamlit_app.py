@@ -80,7 +80,7 @@ export default async function ExecutiveHub() {
   const { tradingAsAt, financeAsAt, financeScope, hero, forward, ragCounts, attention, attentionCounts, health } = await getHubData();
   const { approvals, budgets } = health;
   const waiting = approvals.posPending + approvals.procWithHod + approvals.procWithFinance;
-  const over = budgets.deptOver + budgets.procMonthsOver;
+  const over = budgets.deptOver + budgets.procMonthsOver + (budgets.teeOver || 0);
   const connCount = financeScope?.count || 0;
   const connNames = (financeScope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
 
@@ -207,6 +207,7 @@ export default async function ExecutiveHub() {
         <HealthPanel title="Budgets" href="/dashboards/department-budget" cta="Department dashboards">
           <Line label="Department budgets over" value={`${num(budgets.deptOver)} of ${num(budgets.deptCount)}`} tone={budgets.deptOver > 0 ? "red" : "green"} />
           {budgets.deptOver > 0 && <Line label="Over by" value={money(budgets.deptOverBy, { compact: true })} tone="red" />}
+          <Line label="T&amp;E budgets over" value={num(budgets.teeOver || 0)} tone={budgets.teeOver > 0 ? "red" : "green"} />
           <Line label="Procurement months over" value={`${num(budgets.procMonthsOver)} of ${num(budgets.procMonths)}`} tone={budgets.procMonthsOver > 0 ? "red" : "green"} />
           {budgets.procMonthsOver > 0 && <Line label="Over by" value={money(budgets.procOverBy, { compact: true })} tone="red" />}
         </HealthPanel>
