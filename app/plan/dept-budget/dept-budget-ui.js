@@ -56,7 +56,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const [nd, setNd] = useState(editableDepts[0] || "");
   const [nyear, setNyear] = useState(thisYear);
   const [nver, setNver] = useState("");
-  const [ntype, setNtype] = useState("BUSINESS");   // BUSINESS | PROJECT
+  const [ntype, setNtype] = useState("BUSINESS");   // BUSINESS | PROJECT | TEE
   const [nproj, setNproj] = useState("");           // business_project_id when PROJECT
 
   const status = loaded?.budget?.status;
@@ -243,6 +243,9 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
                 <div style={{ fontSize: 12.5, fontWeight: 600 }}>{b.department} · {b.budget_year}</div>
                 {b.budget_type === "PROJECT" && (
                   <div style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--accent)", marginTop: 2 }}>◆ Project{b.project_name ? ` · ${b.project_name}` : ""}</div>
+                )}
+                {b.budget_type === "TEE" && (
+                  <div style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--accent)", marginTop: 2 }}>✈ Travel, Expenses &amp; Entertainment</div>
                 )}
                 <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", justifyContent: "space-between", marginTop: 2 }}>
                   <span>{b.version_label}</span>
