@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /* HOME — the connected sphere is the hero: a rotating globe of the pillars and
    data feeds converging on the live attention count. Below it, the exception-led
    detail: position, forward view, the ranked "needs attention" feed, and the
-   health of the operating engines. */
+   approvals and budgets behind it. */
 
 const SOURCE = {
   STORE: { fg: "var(--green)", bg: "var(--green-bg)", label: "Store · all" },
@@ -78,19 +78,23 @@ export default async function ExecutiveHub() {
   if (!session) redirect("/login");
 
   const { tradingAsAt, financeAsAt, financeScope, hero, forward, ragCounts, attention, attentionCounts, health } = await getHubData();
-  const { actions, operations, agents } = health;
-  const opsOutstanding = operations.total - operations.complete;
+  const { approvals, budgets } = health;
+  const waiting = approvals.posPending + approvals.procWithHod + approvals.procWithFinance;
+  const over = budgets.deptOver + budgets.procMonthsOver;
   const connCount = financeScope?.count || 0;
   const connNames = (financeScope?.entities || []).filter((e) => e.feed_status === "CONNECTED").map((e) => e.entity_name).join(", ");
 
   // Live status colour per pillar for the connected sphere — same signals the
   // orbit carried, now driving each pillar node's colour.
+  // Only pillars with a live signal carry a colour: budgets (Plan), approvals
+  // waiting (Operate) and the store feed. The rest stay neutral rather than
+  // report on data nobody maintains.
   const pillarTones = {
-    PLAN: "accent",
-    PERFORM: opsOutstanding > 0 ? "amber" : "green",
-    OPERATE: tradingAsAt ? "green" : "amber",
-    AI: agents.pendingReviews > 0 ? "amber" : "green",
-    GOVERN: actions.overdue > 0 ? "red" : actions.open > 0 ? "amber" : "green",
+    PLAN: over > 0 ? "red" : "green",
+    PERFORM: "faint",
+    OPERATE: waiting > 0 ? "amber" : tradingAsAt ? "green" : "amber",
+    AI: "faint",
+    GOVERN: "faint",
     COMMERCIAL: "faint",
   };
 
@@ -186,27 +190,25 @@ export default async function ExecutiveHub() {
         })}
       </div>
 
-      {/* Operating health */}
-      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Operating health</div>
+      {/* Approvals and budgets — the totals behind the feed. */}
+      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Approvals &amp; budgets</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-        <HealthPanel title="Actions & benefits" href="/govern/actions" cta="Action Centre">
-          <Line label="Open actions" value={num(actions.open)} tone={actions.open > 0 ? "amber" : "green"} />
-          <Line label="Overdue" value={num(actions.overdue)} tone={actions.overdue > 0 ? "red" : "green"} />
-          <Line label="Awaiting closure" value={num(actions.awaitingClosure)} tone={actions.awaitingClosure > 0 ? "amber" : undefined} />
-          <Line label="Open value" value={money(actions.openValue, { compact: true })} />
+        <HealthPanel title="P.Os" href="/operate/po-tracker" cta="Purchase Order Requests">
+          <Line label="Awaiting sign-off" value={num(approvals.posPending)} tone={approvals.posPending > 0 ? "amber" : "green"} />
+          <Line label="Value awaiting" value={money(approvals.posPendingValue, { compact: true })} />
         </HealthPanel>
 
-        <HealthPanel title="This week's schedule" href="/perform/schedule" cta="Schedule">
-          <Line label="Tasks this week" value={num(operations.total)} />
-          <Line label="Complete" value={num(operations.complete)} tone={operations.complete === operations.total && operations.total > 0 ? "green" : undefined} />
-          <Line label="Outstanding" value={num(opsOutstanding)} tone={opsOutstanding > 0 ? "amber" : "green"} />
-          <Line label="Overdue / blocked" value={num(operations.overdue + operations.blocked)} tone={operations.overdue + operations.blocked > 0 ? "red" : "green"} />
+        <HealthPanel title="Procurement requests" href="/operate/procurement" cta="Procurement Requests">
+          <Line label="With head of department" value={num(approvals.procWithHod)} tone={approvals.procWithHod > 0 ? "amber" : "green"} />
+          <Line label="With Finance" value={num(approvals.procWithFinance)} tone={approvals.procWithFinance > 0 ? "amber" : "green"} />
+          <Line label="Value not approved" value={money(approvals.procValue, { compact: true })} />
         </HealthPanel>
 
-        <HealthPanel title="AI agents" href="/ai" cta="Control Tower">
-          <Line label="Outputs awaiting review" value={num(agents.pendingReviews)} tone={agents.pendingReviews > 0 ? "amber" : "green"} />
-          <Line label="Material (need sign-off)" value={num(agents.pendingMaterial)} tone={agents.pendingMaterial > 0 ? "amber" : undefined} />
-          <Line label="Open exceptions" value={num(agents.openExceptions)} tone={agents.openExceptions > 0 ? "red" : "green"} />
+        <HealthPanel title="Budgets" href="/dashboards/department-budget" cta="Department dashboards">
+          <Line label="Department budgets over" value={`${num(budgets.deptOver)} of ${num(budgets.deptCount)}`} tone={budgets.deptOver > 0 ? "red" : "green"} />
+          {budgets.deptOver > 0 && <Line label="Over by" value={money(budgets.deptOverBy, { compact: true })} tone="red" />}
+          <Line label="Procurement months over" value={`${num(budgets.procMonthsOver)} of ${num(budgets.procMonths)}`} tone={budgets.procMonthsOver > 0 ? "red" : "green"} />
+          {budgets.procMonthsOver > 0 && <Line label="Over by" value={money(budgets.procOverBy, { compact: true })} tone="red" />}
         </HealthPanel>
       </div>
     </div>
