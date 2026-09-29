@@ -542,3 +542,24 @@ test("a Miniso order paid on TradePay (or in cash) commits nothing; its LC rule 
   assert.equal(settledCommitment({ ...base, payment_method: null }), null);
   assert.equal(settledCommitment({ source: "MINISO", amount_gbp: 1, payment_status: "UNPAID", payment_method: "TRADE_PAY" }), null);
 });
+
+// ---- The budget commits the desk's "Still committed" balance ----
+import { budgetCommitment } from "../lib/procurement-close-rules.js";
+
+test("budgetCommitment: an undrawn Miniso order commits its costing value, with the spot gap as FX", () => {
+  // LC97: $662,900.89 raised at £498,422 (spot at the time). Held at costing 1.28.
+  const row = { source: "MINISO", currency: "USD", amount_ccy: 662900.89, amount_gbp: 498422 };
+  const b = budgetCommitment(row, { drawnCcy: 0, costingRate: 1.28, spotRate: 1.33 });
+  assert.equal(Math.round(b.committed_gbp), 517891);
+  assert.equal(Math.round(b.fx_gbp), Math.round(662900.89 / 1.28 - 662900.89 / 1.33));
+});
+
+test("budgetCommitment: drawn LCs come off; a Local invoice replaces the order value; settled is nil", () => {
+  const miniso = { source: "MINISO", currency: "USD", amount_ccy: 550000, amount_gbp: 413534 };
+  assert.equal(Math.round(budgetCommitment(miniso, { drawnCcy: 200000, costingRate: 1.28, spotRate: 1.33 }).committed_gbp), Math.round(350000 / 1.28));
+  const local = { source: "LOCAL", currency: "GBP", amount_gbp: 1000, invoice_amount: 900, vat_rate: 0 };
+  assert.equal(budgetCommitment(local).committed_gbp, 900);
+  assert.equal(budgetCommitment({ ...local, payment_status: "PAID", payment_method: "CASH" }).committed_gbp, 0);
+  // A foreign order with LCs drawn and no costing rate cannot be valued.
+  assert.equal(budgetCommitment(miniso, { drawnCcy: 1000 }).committed_gbp, null);
+});
