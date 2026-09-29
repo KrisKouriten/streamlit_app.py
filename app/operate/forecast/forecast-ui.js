@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "../../finance-os/ui";
+import { consolidatedForYear } from "../../../lib/forecast-rules";
 
 /* Operate forecast inputs — per-scope monthly workings and the full nominal
    P&L (sales → EBITDA). Pick a store to see its own full forecast; CSV/workbook
@@ -22,7 +23,8 @@ const k = (v) => money(v, { compact: true });
 
 export default function ForecastUI({ data, ready, canManage, canExport = false }) {
   const router = useRouter();
-  const [tab, setTab] = useState("STORES");
+  // Opens on the Franchise tab when a franchise store is in the URL.
+  const [tab, setTab] = useState(data?.selectedFranchiseStore ? "FRANCHISE" : "STORES");
   const [view, setView] = useState("monthly"); // "monthly" | "annual"
   const [year, setYear] = useState(null); // null → default to first forecast year; "ALL" = whole horizon
 
@@ -44,7 +46,8 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
   }
 
   const onStores = tab === "STORES";
-  const selected = onStores ? data.selectedStore : null;
+  const onFranchise = tab === "FRANCHISE";
+  const selected = onStores ? data.selectedStore : onFranchise ? data.selectedFranchiseStore : null;
   const years = [...new Set(data.months.map((m) => m.slice(0, 4)))].sort();
   const activeYear = year ?? years[0]; // headline defaults to the first forecast year; "ALL" = whole horizon
   // Headline tiles = company stores only (HO & franchise reported separately),
@@ -57,13 +60,21 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
   };
   // On the STORES tab with a store selected, show that store's own P&L;
   // otherwise the scope aggregate.
-  const pnl = selected && data.storePnl ? data.storePnl : data.nominalByScope[tab];
+  const pnl = onStores && selected && data.storePnl ? data.storePnl
+    : onFranchise && selected && data.franchisePnl ? data.franchisePnl
+    : data.nominalByScope[tab];
+  // Consolidated store sales — company + franchise — for the selected year.
+  const cons = consolidatedForYear(data.consolidatedMonths || {}, activeYear);
   const scopeLabel = SCOPES.find(([s]) => s === tab)[1];
   const heading = selected ? selected : `${scopeLabel} — all`;
 
   function selectStore(store) {
     router.push(store ? `/operate/forecast?store=${encodeURIComponent(store)}` : "/operate/forecast");
   }
+  function selectFranchiseStore(store) {
+    router.push(store ? `/operate/forecast?fstore=${encodeURIComponent(store)}` : "/operate/forecast");
+  }
+  const clearSelected = () => (onFranchise ? selectFranchiseStore("") : selectStore(""));
 
   return (
     <>
@@ -75,6 +86,10 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
         </div>
       )}
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 26 }}>
+        {/* Every store together, company and franchise — the 4-year sales
+            forecast's TOTAL row. The tiles after it are company stores only. */}
+        <Tile label={activeYear === "ALL" ? "Consolidated sales, all years" : `Consolidated sales ${activeYear}`} value={k(cons.total)}
+          sub={`company ${k(cons.company)} + franchise ${k(cons.franchise)}`} />
         <Tile label={activeYear === "ALL" ? "Store sales FY" : `Store sales ${activeYear}`} value={k(tileVal("sales"))} sub="company stores" />
         <Tile label="Variable costs" value={k(tileVal("variable"))} sub="rate × forecast sales" />
         <Tile label="Fixed costs" value={k(tileVal("fixed"))} sub="schedules + labour" />
@@ -102,7 +117,17 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
             </select>
           </label>
         )}
-        {selected && <button className="fos-btn-ghost" onClick={() => selectStore("")}>Clear</button>}
+        {onFranchise && (data.franchiseStores || []).length > 0 && (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--faint)" }}>
+            Store
+            <select className="fos-input" value={selected || ""} onChange={(e) => selectFranchiseStore(e.target.value)}
+              style={{ fontSize: 12.5, padding: "6px 10px", minWidth: 190 }}>
+              <option value="">All franchise stores</option>
+              {data.franchiseStores.map((s) => <option key={s.store} value={s.store}>{s.store}</option>)}
+            </select>
+          </label>
+        )}
+        {selected && <button className="fos-btn-ghost" onClick={clearSelected}>Clear</button>}
 
         {view === "monthly" && (
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginLeft: "auto", fontSize: 12.5, color: "var(--faint)" }}>

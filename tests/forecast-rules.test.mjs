@@ -49,3 +49,29 @@ test("parseSalesForecast4yr refuses a year whose stores do not match its subtota
 test("parseSalesForecast4yr says so when there is nothing to read", () => {
   assert.match(parseSalesForecast4yr([["something else"]]).errors[0], /No FY20xx year blocks/);
 });
+
+// ---- Consolidated store sales: company + franchise ----
+import { consolidatedStoreSales, consolidatedForYear } from "../lib/forecast-rules.js";
+
+test("consolidatedStoreSales adds company and franchise store sales, and only those", () => {
+  const lines = [
+    { scope: "STORES", unit: "Oxford Street", line_label: "ST: Sales", cost_type: "SALES", ym: "2027-01", value: 100 },
+    { scope: "FRANCHISE", unit: "Trafford", line_label: FRANCHISE_STORE_SALES_LINE, cost_type: "SALES", ym: "2027-01", value: 40 },
+    { scope: "FRANCHISE", unit: "Bluewater", line_label: FRANCHISE_STORE_SALES_LINE, cost_type: "SALES", ym: "2027-02", value: 60 },
+    // Not store sales — must not reach the consolidated figure.
+    { scope: "HEAD_OFFICE", unit: null, line_label: "HO: Royalty income", cost_type: "SALES", ym: "2027-01", value: 999 },
+    { scope: "FRANCHISE", unit: null, line_label: "FR: Allocation income", cost_type: "SALES", ym: "2027-01", value: 999 },
+    { scope: "STORES", unit: "Oxford Street", line_label: "ST: Rent", cost_type: "FIXED", ym: "2027-01", value: 999 },
+  ];
+  const c = consolidatedStoreSales(lines);
+  assert.deepEqual(c.months["2027-01"], { company: 100, franchise: 40, total: 140 });
+  assert.deepEqual(consolidatedForYear(c.months, "2027"), { company: 100, franchise: 100, total: 200 });
+  assert.deepEqual(consolidatedForYear(c.months, "2028"), { company: 0, franchise: 0, total: 0 });
+  assert.deepEqual(c.franchiseStores.map((s) => s.store), ["Bluewater", "Trafford"]);
+});
+
+test("consolidated store sales from the real parse match the file's TOTAL rows", () => {
+  const p = parseSalesForecast4yr([...block(2027, { oxford: 110 })]);
+  const c = consolidatedStoreSales(p.records);
+  assert.equal(consolidatedForYear(c.months, "2027").total, p.years["2027"].total);
+});
