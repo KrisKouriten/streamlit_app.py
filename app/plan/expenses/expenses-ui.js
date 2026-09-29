@@ -9,6 +9,32 @@ const sel = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, bor
 const ukDate = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—");
 
 /*
+ * Create migration 117's tables through the app's own connection — for when
+ * the SQL editor ran it on a different branch from the one the app reads.
+ */
+export function CreateTables() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function go() {
+    setBusy(true); setMsg("");
+    try {
+      const res = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "setup" }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Could not create the tables");
+      setMsg("Expense tables created.");
+      router.refresh();
+    } catch (x) { setMsg(x.message); } finally { setBusy(false); }
+  }
+  return (
+    <div>
+      <button className="fos-btn" disabled={busy} onClick={go}>{busy ? "Creating…" : "Create the expense tables now"}</button>
+      {msg && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+/*
  * Finance's tools on Expense Claims: upload the Xero export, and map any
  * department the export names that the app does not know.
  */
