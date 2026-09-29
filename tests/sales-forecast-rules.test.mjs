@@ -87,3 +87,15 @@ test("compareForecasts gives the later version less the earlier", () => {
   assert.deepEqual(d["2027"], { company: 10, franchise: -10, total: 0 });
   assert.deepEqual(d["2028"], { company: 5, franchise: 0, total: 5 });
 });
+
+test("matchStores prefers the store record that is reported and trading over a duplicate name", () => {
+  const master = [
+    { store_id: 3, store_name: "Oxford St", reports: false, has_actuals: false },   // placeholder
+    { store_id: 8, store_name: "OXFORD STREET", reports: true, has_actuals: true },
+    { store_id: 9, store_name: "Trafford", reports: true, has_actuals: false },
+    { store_id: 12, store_name: "trafford", reports: true, has_actuals: true },
+  ];
+  const { matched } = matchStores([{ store: "Oxford Street", channel: "COMPANY" }, { store: "Trafford", channel: "FRANCHISE" }], master);
+  assert.equal(matched.get("Oxford Street"), 8);
+  assert.equal(matched.get("Trafford"), 12);
+});

@@ -67,8 +67,11 @@ export default async function StoreDrilldown({ searchParams }) {
     m,
     y25: Number(d.monthly.find((r) => r.yr === 2025 && r.mn === i + 1)?.net || 0),
     y26: Number(d.monthly.find((r) => r.yr === 2026 && r.mn === i + 1)?.net || 0),
+    f26: Number((d.fcMonthly || []).find((r) => Number(r.yr) === 2026 && Number(r.mn) === i + 1)?.net || 0),
   }));
-  const maxBar = Math.max(1, ...trend.flatMap((t) => [t.y25, t.y26]));
+  const maxBar = Math.max(1, ...trend.flatMap((t) => [t.y25, t.y26, t.f26]));
+  const fcYtd = Number(d.fcWindow) || 0;
+  const vsFc = fcYtd ? Number(cy.net || 0) / fcYtd - 1 : null;
 
   const detailRows = [
     ["Net sales", money(cy.net), money(py.net), yoy(cy.net, py.net)],
@@ -100,27 +103,29 @@ export default async function StoreDrilldown({ searchParams }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 24 }}>
         {[["Net sales (YTD)", money(cy.net, { compact: true }), k.yoyNet],
+          ["Forecast (YTD)", fcYtd ? money(fcYtd, { compact: true }) : "—", vsFc, "vs forecast"],
           ["Gross margin %", marginPct === null ? "—" : pct(marginPct), null],
           ["ATV", atvCy === null ? "—" : `£${atvCy.toFixed(2)}`, k.yoyAtv],
           ["Conversion", convCy === null ? "—" : pct(convCy), k.yoyConv],
-          ["Footfall", money(cy.footfall).replace("£", ""), k.yoyFf]].map(([label, value, t]) => (
+          ["Footfall", money(cy.footfall).replace("£", ""), k.yoyFf]].map(([label, value, t, what = "YoY"]) => (
           <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 5 }}>{label}</div>
             <div style={{ fontSize: 21, fontWeight: 600, lineHeight: 1 }}>{value}</div>
-            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "var(--red)" }}>{pctOrDash(t)} YoY</div>}
+            {t !== null && t !== undefined && <div style={{ fontSize: 11.5, marginTop: 4, color: t >= 0 ? "var(--green)" : "var(--red)" }}>{pctOrDash(t)} {what}</div>}
           </div>
         ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14, marginBottom: 24 }}>
-        <Panel title="Monthly net sales" note="2026 vs 2025">
+        <Panel title="Monthly net sales" note="2026 vs 2025, and the live 2026 forecast">
           <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130 }}>
               {trend.map((t) => (
                 <div key={t.m} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 105, width: "100%", justifyContent: "center" }}>
-                    <div title={`2025 ${t.m}: ${money(t.y25)}`} style={{ width: "38%", height: `${(t.y25 / maxBar) * 100}%`, background: "var(--line-strong)", borderRadius: "3px 3px 0 0" }} />
-                    <div title={`2026 ${t.m}: ${money(t.y26)}`} style={{ width: "38%", height: `${(t.y26 / maxBar) * 100}%`, background: "var(--accent)", borderRadius: "3px 3px 0 0" }} />
+                    <div title={`2025 ${t.m}: ${money(t.y25)}`} style={{ width: "28%", height: `${(t.y25 / maxBar) * 100}%`, background: "var(--line-strong)", borderRadius: "3px 3px 0 0" }} />
+                    <div title={`2026 ${t.m}: ${money(t.y26)}`} style={{ width: "28%", height: `${(t.y26 / maxBar) * 100}%`, background: "var(--accent)", borderRadius: "3px 3px 0 0" }} />
+                    <div title={`2026 forecast ${t.m}: ${money(t.f26)}`} style={{ width: "28%", height: `${(t.f26 / maxBar) * 100}%`, border: "1.5px dashed var(--accent)", borderBottom: "none", boxSizing: "border-box", borderRadius: "3px 3px 0 0" }} />
                   </div>
                   <div style={{ fontSize: 9.5, color: "var(--faint)" }}>{t.m}</div>
                 </div>
@@ -129,6 +134,7 @@ export default async function StoreDrilldown({ searchParams }) {
             <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8 }}>
               <span style={{ display: "inline-block", width: 9, height: 9, background: "var(--line-strong)", borderRadius: 2, marginRight: 4 }} />2025
               <span style={{ display: "inline-block", width: 9, height: 9, background: "var(--accent)", borderRadius: 2, margin: "0 4px 0 12px" }} />2026
+              <span style={{ display: "inline-block", width: 9, height: 9, border: "1.5px dashed var(--accent)", boxSizing: "border-box", borderRadius: 2, margin: "0 4px 0 12px" }} />2026 forecast
             </div>
           </div>
         </Panel>

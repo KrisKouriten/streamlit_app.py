@@ -77,7 +77,7 @@ export default async function ExecutiveHub() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { tradingAsAt, financeAsAt, financeScope, hero, forward, ragCounts, attention, health } = await getHubData();
+  const { tradingAsAt, financeAsAt, financeScope, hero, forward, ragCounts, attention, attentionCounts, health } = await getHubData();
   const { actions, operations, agents } = health;
   const opsOutstanding = operations.total - operations.complete;
   const connCount = financeScope?.count || 0;
@@ -159,14 +159,14 @@ export default async function ExecutiveHub() {
       <div id="attention" style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4, flexWrap: "wrap", scrollMarginTop: 20 }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Needs attention</span>
         <span style={{ fontSize: 12.5, color: "var(--faint)" }}>
-          {attention.length} item{attention.length === 1 ? "" : "s"} · KPIs {ragCounts.GREEN} on track / {ragCounts.AMBER} watch / {ragCounts.RED} action
+          {attention.length} item{attention.length === 1 ? "" : "s"} · {attentionCounts.budgets} budget{attentionCounts.budgets === 1 ? "" : "s"} over / {attentionCounts.pos} P.O{attentionCounts.pos === 1 ? "" : "s"} awaiting sign-off / {attentionCounts.procurement} procurement request{attentionCounts.procurement === 1 ? "" : "s"} not approved
         </span>
       </div>
-      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12 }}>Ranked by severity. Nothing here is auto-actioned — each item is a link to where a person decides.</div>
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 12 }}>Overspent budgets first, then approvals waiting, oldest first. Nothing here is auto-actioned — each item is a link to where a person decides.</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 30 }}>
         {attention.length === 0 && (
           <div style={{ fontSize: 13.5, color: "var(--faint)", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "16px 18px" }}>
-            Nothing needs attention right now. KPIs are within tolerance, no agent outputs are awaiting sign-off and no actions are overdue.
+            Nothing needs attention right now. No budget is overspent, no P.O is awaiting sign-off and every procurement request has been approved.
           </div>
         )}
         {attention.map((a, i) => {
