@@ -221,14 +221,24 @@ export default function SalesForecastUI({ versions = [], shownId = null, detail 
 }
 
 /*
- * How this version's stores line up with the trading stores. Forecast on a
- * store row the dashboards don't report never reaches them (the FY plan comes
- * in light); a forecast store with no sales this year is either not open yet
- * or named differently from the store it trades as.
+ * How this version's stores line up with the trading stores, and the two fixes.
+ *
+ *   * Forecast on a store record the dashboards don't report (no operator, or
+ *     marked Other). If that record has traded, it IS the store — just never
+ *     set up — so "Put on dashboards" gives it an ownership and operator, and
+ *     its actual sales come through as well as its forecast. If it hasn't,
+ *     the store trades under another name: link it.
+ *   * A forecast store with no sales this year: not open yet, or named
+ *     differently from the store it trades as — link it, or leave it.
+ *
+ * A link moves the forecast onto the trading store and is remembered, so the
+ * next upload lands there first time.
  */
 function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
   const [c, setC] = useState(null);
   const [err, setErr] = useState("");
+  const [pick, setPick] = useState({});      // store_id → chosen trading store_id
+  const [own, setOwn] = useState({});        // store_id → { ownership, operator }
   useEffect(() => {
     let live = true;
     fetch(`/api/sales-forecast?id=${id}&check=${year}`)
@@ -237,33 +247,106 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
       .catch(() => { if (live) setErr("Could not check the stores"); });
     return () => { live = false; };
   }, [id, year]);
-  async function rematch() {
+  async function run(body, done) {
     setBusy(true);
-    try {
-      const r = await post({ action: "rematch", id });
-      onDone(r.moved?.length ? `Re-matched ${r.moved.length} store${r.moved.length === 1 ? "" : "s"}: ${r.moved.map((m) => m.store).join(", ")}.` : "Every store is already on the right store record.");
-    } catch (e) { onDone(e.message); } finally { setBusy(false); }
+    try { const r = await post(body); onDone(done(r)); }
+    catch (e) { onDone(e.message); } finally { setBusy(false); }
   }
+  const link = (r) => {
+    const to = Number(pick[r.store_id] ?? r.suggested);
+    if (!to) return;
+    const t = c.candidates.find((x) => x.store_id === to);
+    if (!window.confirm(`Link the forecast for "${r.store_name}" to "${t?.store_name}"? Its forecast moves onto that store, and future uploads will do the same.`)) return;
+    run({ action: "link", from: r.store_id, to }, (x) => `Linked ${x.forecastName} → ${x.tradingName}.`);
+  };
+  const report = (r) => {
+    const o = own[r.store_id] || {};
+    const ownership = o.ownership || "COMPANY";
+    const entityId = Number(o.entityId ?? r.entity_id) || null;
+    const ent = (c.entities || []).find((e) => e.entity_id === entityId);
+    run({ action: "report", id: r.store_id, ownership, operator: o.operator || "", entityId },
+      (x) => `${x.store} is now reported on the dashboards as a ${ownership.toLowerCase()} store${ent ? ` under ${ent.name}` : ""}.`);
+  };
   if (err) return <div style={{ ...card, fontSize: 12.5, color: "var(--faint)" }}>{err}</div>;
   if (!c) return null;
-  const clean = !c.notReported.length && !c.noActuals.length;
+  const rows = [
+    ...c.notReported.map((r) => ({ ...r, issue: "NOT_REPORTED" })),
+    ...c.noActuals.map((r) => ({ ...r, issue: "NO_SALES" })),
+  ];
+  const sel = { height: 30, fontSize: 12, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", maxWidth: 230 };
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <div style={{ fontSize: 14, fontWeight: 650 }}>Store matching · {year}</div>
-        {canManage && c.notReported.length > 0 && <button className="fos-btn" disabled={busy} onClick={rematch}>Re-match stores</button>}
+        {canManage && c.notReported.length > 0 && <button className="fos-btn-ghost" disabled={busy} onClick={() => run({ action: "rematch", id }, (r) => (r.moved?.length ? `Re-matched ${r.moved.length} store${r.moved.length === 1 ? "" : "s"}: ${r.moved.map((m) => m.store).join(", ")}.` : "No duplicate store records to move — link or report the stores below."))}>Re-match by name</button>}
       </div>
-      {clean && <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 6 }}>Every forecast store is a reported store that has traded this year.</div>}
-      {c.notReported.length > 0 && (
-        <div style={{ fontSize: 12.5, color: "var(--red)", marginTop: 8, lineHeight: 1.55 }}>
-          <strong>{gbp(c.notReportedValue)}</strong> of the {year} forecast sits on {c.notReported.length} store record{c.notReported.length === 1 ? "" : "s"} the dashboards don&rsquo;t report (no operator, or marked Other), so it is missing from the FY plan and from vs forecast: {c.notReported.map((r) => `${r.store_name} (${gbp(r.fc_year)})`).join(", ")}.
-          {canManage ? " Re-match moves it onto the store record that trades under the same name." : ""}
-        </div>
-      )}
-      {c.noActuals.length > 0 && (
-        <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 8, lineHeight: 1.55 }}>
-          {c.noActuals.length} forecast store{c.noActuals.length === 1 ? " has" : "s have"} no {year} sales yet — not open, or named differently in the forecast from the store it trades as: {c.noActuals.map((r) => `${r.store_name} (${gbp(r.fc_year)})`).join(", ")}.
-        </div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "var(--green)", marginTop: 6 }}>Every forecast store is a reported store that has traded this year.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12, color: "var(--faint)", margin: "4px 0 12px", lineHeight: 1.5 }}>
+            {c.notReported.length > 0 && <><strong style={{ color: "var(--red)" }}>{gbp(c.notReportedValue)}</strong> of the {year} forecast is on store records the dashboards don&rsquo;t report, so it is missing from the FY plan. </>}
+            Link a forecast store to the store it trades as, or — where the record has sales but was never set up — put it on the dashboards.
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr>
+                <th style={thL}>Forecast store</th><th style={th}>{year} forecast</th><th style={th}>{year} sales on this record</th><th style={thL}>Issue</th>{canManage && <th style={thL}>Fix</th>}
+              </tr></thead>
+              <tbody>
+                {rows.map((r) => {
+                  const traded = r.actual_year > 0;
+                  const chosen = pick[r.store_id] ?? (r.suggested ? String(r.suggested) : "");
+                  return (
+                    <tr key={`${r.issue}-${r.store_id}`}>
+                      <td style={tdL}><strong>{r.store_name}</strong></td>
+                      <td style={td}>{gbp(r.fc_year)}</td>
+                      <td style={td}>{traded ? gbp(r.actual_year) : "—"}</td>
+                      <td style={{ ...tdL, color: r.issue === "NOT_REPORTED" ? "var(--red)" : "var(--amber)", whiteSpace: "normal", maxWidth: 260 }}>
+                        {r.issue === "NOT_REPORTED"
+                          ? (traded ? "Trades, but the record has no operator / is marked Other — its sales and forecast are both left off the dashboards" : "On a record the dashboards don't report, with no sales — probably trades under another name")
+                          : "No sales this year — not open yet, or trades under another name"}
+                      </td>
+                      {canManage && (
+                        <td style={{ ...tdL, whiteSpace: "normal" }}>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            {r.issue === "NOT_REPORTED" && (
+                              <>
+                                <select style={sel} value={own[r.store_id]?.ownership || "COMPANY"} onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], ownership: e.target.value } }))}>
+                                  <option value="COMPANY">Company</option><option value="FRANCHISE">Franchise</option>
+                                </select>
+                                {(c.entities || []).length > 0 && (
+                                  <select style={sel} title="The legal entity the store trades under" value={String(own[r.store_id]?.entityId ?? r.entity_id ?? "")}
+                                    onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], entityId: e.target.value } }))}>
+                                    {(c.entities || []).map((e) => <option key={e.entity_id} value={e.entity_id}>{e.name}</option>)}
+                                  </select>
+                                )}
+                                {(own[r.store_id]?.ownership === "FRANCHISE") && (
+                                  <input style={{ ...sel, width: 150 }} placeholder="Franchise operator" value={own[r.store_id]?.operator || ""} onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], operator: e.target.value } }))} />
+                                )}
+                                <button className={traded ? "fos-btn" : "fos-btn-ghost"} disabled={busy} onClick={() => report(r)}>Put on dashboards</button>
+                                <span style={{ fontSize: 11, color: "var(--faint)" }}>or</span>
+                              </>
+                            )}
+                            <select style={sel} value={chosen} onChange={(e) => setPick((p) => ({ ...p, [r.store_id]: e.target.value }))}>
+                              <option value="">Link to the store it trades as…</option>
+                              {c.candidates.map((t) => (
+                                <option key={t.store_id} value={t.store_id} disabled={t.hasForecast}>
+                                  {t.store_name}{t.hasForecast ? " (already has a forecast)" : ""}{Number(r.suggested) === t.store_id ? " — suggested" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <button className={!traded || r.issue === "NO_SALES" ? "fos-btn" : "fos-btn-ghost"} disabled={busy || !chosen} onClick={() => link(r)}>Link</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
