@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { isPublicPath, requiredRolesForPath, isAllowed, restrictedRoutes, ENFORCE_ROLE_GATES, originAllowed } from "../lib/route-guards.js";
 
 test("auth handshake, health and the self-guarding cron are public", () => {
-  for (const p of ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/health", "/api/joiin-refresh"]) {
+  for (const p of ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/health", "/api/joiin-refresh", "/api/workflow/cron"]) {
     assert.equal(isPublicPath(p), true, `${p} should be public`);
   }
 });

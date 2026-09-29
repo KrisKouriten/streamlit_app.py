@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, hasRole } from "../../../lib/auth";
 import { listForClose } from "../../../lib/procurement-close";
 import { getProcurement } from "../../../lib/procurement";
+import { procurementAmendments } from "../../../lib/auto-workflow";
 import { getFxRates } from "../../../lib/fx";
 import { findRate } from "../../../lib/fx-rules";
 import { PageHeader, EmptyState } from "../../finance-os/ui";
@@ -42,6 +43,9 @@ export default async function ProcurementSummaryClose() {
   // page reads, so the two screens agree. Best-effort — no budgets set, or the
   // table missing, simply hides the panel.
   const pr = await getProcurement().catch(() => ({ summary: null }));
+  // When Merch last amended each request — an amendment after a challenge stops
+  // the automatic-cancel clock, and the desk says so.
+  const amendments = await procurementAmendments();
   const budgetMonths = {
     MINISO: pr.summary?.MINISO?.months || [],
     LOCAL: pr.summary?.LOCAL?.months || [],
@@ -66,7 +70,7 @@ export default async function ProcurementSummaryClose() {
           This screen needs the procurement finance-close columns (migration <span style={{ fontFamily: "var(--mono)" }}>073_procurement_finance_close.sql</span>). Apply it, refresh, and procurement purchases will appear here.
         </EmptyState>
       ) : (
-        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} budgetMonths={budgetMonths} budgetCommit={budgetCommit} />
+        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} budgetMonths={budgetMonths} budgetCommit={budgetCommit} amendments={amendments} />
       )}
     </div>
   );

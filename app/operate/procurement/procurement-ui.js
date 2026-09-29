@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity } from "../../../lib/procurement-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
+import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
 import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel } from "../../../lib/vat-rules";
 import MoneyInput from "../../money-input";
@@ -47,7 +48,7 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [], suppliers = [] }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [], suppliers = [], amendments = {} }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [err, setErr] = useState("");
@@ -189,7 +190,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
-      <OrdersPanel orders={orders.filter((o) => o.source === tab)} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
+      <OrdersPanel orders={orders.filter((o) => o.source === tab)} amendments={amendments} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
@@ -454,7 +455,7 @@ function BudgetCheck({ impact }) {
 // sign-off → Finance → approved; cancel is the soft action, delete (Finance
 // only, once head-approved) the hard one.
 const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
-function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
+function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
@@ -497,7 +498,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
             <strong style={{ color: "var(--red)" }}>
               {q.length} order{q.length === 1 ? "" : "s"} challenged by Finance
             </strong>{" "}
-            — {q.length === 1 ? "it is" : "they are"} marked below with the reason. Amend the order, or cancel it if it is no longer wanted. Finance re-review once it changes.
+            — {q.length === 1 ? "it is" : "they are"} marked below with the reason. Amend the order, or cancel it if it is no longer wanted. Finance re-review once it changes. An order not amended within 5 working days of the challenge is cancelled automatically.
           </div>
         );
       })()}
@@ -546,6 +547,7 @@ function OrdersPanel({ orders, roles, canManage, fxRates = [], suppliers = [], o
                         {chal.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>&ldquo;{chal.note}&rdquo;</div>}
                         <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 2 }}>
                           Finance are waiting on you — amend it, or cancel it.
+                          {(() => { const n = lapseNote(challengeLapse(o, new Date(), "PROCUREMENT", undefined, { amendedAt: amendments[String(o.purchase_id)] })); return n ? ` ${n}.` : ""; })()}
                         </div>
                       </div>
                     )}
