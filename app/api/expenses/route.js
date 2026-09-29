@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { uploadExpenses, setDeptMapping, getExpenseReport, createExpenseTables } from "../../../lib/expenses";
+import { departmentsHeadedBy } from "../../../lib/dept-budget";
+import { expenseTabs, canSeeExpenses, CONSOLIDATED } from "../../../lib/expense-rules.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,10 +12,17 @@ export async function GET(request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const u = new URL(request.url);
+  const department = u.searchParams.get("department") || null;
+  // Finance see everything; a head of department only their own department.
+  const isFinance = hasRole(session, "ADMIN", "FINANCE");
+  const access = expenseTabs({ isFinance, headed: isFinance ? [] : await departmentsHeadedBy(session.email).catch(() => []) });
+  if (!isFinance && !canSeeExpenses(department || CONSOLIDATED, access)) {
+    return NextResponse.json({ error: "Expense claims are visible to Finance and to the head of the department" }, { status: 403 });
+  }
   try {
     return NextResponse.json(await getExpenseReport({
       year: Number(u.searchParams.get("year")) || new Date().getFullYear(),
-      department: u.searchParams.get("department") || null,
+      department, claimant: u.searchParams.get("claimant") || null,
     }));
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 400 });

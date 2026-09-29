@@ -143,7 +143,9 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           )}
 
           {/* Travel, Expenses & Entertainment — expense claims against the T&E budget */}
-          {tee && (tee.hasData || tee.budget != null) && <TeePanel tee={tee} department={department} year={year} />}
+          {/* Names employees, so — like Expense Claims — it is for the head of
+              department (the sign-off approver) and Finance only. */}
+          {tee && (tee.hasData || tee.budget != null) && (canApprove || hasRole(session, "FINANCE")) && <TeePanel tee={tee} department={department} year={year} />}
 
           {/* Budget by category */}
           <Panel title="Budget by category" note={d.hasBudget ? `${STAGE_LABEL[d.budget.status] || d.budget.status} · ${d.budget.version_label}` : undefined}>
@@ -416,7 +418,7 @@ function TeePanel({ tee, department, year }) {
         ]} rows={tee.claimants} empty="No claims yet." />
       </div>
       <div style={{ fontSize: 12, marginTop: 10 }}>
-        <a href={`/plan/expenses?dept=${encodeURIComponent(department)}&year=${year}`} style={{ color: "var(--accent)", textDecoration: "none" }}>Every claim line on Expense Claims →</a>
+        <a href={`/plan/expenses?tab=${encodeURIComponent(department)}&year=${year}`} style={{ color: "var(--accent)", textDecoration: "none" }}>Every claim line on Expense Claims →</a>
       </div>
     </Panel>
   );

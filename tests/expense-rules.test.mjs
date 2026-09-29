@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   exportDate, claimantName, storeFromTracking, parseExpenseCsv, deptKey, resolveDepartment, summariseExpenses, accountName,
+  expenseTabs, pickExpenseTab, canSeeExpenses, CONSOLIDATED,
 } from "../lib/expense-rules.js";
 import { teeBudgetAttention } from "../lib/hub-attention-rules.js";
 
@@ -118,4 +119,23 @@ test("the in-app table set-up is migration 117's own statements, and only create
     assert.match(st, /^CREATE (TABLE|INDEX) IF NOT EXISTS /);
     assert.ok(norm(mig).includes(norm(st)), `not in migration 117: ${st.slice(0, 60)}`);
   }
+});
+
+test("Expense Claims tabs: Finance see Consolidated and every department; a head only their own", () => {
+  const all = ["Marketing", "HR", "Operations"];
+  const fin = expenseTabs({ isFinance: true, departments: all });
+  assert.deepEqual(fin.tabs.map((t) => t.key), [CONSOLIDATED, "HR", "Marketing", "Operations"]);
+  assert.equal(pickExpenseTab(undefined, fin), CONSOLIDATED);
+  assert.equal(pickExpenseTab("HR", fin), "HR");
+
+  const head = expenseTabs({ isFinance: false, headed: ["Marketing"], departments: all });
+  assert.deepEqual(head.tabs.map((t) => t.key), ["Marketing"]);
+  assert.equal(head.consolidated, false);
+  assert.equal(pickExpenseTab(CONSOLIDATED, head), "Marketing");     // asked for Consolidated, gets their own
+  assert.equal(pickExpenseTab("HR", head), "Marketing");             // cannot open another department
+  assert.equal(canSeeExpenses("HR", head), false);
+  assert.equal(canSeeExpenses(CONSOLIDATED, head), false);
+
+  const nobody = expenseTabs({ isFinance: false, headed: [], departments: all });
+  assert.equal(pickExpenseTab("Marketing", nobody), null);
 });
