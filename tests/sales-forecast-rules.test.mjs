@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   excelSerialToIso, parseDailySheet, parseSalesForecastWorkbook, storeKey, matchStores,
   forecastStoreCode, versionLabelFromFilename, consolidateForecast, compareForecasts,
+  suggestStore, parseStoreLinks,
 } from "../lib/sales-forecast-rules.js";
 
 // A two-store, two-day workbook in the real file's shape.
@@ -98,4 +99,26 @@ test("matchStores prefers the store record that is reported and trading over a d
   const { matched } = matchStores([{ store: "Oxford Street", channel: "COMPANY" }, { store: "Trafford", channel: "FRANCHISE" }], master);
   assert.equal(matched.get("Oxford Street"), 8);
   assert.equal(matched.get("Trafford"), 12);
+});
+
+test("suggestStore offers the trading store a forecast name most likely means", () => {
+  const trading = [
+    { store_id: 1, store_name: "Stratford" }, { store_id: 2, store_name: "Bullring" },
+    { store_id: 3, store_name: "Glasgow Buchanan Galleries" }, { store_id: 4, store_name: "Trafford Centre" },
+  ];
+  assert.equal(suggestStore("Westfield Stratford", trading), 1);
+  assert.equal(suggestStore("Birmingham Bullring", trading), 2);
+  assert.equal(suggestStore("Glasgow Buchanon", trading), 3);     // near spelling
+  assert.equal(suggestStore("Heathrow T5", trading), null);        // nothing in common
+});
+
+test("a saved link wins over the name match, for every later upload", () => {
+  const master = [
+    { store_id: 5, store_name: "Westfield Stratford", reports: false },
+    { store_id: 6, store_name: "Stratford", reports: true, has_actuals: true },
+  ];
+  const links = parseStoreLinks(JSON.stringify({ [storeKey("Westfield Stratford")]: 6 }));
+  const { matched } = matchStores([{ store: "Westfield Stratford", channel: "COMPANY" }], master, links);
+  assert.equal(matched.get("Westfield Stratford"), 6);
+  assert.equal(parseStoreLinks("not json").size, 0);
 });
