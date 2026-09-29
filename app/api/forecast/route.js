@@ -20,7 +20,7 @@ export async function POST(request) {
     if (body.action === "workbook") {
       if (!body.file) return NextResponse.json({ error: "No workbook content" }, { status: 400 });
       const buffer = Buffer.from(body.file, "base64");
-      const r = await ingestForecastWorkbook(buffer, actor);
+      const r = await ingestForecastWorkbook(buffer, actor, { expect: body.expect || null });
       return NextResponse.json({ ok: true, ...r });
     }
     if (body.action === "set") {

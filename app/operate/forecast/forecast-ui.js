@@ -67,6 +67,13 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
 
   return (
     <>
+      {/* Uploads first: this is where the forecast workbooks — including the
+          4-year sales forecast — come in, and below a long P&L it was missed. */}
+      {canManage && (
+        <div className="fos-card" style={{ padding: "14px 16px", marginBottom: 20 }}>
+          <Upload onDone={() => router.refresh()} />
+        </div>
+      )}
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 26 }}>
         <Tile label={activeYear === "ALL" ? "Store sales FY" : `Store sales ${activeYear}`} value={k(tileVal("sales"))} sub="company stores" />
         <Tile label="Variable costs" value={k(tileVal("variable"))} sub="rate × forecast sales" />
@@ -126,8 +133,6 @@ export default function ForecastUI({ data, ready, canManage, canExport = false }
         modelled monthly lines. Scenario planning on the <a href="/plan/scenarios" style={{ color: "var(--accent)" }}>Plan tab</a> flexes
         these inputs. {Object.entries(data.counts).map(([s, n]) => `${s.toLowerCase().replace("_", " ")} ${n}`).join(" · ")} input lines.
       </div>
-
-      {canManage && <Upload onDone={() => router.refresh()} />}
     </>
   );
 }
@@ -284,6 +289,7 @@ function Tile({ label, value, sub, tone }) {
 function Upload({ onDone }) {
   const fileRef = useRef(null);
   const wbRef = useRef(null);
+  const salesRef = useRef(null);
   const [state, setState] = useState("");
   async function onFile(e) {
     const f = e.target.files?.[0];
@@ -297,7 +303,9 @@ function Upload({ onDone }) {
     } catch (x) { setState(x.message); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
-  async function onWorkbook(e) {
+  // `expect` is "sales-4yr" from the sales-forecast button, so a wrong file is
+  // refused instead of being read as the 3-tab store model.
+  async function onWorkbook(e, expect = null) {
     const f = e.target.files?.[0];
     if (!f) return;
     setState("Reading workbook…");
@@ -306,7 +314,7 @@ function Upload({ onDone }) {
       let bin = ""; const bytes = new Uint8Array(buf);
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const file = btoa(bin);
-      const r = await post({ action: "workbook", file });
+      const r = await post({ action: "workbook", file, expect });
       if (r.kind === "sales-4yr") {
         // The 4-year sales forecast reports what it loaded against the file's
         // own subtotals, so the upload can be checked at a glance.
@@ -317,13 +325,18 @@ function Upload({ onDone }) {
       }
       onDone();
     } catch (x) { setState(x.message); }
-    finally { if (wbRef.current) wbRef.current.value = ""; }
+    finally { if (wbRef.current) wbRef.current.value = ""; if (salesRef.current) salesRef.current.value = ""; }
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
-        <button className="fos-btn" onClick={() => wbRef.current?.click()}>Upload forecast workbook (3 tabs)</button>
-        <span>Sales Forecast · Cost Assumptions · Labour Seasonality — store-level. Amends &amp; adds; partial uploads welcome. The <strong>4-year sales forecast</strong> (Monthly by Store tab) is recognised and loaded as it is — company and franchise store sales, actuals included.</span>
+        <button className="fos-btn" onClick={() => salesRef.current?.click()}>Upload sales forecast (4-year)</button>
+        <span>Sales only — the 4-year sales forecast workbook as it is (Monthly by Store tab): company and franchise store sales, every month, actuals included. Replaces sales for the months in the file; costs are not touched.</span>
+        <input ref={salesRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => onWorkbook(e, "sales-4yr")} style={{ display: "none" }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
+        <button className="fos-btn-ghost" onClick={() => wbRef.current?.click()}>Upload forecast workbook (3 tabs)</button>
+        <span>Sales Forecast · Cost Assumptions · Labour Seasonality — the full store model. Amends &amp; adds; partial uploads welcome.</span>
         <input ref={wbRef} type="file" accept=".xlsx,.xlsb,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onWorkbook} style={{ display: "none" }} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
