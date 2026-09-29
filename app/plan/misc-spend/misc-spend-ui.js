@@ -1,4 +1,5 @@
 "use client";
+import { budgetTypeLabel } from "../../../lib/dept-budget-rules";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MISC_CATEGORY_GROUPS, miscTotals } from "../../../lib/misc-spend-rules";
@@ -15,7 +16,7 @@ const dmy = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "—");
 
 // "Marketing · Business · 2026" / "Property · Project · IGB Leeds · 2026"
 const budgetLabel = (b) =>
-  `${b.department} · ${b.type === "PROJECT" ? `Project${b.project ? ` · ${b.project}` : ""}` : "Business"} · ${b.year}`;
+  `${b.department} · ${budgetTypeLabel(b.type, b.project, { short: true })} · ${b.year}`;
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 18px", marginBottom: 18 };
 const field = { display: "flex", flexDirection: "column", gap: 5 };
@@ -126,7 +127,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
           <label style={field}><span style={labelSt}>Budget *</span>
             <select style={inputSt} value={f.budget_id} onChange={(e) => setF((s) => ({ ...s, budget_id: e.target.value }))} disabled={!f.department}>
               <option value="">{!f.department ? "— choose a department first —" : budgetsForDept.length ? "— choose budget —" : "No budgets — create in Departmental Budgets"}</option>
-              {budgetsForDept.map((b) => <option key={b.id} value={b.id}>{b.type === "PROJECT" ? `Project${b.project ? ` · ${b.project}` : ""}` : "Business (annual)"} · {b.year} · {b.version}</option>)}
+              {budgetsForDept.map((b) => <option key={b.id} value={b.id}>{budgetTypeLabel(b.type, b.project)} · {b.year} · {b.version}</option>)}
             </select>
           </label>
           <label style={field}><span style={labelSt}>Category *</span>
@@ -176,7 +177,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
                     <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12 }}>
                       {r.department || "—"}
                       <div style={{ fontSize: 10.5, color: r.budget_type === "PROJECT" ? "var(--accent)" : "var(--faint)", fontFamily: "var(--mono)" }}>
-                        {r.budget_id ? (r.budget_type === "PROJECT" ? `◆ Project${r.project_name ? ` · ${r.project_name}` : ""}` : "Business") + ` · ${r.budget_year ?? ""}` : "budget removed"}
+                        {r.budget_id ? (r.budget_type === "PROJECT" ? `◆ ${budgetTypeLabel(r.budget_type, r.project_name)}` : budgetTypeLabel(r.budget_type, null, { short: true })) + ` · ${r.budget_year ?? ""}` : "budget removed"}
                       </div>
                     </td>
                     <td className="fos-num" style={{ ...td, textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>{money(r.amount)}</td>

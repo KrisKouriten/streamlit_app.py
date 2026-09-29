@@ -46,6 +46,15 @@ export default async function ProcurementSummaryClose() {
     MINISO: pr.summary?.MINISO?.months || [],
     LOCAL: pr.summary?.LOCAL?.months || [],
   };
+  // What each order commits, exactly as the budget tables counted it — so the
+  // desk's "Awaiting your decision vs budget" panel and "Still committed"
+  // column show the budget's own figures instead of working them out again.
+  const budgetCommit = {};
+  for (const o of pr.orders || []) {
+    if (o.committed_gbp != null || o.fx_gbp != null) {
+      budgetCommit[o.purchase_id] = { committed_gbp: o.committed_gbp ?? null, fx_gbp: o.fx_gbp ?? null };
+    }
+  }
 
   return (
     <div className="fos-shell" style={{ padding: "1rem 0" }}>
@@ -57,7 +66,7 @@ export default async function ProcurementSummaryClose() {
           This screen needs the procurement finance-close columns (migration <span style={{ fontFamily: "var(--mono)" }}>073_procurement_finance_close.sql</span>). Apply it, refresh, and procurement purchases will appear here.
         </EmptyState>
       ) : (
-        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} budgetMonths={budgetMonths} />
+        <ProcurementSummaryUI initialRows={res.rows} costingRate={costingRate} budgetMonths={budgetMonths} budgetCommit={budgetCommit} />
       )}
     </div>
   );

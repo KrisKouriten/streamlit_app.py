@@ -352,7 +352,7 @@ function BudgetImport({ onErr, onDone }) {
 // have something pending.
 const AWAITING_FINANCE = (r) => r.finance_status === "PENDING" || r.finance_status === "CHALLENGED";
 const SRC_LABEL = { MINISO: "Miniso purchases", LOCAL: "Local purchases" };
-function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, tab = "MINISO" }) {
+function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, tab = "MINISO", budgetCommit = {} }) {
   const [all, setAll] = useState(false);
   // A cancelled order commits nothing, so it must not weigh on a budget month.
   // (approval_status is absent on a database before migration 082 — an undefined
@@ -365,11 +365,12 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
   const live = rows
     .filter((r) => r.approval_status !== "CANCELLED")
     .map((r) => {
-      // A paid Local order is spend on the facility (or gone in cash), not a
-      // commitment. Same rule the budget tables use — without it every paid
-      // order counted in Committed here and again in Spent.
-      const settled = settledCommitment(r);
-      const bal = settled != null ? settled : settlesByLc(r) ? lcBalanceGbp(r, costingRate) : null;
+      // The budget tables' own figure for this order — its "Still committed"
+      // balance — so this panel cannot count it differently. Falls back to the
+      // desk's own reading of the same rule if the budget rollup could not run.
+      const b = budgetCommit[r.purchase_id];
+      if (b) return { ...r, committed_gbp: b.committed_gbp, fx_gbp: b.fx_gbp };
+      const bal = outstandingCommitment(r, costingRate).balance;
       return bal == null ? r : { ...r, committed_gbp: bal };
     });
   /*
@@ -481,7 +482,7 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
   );
 }
 
-export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {} }) {
+export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {}, budgetCommit = {} }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [filter, setFilter] = useState("ATTENTION");
@@ -762,7 +763,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
       </StatRow>
 
       {/* ---- Budget pressure from the queue below ---- */}
-      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} costingRate={costingRate} tab={tab} />
+      <AwaitingVsBudget rows={initialRows} budgetMonths={budgetMonths} costingRate={costingRate} tab={tab} budgetCommit={budgetCommit} />
 
       {/* ---- Messages ---- */}
       {error && <div style={{ color: "var(--red)", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
@@ -903,6 +904,10 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                             // the facility, so committing it again would charge the
                             // month twice for the same money.
                             const oc = outstandingCommitment(r, costingRate);
+                            // The figure the budget tables commit, when they have one —
+                            // so this column and the budget cannot disagree.
+                            const bc = budgetCommit[r.purchase_id]?.committed_gbp;
+                            if (bc != null) oc.balance = bc;
                             if (oc.balance == null) return <span style={{ color: "var(--faint)" }}>—</span>;
                             const TONE = { red: "var(--red)", green: "var(--green)", amber: "var(--amber)" };
                             return (

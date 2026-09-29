@@ -307,7 +307,14 @@ function Upload({ onDone }) {
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const file = btoa(bin);
       const r = await post({ action: "workbook", file });
-      setState(`Loaded ${r.loaded} lines · ${r.stores} stores · ${r.months} months${r.warnings?.length ? ` · ${r.warnings.length} warning(s)` : ""}.`);
+      if (r.kind === "sales-4yr") {
+        // The 4-year sales forecast reports what it loaded against the file's
+        // own subtotals, so the upload can be checked at a glance.
+        const yrs = Object.entries(r.years || {}).map(([y, t]) => `FY${y} £${Math.round(t.total).toLocaleString("en-GB")}`).join(" · ");
+        setState(`Sales forecast loaded — ${r.companyStores} company + ${r.franchiseStores} franchise stores · ${r.months} months · ${yrs}${r.warnings?.length ? ` · ${r.warnings.join(" · ")}` : ""}.`);
+      } else {
+        setState(`Loaded ${r.loaded} lines · ${r.stores} stores · ${r.months} months${r.warnings?.length ? ` · ${r.warnings.length} warning(s)` : ""}.`);
+      }
       onDone();
     } catch (x) { setState(x.message); }
     finally { if (wbRef.current) wbRef.current.value = ""; }
@@ -316,7 +323,7 @@ function Upload({ onDone }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>
         <button className="fos-btn" onClick={() => wbRef.current?.click()}>Upload forecast workbook (3 tabs)</button>
-        <span>Sales Forecast · Cost Assumptions · Labour Seasonality — store-level. Amends &amp; adds; partial uploads welcome.</span>
+        <span>Sales Forecast · Cost Assumptions · Labour Seasonality — store-level. Amends &amp; adds; partial uploads welcome. The <strong>4-year sales forecast</strong> (Monthly by Store tab) is recognised and loaded as it is — company and franchise store sales, actuals included.</span>
         <input ref={wbRef} type="file" accept=".xlsx,.xlsb,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onWorkbook} style={{ display: "none" }} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: "var(--faint)" }}>

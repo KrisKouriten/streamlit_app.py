@@ -148,3 +148,23 @@ test("budgetValidation flags over-target and missing commentary on material line
   assert.ok(codes.includes("missing_commentary"));
   assert.equal(issues.filter((i) => i.code === "missing_commentary").length, 1);
 });
+
+// ---- Travel, Expenses & Entertainment as its own budget type ----
+import { budgetTypeLabel, BUDGET_TYPES, normBudgetType } from "../lib/dept-budget-rules.js";
+
+test("budget types include Travel, Expenses & Entertainment", () => {
+  assert.ok(BUDGET_TYPES.some((t) => t.code === "TEE" && t.label === "Travel, Expenses & Entertainment"));
+  assert.equal(normBudgetType("tee"), "TEE");
+  assert.equal(normBudgetType("PROJECT"), "PROJECT");
+  assert.equal(normBudgetType("nonsense"), "BUSINESS");
+  // Fits the budget_type varchar(10) column from migration 102 — no migration needed.
+  for (const t of BUDGET_TYPES) assert.ok(t.code.length <= 10);
+});
+
+test("a T&E budget needs no Business Project, and labels itself", () => {
+  assert.equal(validateBudget({ department: "Marketing", budget_year: 2027, budget_type: "TEE" }), null);
+  assert.equal(budgetTypeLabel("TEE"), "Travel, Expenses & Entertainment");
+  assert.equal(budgetTypeLabel("TEE", null, { short: true }), "T&E");
+  assert.equal(budgetTypeLabel("PROJECT", "Store refit"), "Project · Store refit");
+  assert.equal(budgetTypeLabel(null, null, { short: true }), "Business");
+});
