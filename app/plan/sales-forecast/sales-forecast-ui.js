@@ -262,7 +262,10 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
   const report = (r) => {
     const o = own[r.store_id] || {};
     const ownership = o.ownership || "COMPANY";
-    run({ action: "report", id: r.store_id, ownership, operator: o.operator || "" }, (x) => `${x.store} is now reported on the dashboards as a ${ownership.toLowerCase()} store.`);
+    const entityId = Number(o.entityId ?? r.entity_id) || null;
+    const ent = (c.entities || []).find((e) => e.entity_id === entityId);
+    run({ action: "report", id: r.store_id, ownership, operator: o.operator || "", entityId },
+      (x) => `${x.store} is now reported on the dashboards as a ${ownership.toLowerCase()} store${ent ? ` under ${ent.name}` : ""}.`);
   };
   if (err) return <div style={{ ...card, fontSize: 12.5, color: "var(--faint)" }}>{err}</div>;
   if (!c) return null;
@@ -312,6 +315,12 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
                                 <select style={sel} value={own[r.store_id]?.ownership || "COMPANY"} onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], ownership: e.target.value } }))}>
                                   <option value="COMPANY">Company</option><option value="FRANCHISE">Franchise</option>
                                 </select>
+                                {(c.entities || []).length > 0 && (
+                                  <select style={sel} title="The legal entity the store trades under" value={String(own[r.store_id]?.entityId ?? r.entity_id ?? "")}
+                                    onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], entityId: e.target.value } }))}>
+                                    {(c.entities || []).map((e) => <option key={e.entity_id} value={e.entity_id}>{e.name}</option>)}
+                                  </select>
+                                )}
                                 {(own[r.store_id]?.ownership === "FRANCHISE") && (
                                   <input style={{ ...sel, width: 150 }} placeholder="Franchise operator" value={own[r.store_id]?.operator || ""} onChange={(e) => setOwn((o) => ({ ...o, [r.store_id]: { ...o[r.store_id], operator: e.target.value } }))} />
                                 )}

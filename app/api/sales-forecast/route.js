@@ -33,7 +33,7 @@ export async function POST(request) {
       return NextResponse.json(await uploadSalesForecast(Buffer.from(body.file, "base64"), { filename: body.filename || "", label: body.label || "" }, session));
     }
     if (body.action === "live") return NextResponse.json(await setLiveSalesForecast(Number(body.id), session));
-    if (body.action === "report") return NextResponse.json(await reportStore(Number(body.id), { ownership: body.ownership, operator: body.operator }, session));
+    if (body.action === "report") return NextResponse.json(await reportStore(Number(body.id), { ownership: body.ownership, operator: body.operator, entityId: body.entityId }, session));
     if (body.action === "link") return NextResponse.json(await linkForecastStore(Number(body.from), Number(body.to), session));
     if (body.action === "rematch") return NextResponse.json(await rematchSalesForecast(Number(body.id), session));
     if (body.action === "delete") return NextResponse.json(await deleteSalesForecast(Number(body.id), session));
