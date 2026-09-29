@@ -821,10 +821,9 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                           {isForeignRow(r) && r.amount_ccy != null && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{ccyAmt(r.amount_ccy, r.currency)}{r.cost_rate_type ? ` @ ${r.cost_rate_type.toLowerCase()}` : ""}</div>}
                           {fs === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Committed {money(committedAmount(r))}</div>}
                         </td>
-                        {/* Net is what Merch entered; GROSS is what leaves the
-                            bank and what the budget is charged. Both are shown
-                            because a request read as £1,000 hitting a budget as
-                            £1,200 has to say why here, not in a variance. */}
+                        {/* Net is what Merch entered and what the ex-VAT budget
+                            is charged; GROSS is the cash that leaves the bank.
+                            Both are shown so the two can be told apart. */}
                         <td className="fos-num" style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)", textAlign: "right", verticalAlign: "top" }}>
                           {money(grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"))}
                           <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{vatLabel(r)}</div>

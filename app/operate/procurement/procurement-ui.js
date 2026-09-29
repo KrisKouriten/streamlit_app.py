@@ -103,7 +103,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
       <div className="fos-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 24 }}>
         <Tile label="Committed spend" value={money(s.totalCommitted, { compact: true })} sub="all months" />
         <Tile label="Spent" value={money(s.totalSpent, { compact: true })}
-          sub={s.unvaluedDrawings ? `${s.unvaluedDrawings} drawing${s.unvaluedDrawings === 1 ? "" : "s"} unpriced` : "trade pay + cash settled"}
+          sub={s.unvaluedDrawings ? `${s.unvaluedDrawings} drawing${s.unvaluedDrawings === 1 ? "" : "s"} unpriced` : "trade pay + cash settled · net of VAT"}
           tone={s.unvaluedDrawings ? "var(--amber)" : undefined} />
         <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets" />
         <Tile label="Over-budget months" value={s.months.filter((m) => m.overBudget).length} tone={s.months.some((m) => m.overBudget) ? "var(--red)" : "var(--green)"} sub="cash-out basis" />
@@ -112,7 +112,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       <Panel
         title="Monthly cash budget vs committed"
-        note={`everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, ${tradeLabel.toLowerCase()} in the month its facility drawing is due, cash in the month it was paid · variance = budget − committed − ${tradeLabel.toLowerCase()} − cash + FX`}
+        note={`everything here is on a payment-date basis: committed lands in the month the entered payment terms make it fall due, ${tradeLabel.toLowerCase()} in the month its facility drawing is due, cash in the month it was paid · all figures are net of VAT, like the budget${s.totalSpentVat ? ` (${money(s.totalSpentVat, { compact: true })} VAT taken off ${tradeLabel.toLowerCase()} drawings)` : ""} · variance = budget − committed − ${tradeLabel.toLowerCase()} − cash + FX`}
         right={s.months.length > monthsShown.length || allMonths ? (
           <button className="fos-btn-ghost" onClick={() => setAllMonths((x) => !x)}>
             {allMonths ? "Months with activity" : `All months (${s.months.length})`}
@@ -135,7 +135,12 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
               <tr key={m.ym}>
                 <Td>{monthLabel(m.ym)}</Td>
                 <Td r>{money(m.committed)}</Td>
-                <Td r>{m.tradeSpent ? money(m.tradeSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
+                <Td r>
+                  {m.tradeSpent ? money(m.tradeSpent) : <span style={{ color: "var(--faint)" }}>—</span>}
+                  {/* Drawings pay the gross invoice; the budget is ex-VAT. What
+                      came off, so the figure ties back to the facility extract. */}
+                  {m.spentVat ? <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>net · {money(m.spentVat, { compact: true })} VAT off</div> : null}
+                </Td>
                 <Td r>{m.cashSpent ? money(m.cashSpent) : <span style={{ color: "var(--faint)" }}>—</span>}</Td>
                 <Td r>
                   {m.spent ? money(m.spent) : <span style={{ color: "var(--faint)" }}>—</span>}
@@ -283,19 +288,19 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
   // GBP value is the spot conversion for a foreign order (Finance re-strikes it
   // on approval, so this is provisional) and the entered amount for a GBP one.
   /*
-   * Net in, gross committed.
+   * Net in, net committed.
    *
-   * Merch enters the net value on the quote. What leaves the bank is the gross
-   * invoice — we pay the supplier VAT and reclaim it from HMRC later, on a
-   * different timetable — so the budget check and the commitment are struck on
-   * the gross. Both are shown, because a request Merch reads as £1,000 hitting
-   * a budget as £1,200 needs to say why on the form rather than in a variance.
+   * Merch enters the net value on the quote, and the procurement budgets Merch
+   * upload are ex-VAT too — so the budget check is struck on the net, like for
+   * like. The gross is still shown, because it is the cash that leaves (VAT is
+   * paid to the supplier and reclaimed from HMRC later), but it is not what the
+   * budget is charged.
    */
   const vatRate = vatRateOf({ source, vat_rate: f.vat_rate });
   const draftNet = foreign ? gbpPreview : Number(f.amount_gbp) || 0;
   const draftGross = grossFromNet(draftNet, vatRate);
   const draftVat = draftGross == null ? null : draftGross - (draftNet || 0);
-  const draftGbp = draftGross ?? draftNet;
+  const draftGbp = draftNet;
   // Miniso's month comes off the pickup date, Local's off the order month, so
   // wait for the field that actually decides it — guessing from a half-filled
   // form would point at the wrong month's budget.
@@ -336,8 +341,8 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
         <Field label="Currency"><select value={f.currency} onChange={set("currency")} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
         <Field label={`Net amount (${CCY_SYMBOL[f.currency] || f.currency})`}><MoneyInput required value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
-        {/* The gross is what the budget is charged, so the basis is a choice on
-            the form rather than an assumption behind it. */}
+        {/* The gross is the cash that leaves; the budget is charged the net.
+            The basis is a choice on the form rather than an assumption. */}
         <Field label="VAT">
           <select value={f.vat_rate} onChange={set("vat_rate")} style={inp}>
             {VAT_TREATMENTS.map((t) => <option key={t.rate} value={String(t.rate)} title={t.hint}>{t.label}</option>)}
@@ -348,7 +353,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
             readOnly
             value={draftGross == null ? "" : draftGross.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             placeholder="—"
-            title={vatRate ? `Net plus ${Number((vatRate * 100).toFixed(2))}% VAT — this is what the budget is charged` : "No VAT — gross is the net amount"}
+            title={vatRate ? `Net plus ${Number((vatRate * 100).toFixed(2))}% VAT — the cash that leaves; the budget is charged the net` : "No VAT — gross is the net amount"}
             style={{ ...inp, textAlign: "right", background: "var(--raise)", color: "var(--muted)" }} className="fos-num"
           />
         </Field>
