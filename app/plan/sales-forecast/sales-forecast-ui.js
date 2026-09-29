@@ -239,6 +239,8 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
   const [err, setErr] = useState("");
   const [pick, setPick] = useState({});      // store_id → chosen trading store_id
   const [own, setOwn] = useState({});        // store_id → { ownership, operator }
+  const [open, setOpen] = useState(null);    // store_id whose Set up form is showing
+  const [form, setForm] = useState({});      // the Set up form's fields
   useEffect(() => {
     let live = true;
     fetch(`/api/sales-forecast?id=${id}&check=${year}`)
@@ -267,12 +269,32 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
     run({ action: "report", id: r.store_id, ownership, operator: o.operator || "", entityId },
       (x) => `${x.store} is now reported on the dashboards as a ${ownership.toLowerCase()} store${ent ? ` under ${ent.name}` : ""}.`);
   };
+  const startSetup = (r) => {
+    setOpen(open === r.store_id ? null : r.store_id);
+    setForm({
+      ownership: r.ownership_type === "FRANCHISE" ? "FRANCHISE" : "COMPANY",
+      operator: r.ownership_type === "FRANCHISE" && r.operator_name !== "Franchise partner" ? (r.operator_name || "") : "",
+      entityId: r.entity_id ? String(r.entity_id) : "", newEntityName: "", openingDate: r.opening_date || "",
+    });
+  };
+  const saveSetup = (r) => {
+    const f = form;
+    if (f.entityId === "NEW" && !f.newEntityName.trim()) return onDone("Enter the new entity's legal name");
+    run({
+      action: "setup", id: r.store_id, ownership: f.ownership, operator: f.operator,
+      entityId: f.entityId && f.entityId !== "NEW" ? Number(f.entityId) : null,
+      newEntityName: f.entityId === "NEW" ? f.newEntityName : null, openingDate: f.openingDate || null,
+    }, (x) => `${x.store} is set up as a ${f.ownership.toLowerCase()} store${x.createdEntity ? ` under the new entity ${x.createdEntity.name}` : ""}.`);
+    setOpen(null);
+  };
+  const ukDate = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
   if (err) return <div style={{ ...card, fontSize: 12.5, color: "var(--faint)" }}>{err}</div>;
   if (!c) return null;
   const rows = [
     ...c.notReported.map((r) => ({ ...r, issue: "NOT_REPORTED" })),
-    ...c.noActuals.map((r) => ({ ...r, issue: "NO_SALES" })),
+    ...c.noActuals.map((r) => ({ ...r, issue: r.opening_date ? "SET_UP" : "NO_SALES" })),
   ];
+  const lbl = { display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: "var(--faint)" };
   const sel = { height: 30, fontSize: 12, padding: "0 6px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", maxWidth: 230 };
   return (
     <div style={card}>
@@ -302,9 +324,11 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
                       <td style={tdL}><strong>{r.store_name}</strong></td>
                       <td style={td}>{gbp(r.fc_year)}</td>
                       <td style={td}>{traded ? gbp(r.actual_year) : "—"}</td>
-                      <td style={{ ...tdL, color: r.issue === "NOT_REPORTED" ? "var(--red)" : "var(--amber)", whiteSpace: "normal", maxWidth: 260 }}>
+                      <td style={{ ...tdL, color: r.issue === "NOT_REPORTED" ? "var(--red)" : r.issue === "SET_UP" ? "var(--green)" : "var(--amber)", whiteSpace: "normal", maxWidth: 260 }}>
                         {r.issue === "NOT_REPORTED"
                           ? (traded ? "Trades, but the record has no operator / is marked Other — its sales and forecast are both left off the dashboards" : "On a record the dashboards don't report, with no sales — probably trades under another name")
+                          : r.issue === "SET_UP"
+                          ? `Set up · ${r.ownership_type === "FRANCHISE" ? `franchise (${r.operator_name})` : "company"} · opens ${ukDate(r.opening_date)}${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)) ? ` · ${(c.entities || []).find((e) => e.entity_id === Number(r.entity_id)).name}` : ""}`
                           : "No sales this year — not open yet, or trades under another name"}
                       </td>
                       {canManage && (
@@ -337,7 +361,44 @@ function StoreCheck({ id, year, canManage, busy, setBusy, post, onDone }) {
                               ))}
                             </select>
                             <button className={!traded || r.issue === "NO_SALES" ? "fos-btn" : "fos-btn-ghost"} disabled={busy || !chosen} onClick={() => link(r)}>Link</button>
+                            {r.issue !== "NOT_REPORTED" && (
+                              <>
+                                <span style={{ fontSize: 11, color: "var(--faint)" }}>or</span>
+                                <button className={r.issue === "SET_UP" ? "fos-btn-ghost" : "fos-btn"} disabled={busy} onClick={() => startSetup(r)}>{r.issue === "SET_UP" ? "Edit set-up" : "Set up new store"}</button>
+                              </>
+                            )}
                           </div>
+                          {open === r.store_id && (
+                            <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                              <label style={lbl}>Company or franchise
+                                <select style={sel} value={form.ownership} onChange={(e) => setForm((f) => ({ ...f, ownership: e.target.value }))}>
+                                  <option value="COMPANY">Company</option><option value="FRANCHISE">Franchise</option>
+                                </select>
+                              </label>
+                              {form.ownership === "FRANCHISE" && (
+                                <label style={lbl}>Franchise operator
+                                  <input style={{ ...sel, width: 170 }} value={form.operator} placeholder="e.g. the franchisee's name" onChange={(e) => setForm((f) => ({ ...f, operator: e.target.value }))} />
+                                </label>
+                              )}
+                              <label style={lbl}>Legal entity
+                                <select style={sel} value={form.entityId} onChange={(e) => setForm((f) => ({ ...f, entityId: e.target.value }))}>
+                                  <option value="">Keep as it is</option>
+                                  {(c.entities || []).map((e) => <option key={e.entity_id} value={e.entity_id}>{e.name}</option>)}
+                                  <option value="NEW">+ New entity…</option>
+                                </select>
+                              </label>
+                              {form.entityId === "NEW" && (
+                                <label style={lbl}>New entity&rsquo;s legal name
+                                  <input style={{ ...sel, width: 220 }} value={form.newEntityName} placeholder="e.g. Company Name Limited" onChange={(e) => setForm((f) => ({ ...f, newEntityName: e.target.value }))} />
+                                </label>
+                              )}
+                              <label style={lbl}>Opening date
+                                <input type="date" style={sel} value={form.openingDate} onChange={(e) => setForm((f) => ({ ...f, openingDate: e.target.value }))} />
+                              </label>
+                              <button className="fos-btn" disabled={busy} onClick={() => saveSetup(r)}>Save</button>
+                              <button className="fos-btn-ghost" disabled={busy} onClick={() => setOpen(null)}>Cancel</button>
+                            </div>
+                          )}
                         </td>
                       )}
                     </tr>
