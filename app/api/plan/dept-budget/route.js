@@ -11,6 +11,7 @@ import {
   saveInitiativeCosts, budgetIdOfInitiative,
 } from "../../../../lib/dept-initiative";
 import { miscTotalForBudget } from "../../../../lib/misc-spend";
+import { employeeSplits } from "../../../../lib/tee-employee.js";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,9 @@ export async function GET(request) {
     const initiatives = await listInitiatives(Number(id));
     // The auto "Miscellaneous" task total for this budget (from Miscellaneous spend).
     const misc = await miscTotalForBudget(Number(id));
-    return NextResponse.json({ ...loaded, initiatives, misc, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
+    // A T&E budget set per employee: the split beneath the department lines.
+    const employees = loaded.budget.budget_type === "TEE" ? ((await employeeSplits([Number(id)]).catch(() => ({})))[Number(id)] || []) : [];
+    return NextResponse.json({ ...loaded, initiatives, misc, employees, canEdit, canApprove, isAdmin, isFinance, approvers, allowed });
   }
 
   const department = url.searchParams.get("department") || null;
@@ -103,7 +106,13 @@ export async function POST(request) {
 
     if (action === "save-lines" || action === "delete") {
       if (!(await canEditDept(session, dept))) return NextResponse.json({ error: "You cannot edit this department's budget" }, { status: 403 });
-      if (action === "save-lines") return NextResponse.json(await saveLines(budgetId, body.lines || [], session));
+      if (action === "save-lines") {
+        // A T&E budget set per employee is the sum of its split: its lines
+        // change through the template, so the two can never disagree.
+        const split = (await employeeSplits([budgetId]).catch(() => ({})))[budgetId] || [];
+        if (split.length) return NextResponse.json({ error: "This T&E budget is set per employee — download the template, change it and upload it again" }, { status: 400 });
+        return NextResponse.json(await saveLines(budgetId, body.lines || [], session));
+      }
       return NextResponse.json(await deleteBudget(budgetId, session));
     }
 

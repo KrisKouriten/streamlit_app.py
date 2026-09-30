@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay, invoiceChaseStatus, INVOICE_DUE_DAYS } from "../../../lib/po-rules";
+import { displayStatus, CHALLENGE_REASONS, CHALLENGE_RETURN_ROUTES, DEFAULT_CHALLENGE_RETURN_ROUTE, challengeNoteRequired, challengeReasonLabels, committedAmount, poCommitment, isSignedOff, poRef, PAYMENT_STATUSES, paymentStatusOf, INVOICE_STATUSES, invoiceStatusOf, invoiceTotals, invoicesReconcile, describePoAuditEvent, isoDay, invoiceChaseStatus, INVOICE_DUE_DAYS } from "../../../lib/po-rules";
 import MoneyInput from "../../money-input";
 import AutoFollowups from "../auto-followups";
 import DeptTabs from "../../dept-tabs";
@@ -286,6 +286,11 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
                         <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
                           <StatusPill po={p} />
                           {st.code === "CLOSED" && <div style={{ fontSize: 10.5, color: "var(--green)", marginTop: 4 }}>Committed {money(committedAmount(p), p.currency)}</div>}
+                          {(() => {
+                            // From the first invoice the whole P.O counts as committed.
+                            const c = poCommitment(p);
+                            return c.partInvoiced && <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 4 }}>Committed {money(c.committed, p.currency)}{c.balance ? ` · ${money(c.balance, p.currency)} to invoice` : ""}</div>;
+                          })()}
                           {p.finance_status === "CHALLENGED" && <div style={{ fontSize: 10.5, color: "var(--red)", marginTop: 4, maxWidth: 190, whiteSpace: "normal", lineHeight: 1.4 }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</div>}
                           {(() => {
                             const note = lapseNote(challengeLapse(p));
