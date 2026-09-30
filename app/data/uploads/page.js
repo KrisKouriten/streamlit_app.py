@@ -104,7 +104,7 @@ export default async function DataUploads() {
   const facilityRows = (facility.rows || []).length;
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Finance Data" title="Data Uploads"
         right="One place to load every governed input — the feeds that drive the whole platform." />
 

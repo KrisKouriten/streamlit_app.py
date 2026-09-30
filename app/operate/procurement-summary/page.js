@@ -25,7 +25,7 @@ export default async function ProcurementSummaryClose() {
 
   if (!canManage) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Operate" title="Procurement Summary + Close" />
         <EmptyState title="Finance only">
           This desk is limited to Finance and Admin.
@@ -61,7 +61,7 @@ export default async function ProcurementSummaryClose() {
   }
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Procurement Summary + Close"
         right="Approve, challenge, invoice and close procurement purchases" />
 

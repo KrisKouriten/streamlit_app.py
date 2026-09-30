@@ -21,7 +21,7 @@ export default async function OtbPage({ searchParams }) {
 
   if (!hasRole(session, "ADMIN", "FINANCE", "OPS")) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)", padding: "26px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>No access to Open-to-Buy</div>
           <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -68,7 +68,7 @@ export default async function OtbPage({ searchParams }) {
   const canApprove = isAdmin || isFinance;
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <OtbWorkspace
         versions={versions}
         channels={channels}

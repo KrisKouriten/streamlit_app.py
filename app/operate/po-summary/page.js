@@ -27,7 +27,7 @@ export default async function PoSummaryClose() {
   ]);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="P.O Summary + Close"
         right="Finance: record invoices, close or challenge purchase orders" />
 

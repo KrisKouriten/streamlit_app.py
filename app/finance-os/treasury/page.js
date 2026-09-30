@@ -22,7 +22,7 @@ export default async function TreasuryPage() {
 
   const anyReady = data.facility.ready || data.loans.ready || data.sales.ready;
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Perform" title="Treasury" right="Facilities, funding, hedging & cash" />
       {!anyReady ? (
         <EmptyState title="One migration to run">

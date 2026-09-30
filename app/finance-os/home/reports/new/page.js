@@ -17,7 +17,7 @@ export default async function NewReport({ searchParams }) {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!hasRole(session, "ADMIN", "FINANCE")) {
-    return <div style={{ padding: "1rem 0" }}><PageHeader crumb="New report" title="New report" /><EmptyState title="Access required">Creating reports needs finance or admin access.</EmptyState></div>;
+    return <div className="fos-shell"><PageHeader crumb="New report" title="New report" /><EmptyState title="Access required">Creating reports needs finance or admin access.</EmptyState></div>;
   }
   const sp = await searchParams;
   const { templates } = await listTemplates();
@@ -35,7 +35,7 @@ export default async function NewReport({ searchParams }) {
   const canPickAnyDept = hasRole(session, "ADMIN", "FINANCE");
 
   return (
-    <div style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="New report" title="Create a report" right="Step 1 — report details" />
       <Wizard
         templates={templates.map((t) => ({ key: t.template_key, name: t.name, confidentiality: t.default_confidentiality, audience: t.audience }))}

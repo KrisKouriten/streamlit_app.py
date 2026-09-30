@@ -21,7 +21,7 @@ export default async function SuppliersAndCredit() {
 
   if (!canManage) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Operate" title="Suppliers & Credit" />
         <EmptyState title="Finance only">
           This desk is limited to Finance and Admin.
@@ -33,7 +33,7 @@ export default async function SuppliersAndCredit() {
   const exposure = await supplierExposure().catch(() => ({ ready: false, rows: [], totals: null }));
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Operate" title="Suppliers & Credit"
         right="Supplier orders vs credit limits & the HSBC facility position" />
 

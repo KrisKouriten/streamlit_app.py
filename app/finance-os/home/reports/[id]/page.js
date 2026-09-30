@@ -13,13 +13,13 @@ export default async function ReportBuilderPage({ params }) {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!hasRole(session, "ADMIN", "FINANCE", "EXEC")) {
-    return <div style={{ padding: "1rem 0" }}><PageHeader crumb="Report" title="Report" /><EmptyState title="Access required">Finance or executive access is needed to view reports.</EmptyState></div>;
+    return <div className="fos-shell"><PageHeader crumb="Report" title="Report" /><EmptyState title="Access required">Finance or executive access is needed to view reports.</EmptyState></div>;
   }
   const { id } = await params;
   const scope = scopeForSession(session);
   const resolved = await resolveReport(id, scope);
   if (!resolved) {
-    return <div style={{ padding: "1rem 0" }}><PageHeader crumb="Report" title="Report not found" /><EmptyState title="Not found">This report does not exist or the reporting schema is not migrated (run migration 045).</EmptyState></div>;
+    return <div className="fos-shell"><PageHeader crumb="Report" title="Report not found" /><EmptyState title="Not found">This report does not exist or the reporting schema is not migrated (run migration 045).</EmptyState></div>;
   }
   const validation = await validateReportById(id, scope);
   const versions = await listVersions(id);
@@ -27,7 +27,7 @@ export default async function ReportBuilderPage({ params }) {
   const canApprove = isAdmin(session);
 
   return (
-    <div style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Corporate Reporting Centre · Builder" title={resolved.report.title} right={resolved.report.version_label} />
       <Builder

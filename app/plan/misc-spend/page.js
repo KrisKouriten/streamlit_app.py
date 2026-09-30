@@ -22,7 +22,7 @@ export default async function MiscSpendPage() {
   ]);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Miscellaneous Spend"
         right="Project spend that doesn't need a P.O — business-as-usual expenses go through Expense Claims" />
       {!list.ready ? (

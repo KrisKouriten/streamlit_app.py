@@ -22,7 +22,7 @@ export default async function CardSpendPage() {
   ]);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Card / Pre-approved Spend"
         right="Log card or pre-approved spend against a budget — no P.O needed" />
       {!list.ready ? (
