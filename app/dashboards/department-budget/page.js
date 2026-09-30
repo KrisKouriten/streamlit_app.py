@@ -4,7 +4,7 @@ import { getUserDepartment, getApproverEmails } from "../../../lib/dept-budget";
 import { departmentList, getDepartmentDashboard } from "../../../lib/dept-budget-dashboard";
 import { deptExpensePosition } from "../../../lib/expenses";
 import { STAGE_LABEL } from "../../../lib/dept-budget-rules";
-import { challengeReasonLabels, displayStatus, committedAmount, poRef, paymentStatusOf } from "../../../lib/po-rules";
+import { challengeReasonLabels, displayStatus, poCommitment, poRef, paymentStatusOf } from "../../../lib/po-rules";
 import { displayStatus as procDisplayStatus, procRef, lineValue as procLineValue, committedAmount as procCommitted, challengeReasonLabels as procChallengeLabels, paymentStatusOf as procPayment, isForeignRow as procForeign, reportBasis as procReportBasis } from "../../../lib/procurement-close-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, EmptyState, money, pct } from "../../finance-os/ui";
 import DeptDashControls from "./dept-dash-controls";
@@ -95,7 +95,8 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
   const poCommitted = d.pos?.ytdCommitted || 0;
   const cardCommitted = d.cardSpend?.total || 0;
   const cardCount = d.cardSpend?.count || 0;
-  // Committed spend = finance-closed P.Os + card/pre-approved spend logged against
+  // Committed spend = finance-closed P.Os + part-invoiced P.Os (invoiced plus
+  // the balance still to be invoiced) + card/pre-approved spend logged against
   // this budget.
   const committed = Math.round((poCommitted + cardCommitted) * 100) / 100;
   const openValue = d.pos?.openValue || 0;
@@ -119,7 +120,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <StatRow>
             <Stat label="Budget (proposed)" value={d.hasBudget ? money(proposed, { compact: true }) : "—"}
               sub={d.hasBudget ? (s.target != null ? `target ${money(s.target, { compact: true })}` : "no target set") : "no budget for this year"} />
-            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed PO${(d.pos?.closedCount || 0) === 1 ? "" : "s"}${cardCount ? ` + ${cardCount} card item${cardCount === 1 ? "" : "s"}` : ""}, this year`} />
+            <Stat label="YTD committed spend" value={money(committed, { compact: true })} sub={`${d.pos?.closedCount || 0} closed PO${(d.pos?.closedCount || 0) === 1 ? "" : "s"}${d.pos?.partInvoicedCount ? ` + ${d.pos.partInvoicedCount} part-invoiced` : ""}${cardCount ? ` + ${cardCount} card item${cardCount === 1 ? "" : "s"}` : ""}`} />
             <Stat label="Card / pre-approved" value={money(cardCommitted, { compact: true })} sub={cardCount ? `${cardCount} item${cardCount === 1 ? "" : "s"} logged` : "none logged"} />
             <Stat label="Under challenge" value={String(d.pos?.challengedCount || 0)}
               sub={d.pos?.challengedCount ? `${money(d.pos.challengedValue || 0, { compact: true })} in query` : "none"}
@@ -132,7 +133,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           </StatRow>
 
           <div style={{ fontSize: 12, color: "var(--faint)", margin: "-14px 0 22px" }}>
-            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded — <em>plus</em> <strong>card / pre-approved spend</strong> logged against this budget (shown separately too). <strong>Budget remaining</strong> is the proposed budget less committed spend <em>and</em> open purchase orders still in flight. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
+            &ldquo;Committed spend&rdquo; is the net value of purchase orders <strong>closed by Finance</strong> (P.O Summary + Close) for this department this year — invoice net where recorded — <em>plus</em> every signed-off P.O that has <strong>started to be invoiced</strong>: the invoices so far and the balance still to be invoiced, so from the first invoice the whole P.O is committed — <em>plus</em> <strong>card / pre-approved spend</strong> logged against this budget (shown separately too). <strong>Budget remaining</strong> is the proposed budget less committed spend <em>and</em> open purchase orders not yet invoiced. P.Os <strong>under challenge</strong> are shown separately until resolved. A GL-actuals-by-department feed isn&rsquo;t connected yet, so this is committed spend, not booked actuals.
           </div>
 
           {/* Awaiting sign-off — the budget-holder's action queue */}
@@ -201,6 +202,24 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
             />
           </Panel>
 
+          {/* Part-invoiced P.Os — committed in full from the first invoice */}
+          {(d.pos?.partInvoicedCount || 0) > 0 && (
+            <Panel title="Part-invoiced purchase orders" note={`${d.pos.partInvoicedCount} · ${money(d.pos.partCommitted || 0, { compact: true })} committed, of which ${money(d.pos.partBalance || 0, { compact: true })} still to be invoiced`}>
+              <Table
+                columns={[
+                  { label: "P.O number", render: (r) => poRef(r) },
+                  { label: "Supplier", render: (r) => r.supplier || "—" },
+                  { label: "Net value", align: "right", render: (r) => money(r.payment_value) },
+                  { label: "Invoiced", align: "right", render: (r) => money(poCommitment(r).invoiced) },
+                  { label: "Balance to invoice", align: "right", render: (r) => money(poCommitment(r).balance) },
+                  { label: "Committed", align: "right", render: (r) => money(poCommitment(r).committed) },
+                ]}
+                rows={d.pos.partInvoiced || []}
+                empty=""
+              />
+            </Panel>
+          )}
+
           {/* P.O register — every signed-off P.O for this department */}
           <Panel title="P.O register" note={`${d.pos?.registerCount || 0} signed off`}>
             <Table
@@ -211,7 +230,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                 { label: department === "Marketing" ? "Campaign" : "Category", render: (r) => (department === "Marketing" ? (r.marketing_campaign || r.po_category || "—") : (r.po_category || "—")) },
                 { label: "Net value", align: "right", render: (r) => money(r.payment_value) },
                 { label: "Invoice net", align: "right", render: (r) => (r.invoice_amount != null ? money(r.invoice_amount) : "—") },
-                { label: "Committed", align: "right", render: (r) => (r.finance_status === "CLOSED" ? money(committedAmount(r)) : "—") },
+                { label: "Committed", align: "right", render: (r) => { const c = poCommitment(r).committed; return c ? money(c) : "—"; } },
                 { label: "Payment", render: (r) => { const ps = paymentStatusOf(r); return <Badge tone={ps.tone}>{ps.label}</Badge>; } },
                 { label: "Status", render: (r) => { const st = displayStatus(r); return <Badge tone={st.tone}>{st.label}</Badge>; } },
               ]}

@@ -2,7 +2,7 @@ import { getSession } from "../../../../lib/auth";
 import { canExport } from "../../../../lib/reporting/report-access-rules";
 import { confidentialStamp } from "../../../../lib/reporting/watermark";
 import { posForExport } from "../../../../lib/purchase-orders";
-import { displayStatus, committedAmount, challengeReasonLabels, poRef, paymentStatusOf, isoDay } from "../../../../lib/po-rules";
+import { displayStatus, poCommitment, challengeReasonLabels, poRef, paymentStatusOf, isoDay } from "../../../../lib/po-rules";
 import * as XLSX from "xlsx";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export async function GET(request) {
       Payment: paymentStatusOf(p).label, "Paid date": isoDay(p.paid_date) || "",
       "Invoice no": p.invoice_number || "", "Invoice due": isoDay(p.invoice_due_date || p.payment_date) || "",
       "Invoice net": p.invoice_amount != null ? Number(p.invoice_amount) : "",
-      "Committed £": st.code === "CLOSED" ? committedAmount(p) : "",
+      "Committed £": poCommitment(p).committed || "",
       Challenge: p.finance_status === "CHALLENGED" ? challengeReasonLabels(p.challenge_reasons).join("; ") : "",
       "Marketing levy": p.is_marketing ? (p.marketing_levy ? "Levy" : "Non-levy (invoice)") : "",
       "Budget area": p.marketing_budget_category || "",
