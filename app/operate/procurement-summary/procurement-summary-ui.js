@@ -6,7 +6,7 @@ import {
   CHALLENGE_REASON_NEEDS_NOTE, challengeNoteError,
   PROC_PAYMENT_METHODS, paymentMethodOf,
   paymentStatusOf, committedAmount, lineValue, procRef, isMerchRequest, financeActionError,
-  settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT,
+  settlesByLc, lcStatus, lcActionError, LC_BANK_DEFAULT, deskView, deskSuppliers, sameSupplier,
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment, settledCommitment, paidOutsideLc,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
@@ -71,11 +71,15 @@ const TABS = [
 // A cancelled request (by its raiser, or automatically when a challenge was not
 // answered in time) is kept for the record under Cancelled and All only.
 const live = (r) => r.approval_status !== "CANCELLED";
+// Approved orders split into paid and unpaid, and the trade-pay payments with
+// no drawing on the facility to show for them called out (rules: deskView).
 const FILTERS = [
   { key: "ATTENTION", label: "Needs Finance", test: (r) => live(r) && r.finance_status !== "CLOSED" },
-  { key: "PENDING", label: "Pending", test: (r) => live(r) && r.finance_status === "PENDING" },
-  { key: "APPROVED", label: "Approved", test: (r) => live(r) && r.finance_status === "APPROVED" },
-  { key: "CHALLENGED", label: "Challenged", test: (r) => live(r) && r.finance_status === "CHALLENGED" },
+  { key: "NEEDS_APPROVAL", label: "Needs approval", test: deskView.needsApproval },
+  { key: "UNPAID", label: "Unpaid", test: deskView.unpaid },
+  { key: "PAID", label: "Paid", test: deskView.paid },
+  { key: "NO_FACILITY", label: "Paid · no facility record", test: deskView.noFacility, title: "Paid on trade pay, but no drawing on the HSBC facility to show for it — no WC… reference, a reference the register doesn't have, or no register loaded" },
+  { key: "CHALLENGED", label: "Challenged", test: deskView.challenged },
   { key: "CLOSED", label: "Closed", test: (r) => live(r) && r.finance_status === "CLOSED" },
   { key: "CANCELLED", label: "Cancelled", test: (r) => !live(r) },
   { key: "ALL", label: "All", test: () => true },
@@ -525,10 +529,15 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
 
   // Everything in the open tab, before the status filter — the basis for both the
   // rows shown and the filter counts, so the counts describe this book only.
-  const inTab = useMemo(() => {
+  // The suppliers in the open tab, for the supplier picker; one picked narrows
+  // the rows, the filter counts and the download.
+  const [supplier, setSupplier] = useState("");
+  const tabRows = useMemo(() => {
     const t = TABS.find((x) => x.key === tab);
     return t ? initialRows.filter(t.test) : [];
   }, [initialRows, tab]);
+  const suppliers = useMemo(() => deskSuppliers(tabRows), [tabRows]);
+  const inTab = useMemo(() => (supplier ? tabRows.filter((r) => sameSupplier(r, supplier)) : tabRows), [tabRows, supplier]);
 
   const rows = useMemo(() => {
     const f = FILTERS.find((x) => x.key === filter) || FILTERS[FILTERS.length - 1];
@@ -751,7 +760,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
         {TABS.map((t) => {
           const on = t.key === tab;
           return (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
+            <button key={t.key} onClick={() => { setTab(t.key); setSupplier(""); }} style={{
               fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 14px", borderRadius: 7, cursor: "pointer",
               background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
               boxShadow: on ? "var(--shadow-1)" : "none", color: on ? "var(--ink)" : "var(--muted)",
@@ -791,7 +800,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           {FILTERS.map((f) => {
             const on = f.key === filter;
             return (
-              <button key={f.key} onClick={() => setFilter(f.key)} style={{
+              <button key={f.key} onClick={() => setFilter(f.key)} title={f.title} style={{
                 fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "6px 12px", borderRadius: 7, cursor: "pointer",
                 background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
                 color: on ? "var(--ink)" : "var(--muted)",
@@ -800,6 +809,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           })}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <select value={supplier} onChange={(e) => setSupplier(e.target.value)} aria-label="Filter by supplier"
+            style={{ ...inputSt, height: 34, maxWidth: 240, color: supplier ? "var(--ink)" : "var(--muted)" }}>
+            <option value="">All suppliers ({suppliers.length})</option>
+            {suppliers.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
           <span style={{ fontSize: 11.5, color: "var(--faint)" }}>{rows.length} row{rows.length === 1 ? "" : "s"}</span>
           <button style={ghost} disabled={rows.length === 0} onClick={download}>Download (CSV)</button>
         </div>
