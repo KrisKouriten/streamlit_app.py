@@ -6,6 +6,8 @@ import { money } from "../../../lib/money-rules.js";
 
 const card = { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 18px", marginBottom: 20 };
 const sel = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)" };
+// A timestamp as 'YYYY-MM-DD' — it arrives as a Date or an ISO string.
+const isoOf = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); };
 const ukDate = (iso) => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—");
 
 /*
@@ -91,12 +93,22 @@ export default function ExpenseTools({ uploads = [], unmapped = [], departments 
         {msg && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10 }}>{msg}</div>}
         {uploads.length > 0 && (
           <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 10 }}>
-            Last upload: {uploads[0].filename || "export"} · {Number(uploads[0].line_count).toLocaleString("en-GB")} lines · {ukDate(uploads[0].date_from)} – {ukDate(uploads[0].date_to)} · {money(uploads[0].net_total)} net · by {uploads[0].uploaded_by || "—"} on {ukDate(String(uploads[0].uploaded_at).slice(0, 10))}
+            Last upload: {uploads[0].filename || "export"} · {Number(uploads[0].line_count).toLocaleString("en-GB")} lines · {ukDate(uploads[0].date_from)} – {ukDate(uploads[0].date_to)} · {money(uploads[0].net_total)} net · by {uploads[0].uploaded_by || "—"} on {ukDate(isoOf(uploads[0].uploaded_at))}
           </div>
         )}
       </div>
 
-      <TeeBudgetUpload />
+      {/* Budgets are set, and signed off, on Departmental Budgets; this page
+          reads claims against them. */}
+      <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 650 }}>Travel, Expenses &amp; Entertainment budgets</div>
+          <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 3, lineHeight: 1.5 }}>
+            Set on Departmental Budgets by each department&rsquo;s head — for the department or per employee — and signed off there. This page compares claims against them.
+          </div>
+        </div>
+        <a className="fos-btn-ghost" href="/plan/dept-budget?view=tee" style={{ textDecoration: "none" }}>Open T&amp;E budgets</a>
+      </div>
 
       {unmapped.length > 0 && (
         <div style={{ ...card, borderColor: "color-mix(in srgb, var(--amber) 40%, var(--line))" }}>
@@ -118,73 +130,5 @@ export default function ExpenseTools({ uploads = [], unmapped = [], departments 
         </div>
       )}
     </>
-  );
-}
-
-/*
- * Finance's T&E budget upload: download the template for a year (every
- * department × the 15 lines, with claims to date for reference), fill it in,
- * upload it back. Draft budgets are created or replaced; submitted, approved
- * or locked ones are left alone and named.
- */
-function TeeBudgetUpload() {
-  const router = useRouter();
-  const input = useRef(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [replace, setReplace] = useState(false);
-  const thisYear = new Date().getFullYear();
-  async function onFile(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setBusy(true); setMsg(`Reading ${f.name}…`);
-    try {
-      const bytes = new Uint8Array(await f.arrayBuffer());
-      let bin = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      const res = await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "tee-budgets", file: btoa(bin), filename: f.name, replace }) });
-      const r = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(r.error || "Upload failed");
-      const part = (arr, word) => (arr.length ? `${word} ${arr.map((b) => `${b.department} ${b.year} (${money(b.total)})`).join(", ")}.` : "");
-      setMsg([
-        part(r.created, "Created"),
-        part(r.updated, "Updated"),
-        part(r.replaced || [], "Replaced the figures of"),
-        r.skipped?.length ? `Left alone — not a draft: ${r.skipped.join(", ")}. Tick "Replace budgets already submitted or approved" and upload again to load over them.` : "",
-        r.unknown?.length ? `Departments not recognised: ${r.unknown.join(", ")}.` : "",
-        r.rowErrors?.length ? `${r.rowErrors.length} row${r.rowErrors.length === 1 ? "" : "s"} skipped — e.g. ${r.rowErrors[0]}` : "",
-      ].filter(Boolean).join(" ") || "Nothing to load.");
-      router.refresh();
-    } catch (x) { setMsg(x.message); }
-    finally { setBusy(false); if (input.current) input.current.value = ""; }
-  }
-  return (
-    <div style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 650 }}>Travel, Expenses &amp; Entertainment budgets</div>
-          <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 3, lineHeight: 1.5 }}>
-            Download the template, fill in each department&rsquo;s budget by line and month (net of VAT), and upload it. Each department gets a draft T&amp;E budget on Departmental Budgets to submit and approve as usual.
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {[thisYear, thisYear + 1].map((y) => (
-            <a key={y} className="fos-btn-ghost" href={`/api/expenses/template?year=${y}`} style={{ textDecoration: "none" }}>Template {y}</a>
-          ))}
-          <label className="fos-btn" style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>
-            {busy ? "Loading…" : "Upload budgets"}
-            <input ref={input} type="file" accept=".csv,.xlsx,.xls" disabled={busy} onChange={onFile} style={{ display: "none" }} />
-          </label>
-        </div>
-      </div>
-      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.5, cursor: "pointer" }}>
-        <input type="checkbox" checked={replace} disabled={busy} onChange={(e) => setReplace(e.target.checked)} style={{ marginTop: 2 }} />
-        <span>
-          <strong>Replace budgets already submitted or approved.</strong> Without this, only drafts are filled and the rest are left alone.
-          With it, a budget further through approval has its figures replaced and keeps its status; its timeline on Departmental Budgets records the replacement.
-        </span>
-      </label>
-      {msg && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5 }}>{msg}</div>}
-    </div>
   );
 }

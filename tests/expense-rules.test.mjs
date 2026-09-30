@@ -172,11 +172,11 @@ test("teeLineName reads the line names loosely", () => {
 test("parseTeeBudgetRows reads the template: a budget per department and year, lines by month", () => {
   const rows = teeTemplateRows(2027, ["Marketing"], { Marketing: { Travel: 1234.5 } });
   assert.equal(rows.length, 1 + TEE_LINES.length);
-  assert.equal(rows[1][15], 1234.5);                                   // reference column
-  rows[1].splice(3, 12, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, "£1,100");
-  rows[3].splice(3, 12, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  rows.push([2027, "HR", "Mileage", 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]);
-  rows.push([2027, "HR", "Biscuits", 10]);
+  assert.equal(rows[1][16], 1234.5);                                   // reference column
+  rows[1].splice(4, 12, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, "£1,100");
+  rows[3].splice(4, 12, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  rows.push([2027, "HR", "", "Mileage", 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]);
+  rows.push([2027, "HR", "", "Biscuits", 10]);
   const p = parseTeeBudgetRows(rows);
   assert.equal(p.budgets.length, 2);
   const mk = p.budgets.find((b) => b.department === "Marketing");
@@ -186,6 +186,29 @@ test("parseTeeBudgetRows reads the template: a budget per department and year, l
   assert.equal(p.errors.length, 1);
   assert.match(p.errors[0], /not one of the T&E budget lines/);
   assert.match(toCsv([["a,b", 'q"x']]), /"a,b","q""x"/);
+});
+
+test("the template and upload can set a T&E budget per employee", () => {
+  const rows = teeTemplateRows(2027, ["Marketing", "HR"], { Marketing: { "Alex N": { Travel: 50 } } }, "ref", { employees: { Marketing: ["Alex N", "Sam P"] } });
+  assert.equal(rows.length, 1 + 2 * TEE_LINES.length + TEE_LINES.length);
+  assert.deepEqual(rows[1].slice(0, 4), [2027, "Marketing", "Alex N", "Travel"]);
+  assert.equal(rows[1][16], 50);
+  assert.equal(rows[1 + 2 * TEE_LINES.length][2], "");            // HR is department-level
+  const m = (v) => Array(12).fill(v);
+  const p = parseTeeBudgetRows([
+    ["Year", "Department", "Employee", "Line", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    [2027, "Marketing", "Alex N", "Travel", ...m(10)],
+    [2027, "Marketing", "Sam  P", "Travel", ...m(5)],
+    [2027, "Marketing", "Sam P", "Mileage", ...m(2)],
+    [2027, "Marketing", "", "Training", ...m(1)],
+    [2027, "HR", "", "Travel", ...m(3)],
+  ]);
+  const mk = p.budgets.find((b) => b.department === "Marketing");
+  assert.deepEqual(mk.lines.find((l) => l.label === "Travel").months, m(15));   // department = sum of employees
+  assert.deepEqual(mk.employees.map((e) => e.employee), ["Alex N", "Sam P", "Unallocated"]);
+  assert.equal(mk.employees.find((e) => e.employee === "Sam P").lines.length, 2);
+  assert.deepEqual(mk.employees.find((e) => e.employee === "Unallocated").lines[0].label, "Training");
+  assert.deepEqual(p.budgets.find((b) => b.department === "HR").employees, []);  // department-level
 });
 
 test("summariseExpenses compares budget and claims line by line", () => {

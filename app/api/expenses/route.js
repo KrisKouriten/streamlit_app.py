@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { uploadExpenses, setDeptMapping, getExpenseReport, createExpenseTables, uploadTeeBudgets } from "../../../lib/expenses";
+import { uploadExpenses, setDeptMapping, getExpenseReport, createExpenseTables } from "../../../lib/expenses";
 import { departmentsHeadedBy } from "../../../lib/dept-budget";
 import { expenseTabs, canSeeExpenses, CONSOLIDATED } from "../../../lib/expense-rules.js";
 
@@ -40,10 +40,6 @@ export async function POST(request) {
     if (body.action === "upload") {
       if (!body.text) return NextResponse.json({ error: "No file content" }, { status: 400 });
       return NextResponse.json(await uploadExpenses(String(body.text), { filename: body.filename || "" }, session));
-    }
-    if (body.action === "tee-budgets") {
-      if (!body.file) return NextResponse.json({ error: "No file content" }, { status: 400 });
-      return NextResponse.json(await uploadTeeBudgets(Buffer.from(body.file, "base64"), { filename: body.filename || "", replace: body.replace === true }, session));
     }
     if (body.action === "setup") return NextResponse.json(await createExpenseTables(session));
     if (body.action === "map") return NextResponse.json(await setDeptMapping(body.fileDept, body.appDept || null, session));

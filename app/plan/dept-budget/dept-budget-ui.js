@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MONTHS, MONTH_KEYS, QUARTERS, lineTotal, monthlyTotals, grandTotal, priorYearTotal,
@@ -32,13 +32,24 @@ const money0 = (v) => `£${Math.round(Number(v) || 0).toLocaleString("en-GB")}`;
 const moneyC = (v) => { const a = Math.abs(Number(v) || 0); const s = (Number(v) || 0) < 0 ? "−" : ""; if (a >= 1e6) return `${s}£${(a / 1e6).toFixed(2)}m`; if (a >= 1e3) return `${s}£${Math.round(a / 1e3)}k`; return `${s}£${Math.round(a)}`; };
 const dmy = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
 
-export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me, initialObjectives = [], businessProjects = [] }) {
+/*
+ * The page has two headers, and this control centre serves both:
+ *   scope "BAU"  business-as-usual and project budgets
+ *   scope "TEE"  Travel, Expenses & Entertainment budgets — kept apart from
+ *                the day-to-day budgets, loaded by each department's head
+ * Only that scope's budgets are listed, and a new budget is of that scope.
+ */
+const inScope = (scope) => (b) => ((b.budget_type || "BUSINESS") === "TEE") === (scope === "TEE");
+
+export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAdminFinance, me, initialObjectives = [], businessProjects = [], scope = "BAU", openId = null }) {
   const router = useRouter();
   const keyRef = useRef(1);
   const thisYear = new Date().getFullYear();
   const editableDepts = isAdminFinance ? departments : departments.filter((d) => d === myDept);
+  const types = BUDGET_TYPES.filter((t) => (t.code === "TEE") === (scope === "TEE"));
 
-  const [budgets, setBudgets] = useState(initialBudgets);
+  const [budgets, setBudgets] = useState(() => initialBudgets.filter(inScope(scope)));
+  useEffect(() => { setBudgets(initialBudgets.filter(inScope(scope))); }, [initialBudgets, scope]);
   const [selId, setSelId] = useState(null);
   const [loaded, setLoaded] = useState(null);
   const [lines, setLines] = useState([]);
@@ -56,11 +67,14 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
   const [nd, setNd] = useState(editableDepts[0] || "");
   const [nyear, setNyear] = useState(thisYear);
   const [nver, setNver] = useState("");
-  const [ntype, setNtype] = useState("BUSINESS");   // BUSINESS | PROJECT | TEE
+  const [ntype, setNtype] = useState(scope === "TEE" ? "TEE" : "BUSINESS");   // BUSINESS | PROJECT | TEE
   const [nproj, setNproj] = useState("");           // business_project_id when PROJECT
 
   const status = loaded?.budget?.status;
-  const editing = loaded?.canEdit && status === "DRAFT";
+  // A T&E budget set per employee is the sum of its split — changed through
+  // the template, never line by line, so the two cannot disagree.
+  const split = loaded?.employees || [];
+  const editing = loaded?.canEdit && status === "DRAFT" && !split.length;
   const target = loaded?.budget?.target_amount != null ? Number(loaded.budget.target_amount) : null;
 
   const groups = useMemo(() => categoryGroups(lines), [lines]);
@@ -121,8 +135,10 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
       action: "create", department: nd, budget_year: Number(nyear), version_label: nver,
       budget_type: ntype, business_project_id: ntype === "PROJECT" ? Number(nproj) : null,
     });
-    if (r) { setNver(""); setNtype("BUSINESS"); setNproj(""); await loadBudget(r.budgetId); router.refresh(); }
+    if (r) { setNver(""); setNtype(scope === "TEE" ? "TEE" : "BUSINESS"); setNproj(""); await loadBudget(r.budgetId); router.refresh(); }
   }
+
+  useEffect(() => { if (openId) loadBudget(Number(openId)); }, [openId]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   function upd(key, field, value) { setLines((ls) => ls.map((l) => (l._key === key ? { ...l, [field]: value } : l))); setDirty(true); }
   function addLine(category) { setLines((ls) => [...ls, { _key: keyRef.current++, category, line_label: "", prior_year: 0, commentary: "", ...Object.fromEntries(MONTH_KEYS.map((k) => [k, 0])) }]); setDirty(true); }
@@ -220,7 +236,7 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={labelSt}>Budget type</span>
               <select value={ntype} onChange={(e) => { setNtype(e.target.value); if (e.target.value !== "PROJECT") setNproj(""); }} style={inputSt}>
-                {BUDGET_TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
+                {types.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
               </select>
             </label>
             {ntype === "PROJECT" && (
@@ -302,6 +318,8 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
               ))}
             </div>
 
+            {isTee && split.length > 0 && <EmployeeSplit split={split} />}
+
             {tab === "overview" && <Overview lines={lines} monthly={monthly} groups={groups} movers={movers} issues={issues} summary={summary} events={loaded.events || []} approvers={loaded.approvers || []} onGoFinancial={() => setTab("financial")} />}
 
             {tab === "campaigns" && !isTee && (
@@ -319,7 +337,9 @@ export default function DeptBudgetUI({ initialBudgets, departments, myDept, isAd
                 lines={lines} groups={groups} monthly={monthly} editing={editing} viewMode={viewMode} setViewMode={setViewMode}
                 expanded={expanded} setExpanded={setExpanded} upd={upd} setAnnual={setAnnual} spread={spread} addLine={addLine} addCategory={addCategory} removeLine={removeLine}
                 dirty={dirty} busy={busy} onSave={save} fixedLines={isTee}
-                lockedNote={!editing ? (loaded.canEdit ? "Locked while in review — return it to draft to edit." : "Read-only. You can view but not edit this department's budget.") : null}
+                lockedNote={!editing ? (split.length && status === "DRAFT" && loaded.canEdit
+                  ? "Set per employee — download the per-employee template on Travel, Expenses & Entertainment above, change it and upload it again."
+                  : loaded.canEdit ? "Locked while in review — return it to draft to edit; it then needs approving again." : "Read-only. You can view but not edit this department's budget.") : null}
               />
             )}
 
@@ -980,6 +1000,41 @@ function InitiativeEditor({ init, editing, busy, budgetId, api, reload, objectiv
           <button onClick={save} disabled={busy} style={btn("var(--accent)")}>Save {KIND_LABEL[init.kind]?.toLowerCase() || "initiative"}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// A T&E budget set per employee: each reportee's budget by month. The
+// department lines are the sum of these.
+function EmployeeSplit({ split = [] }) {
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const th = { ...labelSt, textAlign: "right", padding: "6px 8px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
+  const td = { padding: "6px 8px", borderBottom: "1px solid var(--hairline)", textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  const total = split.reduce((t, e) => t + e.total, 0);
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 650 }}>Budget per employee</div>
+        <div style={{ fontSize: 11.5, color: "var(--faint)" }}>{split.length} row{split.length === 1 ? "" : "s"} · {moneyC(total)} · the department lines below are the sum</div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+          <thead><tr>
+            <th style={{ ...th, textAlign: "left" }}>Employee</th>
+            {MONTHS.map((m) => <th key={m} style={th}>{m}</th>)}
+            <th style={th}>Total</th>
+          </tr></thead>
+          <tbody>
+            {split.map((e) => (
+              <tr key={e.employee}>
+                <td style={{ ...td, textAlign: "left", color: e.employee === "Unallocated" ? "var(--muted)" : "var(--ink)" }}>{e.employee}</td>
+                {e.months.map((v, i) => <td key={i} style={{ ...td, color: v ? "var(--ink)" : "var(--faint)" }}>{v ? moneyC(v) : "—"}</td>)}
+                <td style={{ ...td, fontWeight: 650 }}>{moneyC(e.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

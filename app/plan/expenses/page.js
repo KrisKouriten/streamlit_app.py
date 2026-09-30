@@ -177,9 +177,22 @@ function DepartmentView({ r, department, through }) {
   const vsYtd = dept.budgetYtd == null ? null : dept.budgetYtd - dept.net;
   const who = r.claimant;
   const mineRow = who ? s.departments.find((d) => d.department === department) : null;
+  // The department budgets per employee: an employee picked is read against
+  // their own budget.
+  const eb = who && r.employeeBudget ? mineRow : null;
+  const ebVs = eb && eb.budgetYtd != null ? eb.budgetYtd - eb.net : null;
   return (
     <>
-      {who ? (
+      {eb ? (
+        <StatRow>
+          <Stat label={`Claimed by ${who}`} value={money(eb.net, { compact: true })} sub={`${s.lines.toLocaleString("en-GB")} line${s.lines === 1 ? "" : "s"}`} />
+          <Stat label={`Their budget${through ? ` to ${through}` : ""}`} value={eb.budgetYtd == null ? "—" : money(eb.budgetYtd, { compact: true })} sub={`full year ${money(eb.budget, { compact: true })}`} />
+          <Stat label="vs their budget to date" value={ebVs == null ? "—" : `${ebVs < 0 ? "−" : "+"}${money(Math.abs(ebVs), { compact: true })}`}
+            tone={ebVs == null ? undefined : ebVs < 0 ? "red" : "green"} sub={ebVs == null ? "" : ebVs < 0 ? "over budget" : "headroom"} />
+          <Stat label="Department vs budget to date" value={vsYtd == null ? "—" : `${vsYtd < 0 ? "−" : "+"}${money(Math.abs(vsYtd), { compact: true })}`}
+            tone={vsYtd == null ? undefined : vsYtd < 0 ? "red" : "green"} sub={vsYtd == null ? "no T&E budget" : vsYtd < 0 ? "over budget" : "headroom"} />
+        </StatRow>
+      ) : who ? (
         <StatRow>
           <Stat label={`Claimed by ${who}`} value={money(s.net, { compact: true })} sub={`${s.lines.toLocaleString("en-GB")} line${s.lines === 1 ? "" : "s"}`} />
           <Stat label={`Share of ${department}`} value={pct(dept.net ? s.net / dept.net : 0, 0)} sub={`of ${money(dept.net, { compact: true })} claimed`} />
@@ -202,6 +215,7 @@ function DepartmentView({ r, department, through }) {
 
       <MonthTable rows={who ? [
         { label: <strong>{who}</strong>, values: mineRow?.months || Array(12).fill(0) },
+        ...(eb?.budgetMonths ? [{ label: <span style={{ color: "var(--muted)" }}>{who} budget</span>, values: eb.budgetMonths }] : []),
         { label: <span style={{ color: "var(--muted)" }}>{department} total</span>, values: dept.months },
       ] : [
         { label: dept.teams?.length ? <strong>{department}</strong> : department, values: dept.months },
@@ -210,6 +224,7 @@ function DepartmentView({ r, department, through }) {
       ]} />
 
       {!who && <BudgetLines dept={dept} through={through} />}
+      {eb && <BudgetLines dept={eb} through={through} />}
       <Breakdowns s={s} showClaimants={!who} />
       <Lines r={r} showDepartment={false} />
     </>
