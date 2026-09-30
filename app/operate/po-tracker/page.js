@@ -63,7 +63,7 @@ export default async function PurchaseOrderRequests() {
   const visiblePos = rowsForViewer(list.pos || [], deptTabs);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Purchase Order Requests"
         right="Raise a P.O, take it through department-head sign-off" />
       {!list.ready ? (

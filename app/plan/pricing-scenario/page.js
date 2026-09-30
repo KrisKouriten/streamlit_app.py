@@ -20,7 +20,7 @@ export default async function PricingScenario({ searchParams }) {
   const canView = hasRole(session, "ADMIN", "FINANCE", "OPS");
   if (!canView) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Plan — HO" title="Pricing Scenario" />
         <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center", borderColor: "color-mix(in srgb, var(--red) 35%, var(--line))" }}>
           <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>You don&rsquo;t have access to Pricing Scenario</div>
@@ -44,7 +44,7 @@ export default async function PricingScenario({ searchParams }) {
   const canApprove = hasRole(session, "ADMIN", "FINANCE");
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Pricing Scenario"
         right="Model a promotion or price change and see its blended-margin impact" />
       <PricingScenarioWorkspace

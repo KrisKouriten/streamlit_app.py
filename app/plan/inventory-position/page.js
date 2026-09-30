@@ -23,7 +23,7 @@ export default async function InventoryPositionPage() {
   ]);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan · HO" title="Inventory Position"
         right="Live stock — in transit, DC & stores — feeding OTB" />
       {!summary.ready ? (

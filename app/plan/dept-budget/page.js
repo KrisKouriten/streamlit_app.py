@@ -58,7 +58,7 @@ export default async function DeptBudgetsPage({ searchParams }) {
   }
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader crumb="Plan — HO" title="Departmental Budgets"
         right="Build, phase and sign off a department's budget for the year" />

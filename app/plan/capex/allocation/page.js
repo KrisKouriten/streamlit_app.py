@@ -19,7 +19,7 @@ export default async function CapitalAllocation({ searchParams }) {
   const canView = hasRole(session, "ADMIN", "FINANCE", "EXEC");
   if (!canView) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Plan — Finance" title="Capital Allocation" />
         <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center", borderColor: "color-mix(in srgb, var(--red) 35%, var(--line))" }}>
           <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>You don&rsquo;t have access to Capital Allocation</div>
@@ -35,7 +35,7 @@ export default async function CapitalAllocation({ searchParams }) {
   const canManage = hasRole(session, "ADMIN", "FINANCE", "EXEC");
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — Finance" title="Capital Allocation"
         right="Capital available, committed & funding required across the portfolio, against the hurdle rate" />
       <CapexWorkspace {...data} canManage={canManage} />

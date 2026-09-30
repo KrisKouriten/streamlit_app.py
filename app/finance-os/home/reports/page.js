@@ -48,7 +48,7 @@ export default async function ReportingCentre({ searchParams }) {
   const mine = allow(mineAll.reports || []).slice(0, 8);
 
   if (!canView) {
-    return <div style={{ padding: "1rem 0" }}><PageHeader crumb="Corporate Reporting Centre" title="Corporate Reporting Centre" /><EmptyState title="Access required">Ask an administrator for access to the reports your department needs.</EmptyState></div>;
+    return <div className="fos-shell"><PageHeader crumb="Corporate Reporting Centre" title="Corporate Reporting Centre" /><EmptyState title="Access required">Ask an administrator for access to the reports your department needs.</EmptyState></div>;
   }
 
   // Drill-down: "View history" for one template. Shows every report of that
@@ -57,12 +57,12 @@ export default async function ReportingCentre({ searchParams }) {
   if (ready && templateFilter) {
     // Non-full-access users may only drill into a template they have been granted.
     if (!fullAccess && !allowedKeys.includes(templateFilter)) {
-      return <div style={{ padding: "1rem 0" }}><PageHeader crumb="Corporate Reporting Centre" title="Corporate Reporting Centre" /><EmptyState title="Access required">Your department does not have access to this report.</EmptyState></div>;
+      return <div className="fos-shell"><PageHeader crumb="Corporate Reporting Centre" title="Corporate Reporting Centre" /><EmptyState title="Access required">Your department does not have access to this report.</EmptyState></div>;
     }
     const tpl = templates.find((t) => t.template_key === templateFilter);
     const { reports } = await listReports({ templateKey: templateFilter, limit: 200 });
     return (
-      <div style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Corporate Reporting Centre · History" title={tpl ? `${tpl.name} — history` : "Report history"} right={`${reports.length} report${reports.length === 1 ? "" : "s"}`} />
         <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <Link href="/finance-os/home/reports" style={{ fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, textDecoration: "none", color: "var(--muted)", border: "1px solid var(--line)" }}>← All reporting</Link>
@@ -93,7 +93,7 @@ export default async function ReportingCentre({ searchParams }) {
 
   if (!ready) {
     return (
-      <div style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Corporate Reporting Centre" title="Corporate Reporting Centre" />
         <EmptyState title="Reporting Centre not migrated yet">Run migration 045 to create the reporting schema and seed the five corporate templates.</EmptyState>
       </div>
@@ -101,7 +101,7 @@ export default async function ReportingCentre({ searchParams }) {
   }
 
   return (
-    <div style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <ScreenWatermark text={confidentialStamp(session, new Date())} />
       <PageHeader
         crumb="Corporate Reporting Centre"

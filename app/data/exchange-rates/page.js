@@ -21,7 +21,7 @@ export default async function ExchangeRates() {
   const rates = await getFxRates().catch(() => []);
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Finance Data" title="Exchange Rates"
         right="spot / hedged / costing rates against sterling" />
       {!rates.length ? (

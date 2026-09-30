@@ -18,7 +18,7 @@ export default async function PricingReview({ searchParams }) {
   const canView = hasRole(session, "ADMIN", "FINANCE", "OPS");
   if (!canView) {
     return (
-      <div className="fos-shell" style={{ padding: "1rem 0" }}>
+      <div className="fos-shell">
         <PageHeader crumb="Plan — HO" title="Pricing Review" />
         <div className="fos-card" style={{ padding: "26px 24px", textAlign: "center", borderColor: "color-mix(in srgb, var(--red) 35%, var(--line))" }}>
           <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 6 }}>You don&rsquo;t have access to Pricing Review</div>
@@ -47,7 +47,7 @@ export default async function PricingReview({ searchParams }) {
   const canManage = hasRole(session, "ADMIN", "FINANCE", "OPS");
 
   return (
-    <div className="fos-shell" style={{ padding: "1rem 0" }}>
+    <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Pricing Review"
         right="Cost build, margin analysis and pricing health across the range" />
       <PricingWorkspace
