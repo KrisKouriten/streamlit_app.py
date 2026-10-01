@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import DeptTabs from "../../dept-tabs";
+import PoBudget from "./po-budget";
 import { ALL_DEPTS, rowsForTab } from "../../../lib/dept-tabs-rules.js";
 import { useRouter } from "next/navigation";
 import {
@@ -75,12 +76,14 @@ const EMPTY = {
 const REQUEST_FILTERS = [
   { key: "ALL", label: "All", test: () => true },
   { key: "DRAFT", label: "Draft", test: (p) => p.status === "DRAFT" },
+  // Submitted, waiting on the department head's sign-off.
+  { key: "AWAITING", label: "Awaiting approval", test: (p) => p.status === "PENDING_SIGNOFF" },
   { key: "OPEN", label: "Open", test: (p) => displayStatus(p).code === "OPEN" },
   { key: "CHALLENGED", label: "Challenged", test: (p) => isChallenged(p) },
   { key: "CLOSED", label: "Closed", test: (p) => p.finance_status === "CLOSED" },
 ];
 
-export default function PoUI({ initialPos, deptTabs = [], departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [] }) {
+export default function PoUI({ initialPos, deptTabs = [], departments, stores, me, isAdmin = false, approverDepts = [], marketingCampaigns = [], businessProjects = [], selfApproveLimit = 0, supplierNames = [], entities = [], openPo = null, budgetPanel = null }) {
   const router = useRouter();
   const [f, setF] = useState(EMPTY);
   const [recharge, setRecharge] = useState([]); // [{store_code, store_name, pct}]
@@ -106,6 +109,17 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
     const matches = (p) => !q || [poRef(p), p.description, p.supplier].some((v) => String(v || "").toLowerCase().includes(q));
     return deptPos.filter((p) => flt.test(p) && matches(p));
   }, [deptPos, listFilter, listSearch]);
+  // A link from a dashboard (?po=ID) opens that P.O: its department tab, every
+  // status, the row expanded and scrolled into view.
+  useEffect(() => {
+    const p = openPo != null ? initialPos.find((x) => String(x.po_id) === String(openPo)) : null;
+    if (!p) return;
+    setListDept(deptTabs.includes(p.department) ? p.department : (deptTabs[0] || ALL_DEPTS));
+    setListFilter("ALL"); setListSearch("");
+    toggleView(p);
+    setTimeout(() => document.getElementById(`po-${p.po_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+  }, [openPo]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const editingChallenged = !!editing && isChallenged(editing.po);
   const returnRouteLabel = (code) => (CHALLENGE_RETURN_ROUTES.find((r) => r.code === code) || {}).label || null;
 
@@ -527,6 +541,9 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
         </div>
       </div>
 
+      {/* ---- Spend & committed vs budget — for the department's head and Finance ---- */}
+      {budgetPanel && <PoBudget year={budgetPanel.year} budgets={budgetPanel.budgets} visible={budgetPanel.visible} pos={initialPos} dept={listDept} />}
+
       {/* ---- Existing P.O.s ---- */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Purchase orders</div>
@@ -569,7 +586,7 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
                   const lapse = lapseNote(challengeLapse(p));
                   return (
                   <FragmentRow key={p.po_id}>
-                  <tr>
+                  <tr id={`po-${p.po_id}`} style={String(openPo) === String(p.po_id) ? { background: "var(--accent-bg)" } : undefined}>
                     <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--hairline)" }}>
                       <button onClick={() => toggleView(p)} title="View P.O details" aria-expanded={viewFor === p.po_id}
                         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: viewFor === p.po_id ? "var(--accent)" : "var(--ink)", font: "inherit", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "underline", textDecorationColor: "var(--line-strong)", textUnderlineOffset: 3 }}>

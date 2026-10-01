@@ -3,9 +3,9 @@ import { getSession, hasRole, isAdmin } from "../../../lib/auth";
 import { getExpenseReport, expenseDbTarget } from "../../../lib/expenses";
 import { departmentsHeadedBy } from "../../../lib/dept-budget";
 import { listDepartments } from "../../../lib/governance";
-import { accountName, storeFromTracking, expenseTabs, pickExpenseTab, CONSOLIDATED } from "../../../lib/expense-rules.js";
+import { accountName, storeFromTracking, expenseTabs, pickExpenseTab, expensePeriod, CONSOLIDATED } from "../../../lib/expense-rules.js";
 import { PageHeader, Panel, Table, StatRow, Stat, EmptyState, money, pct, Badge } from "../../finance-os/ui";
-import ExpenseTools, { CreateTables } from "./expenses-ui";
+import ExpenseTools, { CreateTables, PeriodPicker } from "./expenses-ui";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,9 @@ export default async function ExpensesPage({ searchParams }) {
   }
 
   const department = tab === CONSOLIDATED ? null : tab;
-  const r = await getExpenseReport({ year, department, claimant: department ? sp.emp || null : null });
+  // The period: year to date, a month, or custom dates within the year.
+  const period = expensePeriod({ year, period: sp.period || "ytd", from: sp.from, to: sp.to });
+  const r = await getExpenseReport({ year, department, claimant: department ? sp.emp || null : null, period: period.key === "ytd" ? null : period });
   if (!r.ready) {
     return (
       <div className="fos-shell">
@@ -66,18 +68,20 @@ export default async function ExpensesPage({ searchParams }) {
 
   const s = r.summary;
   const years = [...new Set([year, ...r.years])].sort((a, b) => b - a);
-  const through = s.lastMonth ? MONTHS[s.lastMonth - 1] : null;
+  // "to Aug" for the year to date; "for Sep 2026" once a period is picked.
+  const through = period.key !== "ytd" ? `for ${period.label}` : s.lastMonth ? `to ${MONTHS[s.lastMonth - 1]}` : null;
   const scope = department ? (r.claimant ? `${department} · ${r.claimant}` : department) : "Consolidated";
+  const keep = { tab, year, emp: department ? r.claimant || "" : "", period: period.key, from: period.key === "custom" ? period.from : "", to: period.key === "custom" ? period.to : "" };
 
   return (
     <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Expense Claims"
-        right={`${scope} · ${year}${through ? ` · claims to ${through}` : ""} · net of VAT, against the Travel, Expenses & Entertainment budget`} />
+        right={`${scope} · ${year}${period.key !== "ytd" ? ` · ${period.label}` : through ? ` · claims ${through}` : ""} · net of VAT, against the Travel, Expenses & Entertainment budget`} />
 
       {/* One tab per department the viewer may see, Consolidated first for Finance. */}
       <nav style={{ display: "flex", gap: 4, flexWrap: "wrap", borderBottom: "1px solid var(--line)", marginBottom: 18 }}>
         {access.tabs.map((t) => (
-          <a key={t.key} href={qs({ tab: t.key, year })} style={{
+          <a key={t.key} href={qs({ tab: t.key, year, period: keep.period, from: keep.from, to: keep.to })} style={{
             padding: "8px 12px", fontSize: 13, textDecoration: "none", whiteSpace: "nowrap",
             color: t.key === tab ? "var(--ink)" : "var(--muted)", fontWeight: t.key === tab ? 650 : 500,
             borderBottom: t.key === tab ? "2px solid var(--accent)" : "2px solid transparent", marginBottom: -1,
@@ -99,7 +103,13 @@ export default async function ExpensesPage({ searchParams }) {
         <select name="year" defaultValue={String(year)} style={sel}>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
+        <PeriodPicker key={`${year}-${period.key}-${period.from}-${period.to}`} year={year} period={period.key}
+          from={period.key === "custom" ? period.from : ""} to={period.key === "custom" ? period.to : ""} />
         <button type="submit" className="fos-btn" style={{ height: 34 }}>View</button>
+        {/* Every claim line in this view — tab, employee, year and period — as Excel. */}
+        <a href={`/api/expenses/export${qs(keep)}`} className="fos-btn-ghost" style={{ height: 34, display: "inline-flex", alignItems: "center", textDecoration: "none", marginLeft: "auto" }}>
+          Download claim lines (Excel)
+        </a>
       </form>
 
       {!department && isFinance && <ExpenseTools uploads={r.uploads} unmapped={r.unmapped} departments={r.departments} />}
@@ -132,10 +142,10 @@ function ConsolidatedView({ r, year, through }) {
         <Stat label="T&E budget" value={withBudget.length ? money(bud, { compact: true }) : "—"}
           sub={withBudget.length ? `${pct(bud ? spentAgainst / bud : 0, 0)} used · ${withBudget.length} department${withBudget.length === 1 ? "" : "s"}` : "no T&E budgets set yet"} />
         <Stat label="Over T&E budget" value={s.departments.filter((d) => d.overYtd || d.over).length}
-          tone={s.departments.some((d) => d.overYtd || d.over) ? "red" : "green"} sub={through ? `budget to ${through}` : "year to date"} />
+          tone={s.departments.some((d) => d.overYtd || d.over) ? "red" : "green"} sub={through ? `budget ${through}` : "year to date"} />
       </StatRow>
 
-      <Panel title="By department" note={`claims against each department's Travel, Expenses & Entertainment budget · budget to date = the budget's months to ${through || "date"}`}>
+      <Panel title="By department" note={`claims against each department's Travel, Expenses & Entertainment budget · budget to date = the budget's months ${through || "to date"}`}>
         <Table columns={[
           { label: "Department", render: (d) => <a href={qs({ tab: d.department, year })} style={{ color: "var(--accent)", textDecoration: "none" }}>{d.department}</a> },
           { label: "Claimed", align: "right", render: (d) => (
@@ -186,7 +196,7 @@ function DepartmentView({ r, department, through }) {
       {eb ? (
         <StatRow>
           <Stat label={`Claimed by ${who}`} value={money(eb.net, { compact: true })} sub={`${s.lines.toLocaleString("en-GB")} line${s.lines === 1 ? "" : "s"}`} />
-          <Stat label={`Their budget${through ? ` to ${through}` : ""}`} value={eb.budgetYtd == null ? "—" : money(eb.budgetYtd, { compact: true })} sub={`full year ${money(eb.budget, { compact: true })}`} />
+          <Stat label={`Their budget${through ? ` ${through}` : ""}`} value={eb.budgetYtd == null ? "—" : money(eb.budgetYtd, { compact: true })} sub={`full year ${money(eb.budget, { compact: true })}`} />
           <Stat label="vs their budget to date" value={ebVs == null ? "—" : `${ebVs < 0 ? "−" : "+"}${money(Math.abs(ebVs), { compact: true })}`}
             tone={ebVs == null ? undefined : ebVs < 0 ? "red" : "green"} sub={ebVs == null ? "" : ebVs < 0 ? "over budget" : "headroom"} />
           <Stat label="Department vs budget to date" value={vsYtd == null ? "—" : `${vsYtd < 0 ? "−" : "+"}${money(Math.abs(vsYtd), { compact: true })}`}
@@ -204,7 +214,7 @@ function DepartmentView({ r, department, through }) {
         <StatRow>
           <Stat label="Claimed (net)" value={money(dept.net, { compact: true })}
             sub={dept.teams?.length ? dept.teams.map((t) => `${t.key} ${money(t.net, { compact: true })}`).join(" · ") : `${dept.lines.toLocaleString("en-GB")} lines · ${s.claimants} claimants`} />
-          <Stat label={`Budget${through ? ` to ${through}` : ""}`} value={dept.budgetYtd == null ? "—" : money(dept.budgetYtd, { compact: true })}
+          <Stat label={`Budget${through ? ` ${through}` : ""}`} value={dept.budgetYtd == null ? "—" : money(dept.budgetYtd, { compact: true })}
             sub={dept.budget == null ? "no T&E budget for this year" : `full year ${money(dept.budget, { compact: true })}`} />
           <Stat label="vs budget to date" value={vsYtd == null ? "—" : `${vsYtd < 0 ? "−" : "+"}${money(Math.abs(vsYtd), { compact: true })}`}
             tone={vsYtd == null ? undefined : vsYtd < 0 ? "red" : "green"} sub={vsYtd == null ? "set a T&E budget" : vsYtd < 0 ? "over budget" : "headroom"} />
@@ -239,7 +249,7 @@ function BudgetLines({ dept, through }) {
   const hasBudget = rows.some((r) => r.budget != null);
   const vs = (b, n) => (b == null ? dash : `${n > b ? "−" : "+"}${money(Math.abs(b - n))}`);
   return (
-    <Panel title="By budget line" note={`claims sorted onto the Travel, Expenses & Entertainment budget lines · budget to date = the budget's months to ${through || "date"}`}>
+    <Panel title="By budget line" note={`claims sorted onto the Travel, Expenses & Entertainment budget lines · budget to date = the budget's months ${through || "to date"}`}>
       <Table columns={[
         { label: "Line", render: (r) => r.label },
         { label: "Claimed", align: "right", render: (r) => money(r.net) },

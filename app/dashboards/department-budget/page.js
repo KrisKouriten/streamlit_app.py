@@ -35,7 +35,7 @@ const procCcyAmt = (v, ccy) => `${PROC_CCY_SYMBOL[ccy] || ""}${Number(v || 0).to
 const procReportedGbp = (r) => (r.report_gbp != null ? Number(r.report_gbp) : procLineValue(r));
 function procRegisterColumns({ lc = false } = {}) {
   const cols = [
-    { label: "Reference", render: (r) => procRef(r) },
+    { label: "Reference", render: (r) => <ProcLink r={r} /> },
     { label: "Supplier", render: (r) => r.supplier || "—" },
     { label: "Channel / SKU", render: (r) => (r.channel_code ? `${r.channel_code}${r.sku_or_range ? ` · ${r.sku_or_range}` : ""}` : (r.category || "—")) },
     {
@@ -67,6 +67,12 @@ const PROC_REGISTER_GROUPS = [
   ["LOCAL", "Local purchases", false],
   ["OTHER", "Other", false],
 ];
+
+// A P.O or procurement order named on the dashboard links to it on its own
+// request page, opened and scrolled into view.
+const linkSt = { color: "var(--accent)", textDecoration: "none", fontWeight: 600 };
+const PoLink = ({ p }) => <a href={`/operate/po-tracker?po=${p.po_id}`} title="Open on Purchase Order Requests" style={linkSt}>{poRef(p)}</a>;
+const ProcLink = ({ r }) => <a href={`/operate/procurement?order=${r.purchase_id}`} title="Open on Procurement Requests" style={linkSt}>{procRef(r)}</a>;
 
 export default async function DepartmentBudgetDashboard({ searchParams }) {
   const session = await getSession();
@@ -177,7 +183,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
               <div className="fos-card" style={{ padding: "6px 16px", borderColor: "color-mix(in srgb, var(--red) 30%, var(--line))" }}>
                 {d.pos.challenged.map((p) => (
                   <div key={p.po_id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{poRef(p)}</span>
+                    <span style={{ fontSize: 13 }}><PoLink p={p} /></span>
                     <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
                     <span className="fos-num" style={{ fontSize: 12.5 }}>{money(p.payment_value)}</span>
                     <span style={{ flex: 1, fontSize: 11.5, color: "var(--red)" }}>{challengeReasonLabels(p.challenge_reasons).join(" · ")}</span>
@@ -191,6 +197,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <Panel title="Open purchase orders" note={`${d.pos?.openCount || 0} open`}>
             <Table
               columns={[
+                { label: "P.O number", render: (r) => <PoLink p={r} /> },
                 { label: "Date", render: (r) => (r.po_date ? new Date(r.po_date).toLocaleDateString("en-GB") : "—") },
                 { label: "Supplier", render: (r) => r.supplier || "—" },
                 { label: "Category", render: (r) => r.po_category || "—" },
@@ -207,7 +214,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
             <Panel title="Part-invoiced purchase orders" note={`${d.pos.partInvoicedCount} · ${money(d.pos.partCommitted || 0, { compact: true })} committed, of which ${money(d.pos.partBalance || 0, { compact: true })} still to be invoiced`}>
               <Table
                 columns={[
-                  { label: "P.O number", render: (r) => poRef(r) },
+                  { label: "P.O number", render: (r) => <PoLink p={r} /> },
                   { label: "Supplier", render: (r) => r.supplier || "—" },
                   { label: "Net value", align: "right", render: (r) => money(r.payment_value) },
                   { label: "Invoiced", align: "right", render: (r) => money(poCommitment(r).invoiced) },
@@ -224,7 +231,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
           <Panel title="P.O register" note={`${d.pos?.registerCount || 0} signed off`}>
             <Table
               columns={[
-                { label: "P.O number", render: (r) => poRef(r) },
+                { label: "P.O number", render: (r) => <PoLink p={r} /> },
                 { label: "Approved", render: (r) => (r.approved_at ? new Date(r.approved_at).toLocaleDateString("en-GB") : "—") },
                 { label: "Supplier", render: (r) => r.supplier || "—" },
                 { label: department === "Marketing" ? "Campaign" : "Category", render: (r) => (department === "Marketing" ? (r.marketing_campaign || r.po_category || "—") : (r.po_category || "—")) },
@@ -321,7 +328,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                   <div className="fos-card" style={{ padding: "6px 16px", borderColor: "color-mix(in srgb, var(--red) 30%, var(--line))" }}>
                     {d.proc.challenged.map((p) => (
                       <div key={p.purchase_id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{procRef(p)}</span>
+                        <span style={{ fontSize: 13 }}><ProcLink r={p} /></span>
                         <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
                         <span className="fos-num" style={{ fontSize: 12.5 }}>{money(procCommitted(p))}</span>
                         <span style={{ flex: 1, fontSize: 11.5, color: "var(--red)" }}>{procChallengeLabels(p.challenge_reasons).join(" · ")}</span>

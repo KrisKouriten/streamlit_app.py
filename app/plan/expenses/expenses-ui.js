@@ -132,3 +132,28 @@ export default function ExpenseTools({ uploads = [], unmapped = [], departments 
     </>
   );
 }
+
+/*
+ * The period picker on Expense Claims: the year to date, one month, or custom
+ * dates. Choosing a date switches the picker to Custom dates, so the dates are
+ * never silently ignored.
+ */
+const PERIOD_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export function PeriodPicker({ year, period = "ytd", from = "", to = "" }) {
+  const [p, setP] = useState(period);
+  const pick = { height: 34, padding: "0 10px", border: "1px solid var(--line-strong)", borderRadius: 8, background: "var(--surface)", color: "var(--ink)", fontSize: 13 };
+  return (
+    <>
+      <select name="period" value={p} onChange={(e) => setP(e.target.value)} style={pick} aria-label="Period">
+        <option value="ytd">Year to date</option>
+        {PERIOD_MONTHS.map((m, i) => <option key={m} value={String(i + 1)}>{m}</option>)}
+        <option value="custom">Custom dates</option>
+      </select>
+      <input type="date" name="from" defaultValue={from} min={`${year}-01-01`} max={`${year}-12-31`} onChange={() => setP("custom")}
+        aria-label="From" style={{ ...pick, opacity: p === "custom" ? 1 : 0.55 }} />
+      <span style={{ fontSize: 12.5, color: "var(--faint)" }}>to</span>
+      <input type="date" name="to" defaultValue={to} min={`${year}-01-01`} max={`${year}-12-31`} onChange={() => setP("custom")}
+        aria-label="To" style={{ ...pick, opacity: p === "custom" ? 1 : 0.55 }} />
+    </>
+  );
+}
