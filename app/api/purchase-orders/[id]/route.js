@@ -7,7 +7,7 @@ import {
   resubmitChallenge, computeSelfApprovalDecision, overrideRoute,
 } from "../../../../lib/purchase-orders";
 import { getApproverEmails } from "../../../../lib/dept-budget";
-import { canDeletePo, challengeReasonLabels, invoiceChaseStatus, poRef } from "../../../../lib/po-rules";
+import { canDeletePo, challengeReasonLabels, invoiceChaseStatus, poRef, deptInvoiceError, deptCanRemoveInvoice } from "../../../../lib/po-rules";
 import { resolveBaseUrl } from "../../../../lib/invite-rules";
 import { notifyPoAwaitingSignoff, notifyPoDecision, notifyPoChallenge, notifyPoInvoiceChase } from "../../../../lib/workflow-notify";
 import { audit } from "../../../../lib/governance";
@@ -147,6 +147,32 @@ export async function POST(request, { params }) {
         const gate = canDeletePo(loaded.po, { isAdmin: isAdmin(session), isOwner });
         if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
         return NextResponse.json(await deletePo(id, session));
+      }
+
+      // ---- The department: the supplier's invoice against its own P.O ----
+      // Whoever raised the P.O (or the department's head) records the invoice
+      // number and value, so they can check it against what they ordered.
+      // Always entered as Received; Finance take it on from there.
+      case "dept-add-invoice":
+      case "dept-remove-invoice": {
+        const loaded = await getPo(id);
+        if (!loaded) return NextResponse.json({ error: "P.O not found" }, { status: 404 });
+        const who = String(session.email || session.name || "").toLowerCase();
+        const isRaiser = !!who && String(loaded.po.created_by || "").toLowerCase() === who;
+        const isHead = isFinance(session) || (await canApprove(session, loaded.po.department));
+        const err = deptInvoiceError(loaded.po, { isRaiser, isHead });
+        if (err) return NextResponse.json({ error: err }, { status: 403 });
+        if (body.op === "dept-add-invoice") {
+          const inv = body.invoice || {};
+          return NextResponse.json(await addPoInvoice(id, {
+            invoice_number: inv.invoice_number, invoice_amount: inv.invoice_amount,
+            invoice_date: inv.invoice_date || null, invoice_status: "RECEIVED",
+          }, session));
+        }
+        const target = (loaded.invoices || []).find((i) => String(i.invoice_id) === String(body.invoice_id));
+        if (!target) return NextResponse.json({ error: "Invoice not found on this P.O" }, { status: 404 });
+        if (!deptCanRemoveInvoice(target)) return NextResponse.json({ error: "Finance are already working this invoice — ask Finance to change it" }, { status: 400 });
+        return NextResponse.json(await deletePoInvoice(target.invoice_id, session));
       }
 
       // ---- Finance: invoice / close / challenge / reopen / payment (P.O Summary + Close) ----

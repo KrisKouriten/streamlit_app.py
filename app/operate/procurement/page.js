@@ -29,7 +29,7 @@ export default async function Procurement({ searchParams }) {
   const isAdmin = hasRole(session, "ADMIN");
   const merchApprovers = (await getApproverEmails("Merchandising").catch(() => [])).map((e) => (e || "").toLowerCase());
   const isMerchApprover = isAdmin || merchApprovers.includes((session.email || "").toLowerCase());
-  const roles = { canManage, isMerchApprover, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin };
+  const roles = { canManage, isMerchApprover, isHod: hasRole(session, "ADMIN", "EXEC"), isFinance: hasRole(session, "ADMIN", "FINANCE"), isAdmin, me: session.email || session.name || null };
   const sp = (await searchParams) || {};
   const [pr, otbVersions, fxRates, supplierList, amendments] = await Promise.all([
     getProcurement(),

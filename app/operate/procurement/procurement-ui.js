@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS, orderInvoiceError } from "../../../lib/procurement-rules";
+import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
@@ -468,7 +469,16 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
-  const { isHod, isFinance, isMerchApprover } = roles || {};
+  const [inv, setInv] = useState(null);               // { purchase_id, number, amount } — the supplier's invoice being entered
+  const { isHod, isFinance, isMerchApprover, me } = roles || {};
+  // Whoever raised a Local order (or a manager) records the supplier's invoice
+  // on it, to check it against what was ordered.
+  const mayInvoice = (o) => !orderInvoiceError(o, { canManage, isRaiser: !!me && String(o.created_by || "").toLowerCase() === String(me).toLowerCase() });
+  async function saveInv() {
+    if (!inv) return;
+    await act(inv.purchase_id, "set-invoice", { invoice_number: inv.number.trim(), invoice_amount: inv.amount });
+    setInv(null);
+  }
   if (!orders.length) return null;
 
   async function act(id, action, extra) {
@@ -566,6 +576,11 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                       {chal && <Badge tone="red">Challenged</Badge>}
                     </div>
+                    {o.source === "LOCAL" && Number(o.invoice_amount) > 0 && (() => {
+                      const m = invoiceMatch(o.amount_gbp, o.invoice_amount);
+                      const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
+                      return <div style={{ fontSize: 10.5, color: col, marginTop: 4, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.4 }}>Invoice {o.invoice_number || ""} {money(o.invoice_amount)} · {m.label.replace("P.O", "order")}</div>;
+                    })()}
                     {chal && (
                       <div style={{ marginTop: 5, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.45 }}>
                         <div style={{ fontSize: 11, color: "var(--red)", fontWeight: 600 }}>
@@ -591,6 +606,8 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                         {(isHod || isMerchApprover) && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
                         {canManage && o.approval_status === "PENDING" && <button disabled={busy} style={btn} title="Re-send the head-of-department sign-off request" onClick={() => act(o.purchase_id, "resubmit")}>Resubmit</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
+                        {mayInvoice(o) && <button disabled={busy} style={inv?.purchase_id === o.purchase_id ? { ...btn, borderColor: "var(--accent)", color: "var(--accent)" } : btn}
+                          onClick={() => setInv(inv?.purchase_id === o.purchase_id ? null : { purchase_id: o.purchase_id, number: o.invoice_number || "", amount: o.invoice_amount != null ? String(o.invoice_amount) : "" })}>{o.invoice_number ? "Invoice" : "Add invoice"}</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => openEdit(o)}>Edit</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
                         {isFinance && hodApprovedStatus(o.approval_status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)" }} onClick={() => del(o)}>Delete</button>}
@@ -602,6 +619,28 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                   <tr>
                     <td colSpan={8} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <FxApprove order={o} rates={fxRates} busy={busy} onCancel={() => setFxApprove(null)} onConfirm={(picks) => act(o.purchase_id, "finance-approve", picks)} />
+                    </td>
+                  </tr>
+                )}
+                {inv?.purchase_id === o.purchase_id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Invoice no / ref</span>
+                          <input style={{ ...editInp, width: 170 }} value={inv.number} onChange={(e) => setInv((s) => ({ ...s, number: e.target.value }))} placeholder="e.g. INV-1042" />
+                        </label>
+                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Invoice value (net)</span>
+                          <input style={{ ...editInp, width: 140, textAlign: "right" }} inputMode="decimal" value={inv.amount} onChange={(e) => setInv((s) => ({ ...s, amount: e.target.value }))} placeholder="0.00" />
+                        </label>
+                        {(() => {
+                          const m = invoiceMatch(o.amount_gbp, String(inv.amount).replace(/[£,\s]/g, ""));
+                          const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
+                          return <span style={{ fontSize: 12, color: col, alignSelf: "center" }}>Order {money(o.amount_gbp)} · {m.label.replace("P.O", "order")}</span>;
+                        })()}
+                        <button disabled={busy} onClick={saveInv} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save invoice</button>
+                        <button disabled={busy} onClick={() => setInv(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Cancel</button>
+                        <span style={{ fontSize: 11, color: "var(--faint)", flex: "1 1 200px" }}>Net of VAT, as on the order. Clear both fields to remove it. Finance record and close it on Procurement Summary + Close.</span>
+                      </div>
                     </td>
                   </tr>
                 )}
