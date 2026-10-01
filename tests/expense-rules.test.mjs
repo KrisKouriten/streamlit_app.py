@@ -233,3 +233,31 @@ test("pickTeeBudget: the T&E budget furthest through approval counts, then the n
   assert.equal(pickTeeBudget([b(1, "LOCKED", "2026-01-01"), b(2, "SLT_APPROVAL", "2026-09-01")]).budget_id, 1);
   assert.equal(pickTeeBudget([b(1, "DRAFT", "2026-01-01"), b(2, "DRAFT", "2026-09-01")]).budget_id, 2);
 });
+
+test("expensePeriod: year to date, one month, or custom dates kept inside the year", async () => {
+  const { expensePeriod, claimExportRow, summariseExpenses } = await import("../lib/expense-rules.js");
+  assert.deepEqual(expensePeriod({ year: 2026 }), { key: "ytd", from: "2026-01-01", to: "2026-12-31", months: null, label: "Year to date" });
+  assert.deepEqual(expensePeriod({ year: 2026, period: "2" }), { key: "2", from: "2026-02-01", to: "2026-02-28", months: [2, 2], label: "Feb 2026" });
+  const c = expensePeriod({ year: 2026, period: "custom", from: "2026-08-20", to: "2026-03-05" });
+  assert.deepEqual([c.from, c.to, c.months, c.label], ["2026-03-05", "2026-08-20", [3, 8], "05/03/2026 – 20/08/2026"]);
+  assert.equal(expensePeriod({ year: 2026, period: "custom", from: "2025-11-01", to: "2026-01-31" }).from, "2026-01-01");
+  assert.equal(expensePeriod({ year: 2026, period: "custom", from: "2026-03-01" }).key, "ytd");
+  assert.equal(expensePeriod({ year: 2026, period: "13" }).key, "ytd");
+
+  // A period narrows the claims, and the budget is for the period's months.
+  const lines = [
+    { department: "HR", claimant: "A", claim_date: "2026-02-10", net_amount: 100, tax_amount: 0, account_code: "493" },
+    { department: "HR", claimant: "A", claim_date: "2026-05-10", net_amount: 40, tax_amount: 8, account_code: "493" },
+  ];
+  const budgets = { HR: { total: 1200, months: Array(12).fill(100), lines: {} } };
+  const ytd = summariseExpenses(lines, { year: 2026, budgets });
+  assert.equal(ytd.departments[0].budgetYtd, 500);          // Jan–May
+  const feb = summariseExpenses(lines, { year: 2026, budgets, period: expensePeriod({ year: 2026, period: "2" }) });
+  assert.equal(feb.net, 100);
+  assert.equal(feb.departments[0].budgetYtd, 100);           // February only
+
+  const row = claimExportRow({ ...lines[1], description: "Train", store_tracking: null });
+  assert.equal(row.Date, "10/05/2026");
+  assert.equal(row["Gross £"], 48);
+  assert.equal(row["T&E budget line"], "Travel");
+});

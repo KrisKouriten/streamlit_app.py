@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, isAdmin, hasRole } from "../../../lib/auth";
 import { getUserDepartment } from "../../../lib/dept-budget";
+import { departmentPoBudgets } from "../../../lib/dept-budget-dashboard";
 import { deptTabsFor, rowsForViewer } from "../../../lib/dept-tabs-rules.js";
 import { listPos, getDepartments, marketingCampaignSuggestions } from "../../../lib/purchase-orders";
 import { listEntitiesForPicker } from "../../../lib/intercompany";
@@ -18,8 +19,9 @@ export const dynamic = "force-dynamic";
 // department-head sign-off. A department's sign-off approvers (or an admin) can
 // approve/reject; once signed off a P.O can only be deleted by an admin. Finance
 // then closes or challenges it on the P.O Summary + Close screen (Operate).
-export default async function PurchaseOrderRequests() {
+export default async function PurchaseOrderRequests({ searchParams }) {
   const session = await getSession();
+  const sp = (await searchParams) || {};
   if (!session) redirect("/login");
 
   const admin = isAdmin(session);
@@ -62,6 +64,14 @@ export default async function PurchaseOrderRequests() {
   const deptTabs = deptTabsFor({ seeAll, departments: departments.map((d) => d.department_name), mine: [myDept, ...approverDepts, ...raisedIn] });
   const visiblePos = rowsForViewer(list.pos || [], deptTabs);
 
+  // Spend & committed vs budget: Finance and admins for every department, a
+  // head for the departments they sign off.
+  const year = new Date().getFullYear();
+  const budgetDepts = seeAll ? departments.map((d) => d.department_name) : [...new Set(approverDepts)];
+  const budgetPanel = budgetDepts.length
+    ? { year, visible: budgetDepts.filter((d) => deptTabs.includes(d)), budgets: await departmentPoBudgets(year, budgetDepts).catch(() => ({})) }
+    : null;
+
   return (
     <div className="fos-shell">
       <PageHeader crumb="Plan — HO" title="Purchase Order Requests"
@@ -84,6 +94,8 @@ export default async function PurchaseOrderRequests() {
           selfApproveLimit={selfApproveLimit}
           supplierNames={(supplierList.suppliers || []).map((s) => s.name)}
           entities={entities.map((e) => ({ entity_id: e.entity_id, entity_name: e.entity_name }))}
+          openPo={sp.po || null}
+          budgetPanel={budgetPanel}
         />
       )}
     </div>

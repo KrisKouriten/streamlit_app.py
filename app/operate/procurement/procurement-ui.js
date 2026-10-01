@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS } from "../../../lib/procurement-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
@@ -48,9 +48,11 @@ async function post(body) {
   return d;
 }
 
-export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [], suppliers = [], amendments = {} }) {
+export default function ProcurementUI({ data, ready, loaded, illustrative, canManage, orders = [], roles = {}, fxRates = [], otbVersions = [], activeVersionId = null, merchRequests = [], channelOpts = [], supplierNames = [], suppliers = [], amendments = {}, openOrder = null }) {
   const router = useRouter();
-  const [tab, setTab] = useState("MINISO");
+  // A link from a dashboard (?order=ID) opens on that order's own tab.
+  const linked = openOrder != null ? orders.find((o) => String(o.purchase_id) === String(openOrder)) : null;
+  const [tab, setTab] = useState(linked && (linked.source === "MINISO" || linked.source === "LOCAL") ? linked.source : "MINISO");
   const [err, setErr] = useState("");
 
   if (!ready) {
@@ -190,7 +192,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         )}
       </Panel>
 
-      <OrdersPanel orders={orders.filter((o) => o.source === tab)} amendments={amendments} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
+      <OrdersPanel key={tab} orders={orders.filter((o) => o.source === tab)} openOrder={openOrder} amendments={amendments} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
 
       {canManage && (
         <Panel title="Add purchases" note="key a line straight in, or bulk-load a CSV">
@@ -455,7 +457,14 @@ function BudgetCheck({ impact }) {
 // sign-off → Finance → approved; cancel is the soft action, delete (Finance
 // only, once head-approved) the hard one.
 const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
-function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
+function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
+  // Which orders to list (REQUEST_VIEWS) — a linked order shows under All.
+  const [view, setView] = useState("ALL");
+  useEffect(() => {
+    if (openOrder == null) return;
+    const t = setTimeout(() => document.getElementById(`order-${openOrder}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    return () => clearTimeout(t);
+  }, [openOrder]);
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
@@ -484,6 +493,7 @@ function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], 
   const del = (o) => { if (window.confirm(`Delete this order (${o.supplier}) permanently? This cannot be undone.`)) act(o.purchase_id, "delete"); };
   // GBP orders approve in one click; a foreign order opens the rate pickers first.
   const financeApprove = (o) => (isForeignCurrency(o.currency) ? setFxApprove(fxApprove === o.purchase_id ? null : o.purchase_id) : act(o.purchase_id, "finance-approve"));
+  const shown = orders.filter((REQUEST_VIEWS.find((v) => v.key === view) || REQUEST_VIEWS[0]).test);
 
   return (
     <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete, once head-approved or cancelled">
@@ -502,6 +512,20 @@ function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], 
           </div>
         );
       })()}
+      {/* Status headers — the same views as Purchase Order Requests. */}
+      <div style={{ display: "inline-flex", gap: 3, padding: 3, marginBottom: 11, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
+        {REQUEST_VIEWS.map((v) => {
+          const on = v.key === view;
+          const n = orders.filter(v.test).length;
+          return (
+            <button key={v.key} onClick={() => setView(v.key)} style={{
+              fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
+              background: on ? "var(--surface)" : "transparent", border: `1px solid ${on ? "var(--line-strong)" : "transparent"}`,
+              color: on ? "var(--ink)" : "var(--muted)",
+            }}>{v.label} <span style={{ color: "var(--faint)", fontWeight: 500 }}>{n}</span></button>
+          );
+        })}
+      </div>
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 860 }}>
           <thead><tr>
@@ -510,13 +534,16 @@ function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], 
             ))}
           </tr></thead>
           <tbody>
-            {orders.map((o, i) => {
+            {!shown.length && (
+              <tr><td colSpan={8} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>No orders in this view.</td></tr>
+            )}
+            {shown.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
               // Finance's own lifecycle. A challenge lands here, not on
               // approval_status, so without this the row reads "Approved" while
               // Finance are waiting on an answer.
               const chal = financeChallenge(o);
-              const last = i === orders.length - 1 && fxApprove !== o.purchase_id;
+              const last = i === shown.length - 1 && fxApprove !== o.purchase_id;
               const bb = last ? "none" : "1px solid var(--hairline)";
               const cancelled = o.approval_status === "CANCELLED";
               const foreign = isForeignCurrency(o.currency);
@@ -524,7 +551,7 @@ function OrdersPanel({ orders, amendments = {}, roles, canManage, fxRates = [], 
               const btn = { fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", whiteSpace: "nowrap" };
               return (
                 <Fragment key={o.purchase_id}>
-                <tr style={{ opacity: cancelled ? 0.55 : 1 }}>
+                <tr id={`order-${o.purchase_id}`} style={{ opacity: cancelled ? 0.55 : 1, background: String(openOrder) === String(o.purchase_id) ? "var(--accent-bg)" : undefined }}>
                   <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}{o.reference ? <span style={{ color: "var(--faint)", fontWeight: 400 }}> · {o.reference}</span> : null}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>

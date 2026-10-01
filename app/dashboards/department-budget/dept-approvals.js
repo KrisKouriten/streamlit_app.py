@@ -33,7 +33,7 @@ export default function DeptApprovals({ pos = [], canApprove = false }) {
     <div className="fos-card" style={{ padding: "6px 16px", borderColor: canApprove ? "color-mix(in srgb, var(--amber) 35%, var(--line))" : "var(--line)" }}>
       {pos.map((p) => (
         <div key={p.po_id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--hairline)", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}>{p.xero_po_number}</span>
+          <a href={`/operate/po-tracker?po=${p.po_id}`} title="Open on Purchase Order Requests" style={{ fontWeight: 600, fontSize: 13, color: "var(--accent)", textDecoration: "none" }}>{p.xero_po_number || `P.O #${p.po_id}`}</a>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.supplier}</span>
           <span style={{ fontSize: 12, color: "var(--faint)" }}>{p.po_category}{p.marketing_campaign ? ` · ${p.marketing_campaign}` : ""}</span>
           <span className="fos-num" style={{ fontSize: 12.5, fontWeight: 600 }}>{money(p.payment_value, p.currency)}</span>
