@@ -541,9 +541,6 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
         </div>
       </div>
 
-      {/* ---- Spend & committed vs budget — for the department's head and Finance ---- */}
-      {budgetPanel && <PoBudget year={budgetPanel.year} budgets={budgetPanel.budgets} visible={budgetPanel.visible} pos={initialPos} dept={listDept} />}
-
       {/* ---- Existing P.O.s ---- */}
       <div style={card}>
         <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 12 }}>Purchase orders</div>
@@ -553,6 +550,9 @@ export default function PoUI({ initialPos, deptTabs = [], departments, stores, m
           <>
           {/* One tab per department the viewer may see; status filters within. */}
           <DeptTabs tabs={deptTabs} active={listDept} onChange={setListDept} counts={deptCounts} />
+          {/* Spend & committed vs budget for the department tab open — shown
+              to that department's head (and Finance), not on All departments. */}
+          {budgetPanel && listDept !== ALL_DEPTS && <PoBudget year={budgetPanel.year} budgets={budgetPanel.budgets} visible={budgetPanel.visible} pos={initialPos} dept={listDept} />}
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
             <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
               {REQUEST_FILTERS.map((flt) => {
