@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder, setOrderInvoice } from "../../../lib/procurement";
+import { orderInvoiceError } from "../../../lib/procurement-rules";
 import { setFxRate } from "../../../lib/fx";
 import { getApproverEmails } from "../../../lib/dept-budget";
 import { resolveBaseUrl } from "../../../lib/invite-rules";
@@ -120,6 +121,16 @@ export async function POST(request) {
       case "edit-supplier": {
         const d = deny(MANAGE, "Editing an order requires ADMIN, FINANCE or OPS"); if (d) return d;
         return NextResponse.json(await amendProcurementSupplier(body.id, { supplier: body.supplier, reference: body.reference }, actor));
+      }
+      // The supplier's invoice on a Local purchase, entered by whoever raised
+      // the order so they can check it against what they ordered.
+      case "set-invoice": {
+        const order = await getProcurementOrder(body.id);
+        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        const who = String(session.email || session.name || "").toLowerCase();
+        const err = orderInvoiceError(order, { canManage: hasRole(session, ...MANAGE), isRaiser: !!who && String(order.created_by || "").toLowerCase() === who });
+        if (err) return NextResponse.json({ error: err }, { status: 403 });
+        return NextResponse.json(await setOrderInvoice(body.id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, actor));
       }
       case "delete": {
         const d = deny(FIN, "Only Finance can delete a procurement order"); if (d) return d;
