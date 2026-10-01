@@ -753,7 +753,9 @@ function DeptInvoices({ po, onChanged }) {
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Invoice no / ref" style={{ ...inputSt, width: 170 }} />
         <MoneyInput value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Net value (ex VAT)" style={{ ...inputSt, width: 150, textAlign: "right" }} />
-        <div style={{ width: 160 }}><DateField value={date} onChange={setDate} /></div>
+        {/* The date field sizes itself from inputStyle; a narrower wrapper let
+            it spill over the button beside it. */}
+        <DateField value={date} onChange={setDate} inputStyle={{ width: 190, flex: "0 0 190px" }} />
         <button style={btn("var(--accent)")} disabled={busy || !num.trim() || !(Number(String(amt).replace(/[£,\s]/g, "")) > 0)} onClick={add}>{busy ? "Saving…" : "Add invoice"}</button>
         <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Net of VAT, as on the P.O. Finance take it on from P.O Summary + Close.</span>
       </div>
