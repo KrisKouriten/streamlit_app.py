@@ -130,7 +130,7 @@ export async function POST(request) {
         const who = String(session.email || session.name || "").toLowerCase();
         const err = orderInvoiceError(order, { canManage: hasRole(session, ...MANAGE), isRaiser: !!who && String(order.created_by || "").toLowerCase() === who });
         if (err) return NextResponse.json({ error: err }, { status: 403 });
-        return NextResponse.json(await setOrderInvoice(body.id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount }, actor));
+        return NextResponse.json(await setOrderInvoice(body.id, { invoice_number: body.invoice_number, invoice_amount: body.invoice_amount, invoice_vat: body.invoice_vat }, actor));
       }
       case "delete": {
         const d = deny(FIN, "Only Finance can delete a procurement order"); if (d) return d;

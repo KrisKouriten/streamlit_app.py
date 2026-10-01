@@ -8,7 +8,7 @@ import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
-import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel } from "../../../lib/vat-rules";
+import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel, netVat, vatEntryError } from "../../../lib/vat-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
 
@@ -109,7 +109,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
         <Tile label="Spent" value={money(s.totalSpent, { compact: true })}
           sub={s.unvaluedDrawings ? `${s.unvaluedDrawings} drawing${s.unvaluedDrawings === 1 ? "" : "s"} unpriced` : "trade pay + cash settled · net of VAT"}
           tone={s.unvaluedDrawings ? "var(--amber)" : undefined} />
-        <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets" />
+        <Tile label="Cash budget" value={money(s.totalBudget, { compact: true })} sub="sum of monthly budgets · net of VAT" />
         <Tile label="Over-budget months" value={s.months.filter((m) => m.overBudget).length} tone={s.months.some((m) => m.overBudget) ? "var(--red)" : "var(--green)"} sub="cash-out basis" />
         <Tile label="Suppliers" value={s.suppliers.length} sub="with orders" />
       </div>
@@ -300,7 +300,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
    * paid to the supplier and reclaimed from HMRC later), but it is not what the
    * budget is charged.
    */
-  const vatRate = vatRateOf({ source, vat_rate: f.vat_rate });
+  const vatRate = vatRateOf({ source, currency: f.currency, vat_rate: f.vat_rate });
   const draftNet = foreign ? gbpPreview : Number(f.amount_gbp) || 0;
   const draftGross = grossFromNet(draftNet, vatRate);
   const draftVat = draftGross == null ? null : draftGross - (draftNet || 0);
@@ -343,7 +343,9 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
         <Field label="Category"><input value={f.category} onChange={set("category")} placeholder={eg.category} style={inp} /></Field>
         <Field label="Order month"><input required type="month" value={f.order_ym} onChange={set("order_ym")} style={inp} /></Field>
         <Field label="Delivery month"><input type="month" value={f.delivery_ym} onChange={set("delivery_ym")} style={inp} /></Field>
-        <Field label="Currency"><select value={f.currency} onChange={set("currency")} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+        {/* Changing the currency resets the VAT to its default for it — an
+            order from abroad carries no UK VAT. */}
+        <Field label="Currency"><select value={f.currency} onChange={(e) => { const v = e.target.value; setF((s) => ({ ...s, currency: v, vat_rate: String(defaultVatRate({ source, currency: v })) })); }} style={inp}>{CCY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
         <Field label={`Net amount (${CCY_SYMBOL[f.currency] || f.currency})`}><MoneyInput required value={f.amount_gbp} onChange={set("amount_gbp")} placeholder={eg.amount} style={{ ...inp, textAlign: "right" }} className="fos-num" /></Field>
         {/* The gross is the cash that leaves; the budget is charged the net.
             The basis is a choice on the form rather than an assumption. */}
@@ -352,7 +354,9 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
             {VAT_TREATMENTS.map((t) => <option key={t.rate} value={String(t.rate)} title={t.hint}>{t.label}</option>)}
           </select>
         </Field>
-        <Field label={`Gross (${CCY_SYMBOL[f.currency] || f.currency})`}>
+        {/* The gross is worked out on the £ figure (a foreign order's spot
+            conversion), so it is labelled in £ whatever the order currency. */}
+        <Field label="Gross (£)">
           <input
             readOnly
             value={draftGross == null ? "" : draftGross.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -469,14 +473,16 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
   const [busy, setBusy] = useState(null);
   const [fxApprove, setFxApprove] = useState(null);   // purchase_id awaiting the FX rate picks
   const [edit, setEdit] = useState(null);             // { purchase_id, supplier, reference } being edited
-  const [inv, setInv] = useState(null);               // { purchase_id, number, amount } — the supplier's invoice being entered
+  const [inv, setInv] = useState(null);               // { purchase_id, number, amount, vat } — the supplier's invoice being entered
   const { isHod, isFinance, isMerchApprover, me } = roles || {};
   // Whoever raised a Local order (or a manager) records the supplier's invoice
   // on it, to check it against what was ordered.
   const mayInvoice = (o) => !orderInvoiceError(o, { canManage, isRaiser: !!me && String(o.created_by || "").toLowerCase() === String(me).toLowerCase() });
+  const vatErrOf = (x) => vatEntryError(x?.amount, x?.vat);
   async function saveInv() {
     if (!inv) return;
-    await act(inv.purchase_id, "set-invoice", { invoice_number: inv.number.trim(), invoice_amount: inv.amount });
+    const vat = String(inv.vat || "").replace(/[£,\s]/g, "");
+    await act(inv.purchase_id, "set-invoice", { invoice_number: inv.number.trim(), invoice_amount: inv.amount, invoice_vat: vat === "" ? null : vat });
     setInv(null);
   }
   if (!orders.length) return null;
@@ -579,7 +585,8 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                     {o.source === "LOCAL" && Number(o.invoice_amount) > 0 && (() => {
                       const m = invoiceMatch(o.amount_gbp, o.invoice_amount);
                       const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
-                      return <div style={{ fontSize: 10.5, color: col, marginTop: 4, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.4 }}>Invoice {o.invoice_number || ""} {money(o.invoice_amount)} · {m.label.replace("P.O", "order")}</div>;
+                      const nv = netVat(o.invoice_amount, o.invoice_vat);
+                      return <div style={{ fontSize: 10.5, color: col, marginTop: 4, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.4 }}>Invoice {o.invoice_number || ""} {money(nv.net)} net{nv.vat != null ? ` + ${money(nv.vat)} VAT = ${money(nv.gross)}` : ""} · {m.label.replace("P.O", "order")}</div>;
                     })()}
                     {chal && (
                       <div style={{ marginTop: 5, maxWidth: 260, whiteSpace: "normal", lineHeight: 1.45 }}>
@@ -607,7 +614,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                         {canManage && o.approval_status === "PENDING" && <button disabled={busy} style={btn} title="Re-send the head-of-department sign-off request" onClick={() => act(o.purchase_id, "resubmit")}>Resubmit</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
                         {mayInvoice(o) && <button disabled={busy} style={inv?.purchase_id === o.purchase_id ? { ...btn, borderColor: "var(--accent)", color: "var(--accent)" } : btn}
-                          onClick={() => setInv(inv?.purchase_id === o.purchase_id ? null : { purchase_id: o.purchase_id, number: o.invoice_number || "", amount: o.invoice_amount != null ? String(o.invoice_amount) : "" })}>{o.invoice_number ? "Invoice" : "Add invoice"}</button>}
+                          onClick={() => setInv(inv?.purchase_id === o.purchase_id ? null : { purchase_id: o.purchase_id, number: o.invoice_number || "", amount: o.invoice_amount != null ? String(o.invoice_amount) : "", vat: o.invoice_vat != null ? String(o.invoice_vat) : "" })}>{o.invoice_number ? "Invoice" : "Add invoice"}</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => openEdit(o)}>Edit</button>}
                         {canManage && <button disabled={busy} style={btn} onClick={() => cancel(o)}>Cancel</button>}
                         {isFinance && hodApprovedStatus(o.approval_status) && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)" }} onClick={() => del(o)}>Delete</button>}
@@ -632,14 +639,20 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                         <label style={{ display: "block" }}><span style={FIELD_LAB}>Invoice value (net)</span>
                           <input style={{ ...editInp, width: 140, textAlign: "right" }} inputMode="decimal" value={inv.amount} onChange={(e) => setInv((s) => ({ ...s, amount: e.target.value }))} placeholder="0.00" />
                         </label>
+                        <label style={{ display: "block" }}><span style={FIELD_LAB}>VAT</span>
+                          <input style={{ ...editInp, width: 110, textAlign: "right" }} inputMode="decimal" value={inv.vat || ""} onChange={(e) => setInv((s) => ({ ...s, vat: e.target.value }))} placeholder="0.00" />
+                        </label>
                         {(() => {
-                          const m = invoiceMatch(o.amount_gbp, String(inv.amount).replace(/[£,\s]/g, ""));
+                          const vErr = vatEntryError(inv.amount, inv.vat);
+                          if (vErr) return <span style={{ fontSize: 12, color: "var(--red)", alignSelf: "center", maxWidth: 320 }}>{vErr}</span>;
+                          const nv = netVat(inv.amount, inv.vat);
+                          const m = invoiceMatch(o.amount_gbp, nv.net);
                           const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
-                          return <span style={{ fontSize: 12, color: col, alignSelf: "center" }}>Order {money(o.amount_gbp)} · {m.label.replace("P.O", "order")}</span>;
+                          return <span style={{ fontSize: 12, color: col, alignSelf: "center" }}>Order {money(o.amount_gbp)} net · {m.label.replace("P.O", "order")}{nv.net > 0 ? <span style={{ color: "var(--faint)" }}> · gross {money(nv.gross)}</span> : null}</span>;
                         })()}
-                        <button disabled={busy} onClick={saveInv} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save invoice</button>
+                        <button disabled={busy || !!vatErrOf(inv)} onClick={saveInv} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save invoice</button>
                         <button disabled={busy} onClick={() => setInv(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Cancel</button>
-                        <span style={{ fontSize: 11, color: "var(--faint)", flex: "1 1 200px" }}>Net of VAT, as on the order. Clear both fields to remove it. Finance record and close it on Procurement Summary + Close.</span>
+                        <span style={{ fontSize: 11, color: "var(--faint)", flex: "1 1 200px" }}>Net and VAT as on the invoice — the net is checked against the order and the budget, both ex-VAT. Clear the fields to remove it. Finance record and close it on Procurement Summary + Close.</span>
                       </div>
                     </td>
                   </tr>
