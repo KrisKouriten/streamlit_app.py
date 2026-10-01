@@ -12,18 +12,16 @@ const td = (right, extra = {}) => ({ padding: "7px 10px", borderBottom: "1px sol
 const tone = (v) => (v == null ? undefined : v < 0 ? "var(--red)" : "var(--green)");
 
 /*
- * Spend & committed against budget, on Purchase Order Requests — for the
- * department's head and Finance. One department: its budget, committed and
- * open P.Os month by month (P.O date), the same figures as its Departmental
- * Budget dashboard. All departments: one line each.
+ * Spend & committed against budget, on Purchase Order Requests, under the
+ * department tabs — for that department's head and Finance only, and not on
+ * All departments. The department's budget, committed and open P.Os month by
+ * month (P.O date), the same figures as its Departmental Budget dashboard.
  *   budgets   { [department]: { budgetMonths, card, version, status } }
  *   visible   the departments this person may see it for
  */
 export default function PoBudget({ year, budgets = {}, visible = [], pos = [], dept }) {
-  // All departments: those with a budget or a P.O; one department: just it.
-  const shown = dept === ALL_DEPTS
-    ? visible.filter((d) => budgets[d] || pos.some((p) => p.department === d))
-    : visible.filter((d) => d === dept);
+  // The department tab open, and only for someone who may see its budget.
+  const shown = dept === ALL_DEPTS ? [] : visible.filter((d) => d === dept);
   const per = useMemo(() => Object.fromEntries(shown.map((d) => [d, poBudgetByMonth({
     year, pos: pos.filter((p) => p.department === d),
     budgetMonths: budgets[d]?.budgetMonths || null, card: budgets[d]?.card || 0,
@@ -39,39 +37,6 @@ export default function PoBudget({ year, budgets = {}, visible = [], pos = [], d
       </div>
     </div>
   );
-
-  if (shown.length > 1) {
-    return (
-      <div style={card}>
-        {head}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-            <thead><tr>
-              <th style={th()}>Department</th><th style={th(true)}>Budget</th><th style={th(true)}>Committed</th>
-              <th style={th(true)}>Open P.Os</th><th style={th(true)}>Card / pre-approved</th><th style={th(true)}>Remaining</th><th style={th(true)}>Used</th>
-            </tr></thead>
-            <tbody>
-              {shown.map((d) => {
-                const t = per[d].totals;
-                const used = t.budget ? (t.committed + t.open + t.card) / t.budget : null;
-                return (
-                  <tr key={d}>
-                    <td style={td(false, { fontWeight: 600 })}>{d}</td>
-                    <td style={td(true)}>{t.budget == null ? <span style={{ color: "var(--faint)" }}>no budget</span> : gbp(t.budget)}</td>
-                    <td style={td(true)}>{gbp(t.committed)}</td>
-                    <td style={td(true)}>{gbp(t.open)}</td>
-                    <td style={td(true)}>{t.card ? gbp(t.card) : "—"}</td>
-                    <td style={td(true, { color: tone(t.remaining), fontWeight: 600 })}>{gbp(t.remaining)}</td>
-                    <td style={td(true, { color: used != null && used > 1 ? "var(--red)" : "var(--muted)" })}>{used == null ? "—" : `${Math.round(used * 100)}%`}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
 
   const d = shown[0];
   const r = per[d];
