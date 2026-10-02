@@ -88,7 +88,7 @@ function Tiles({ s }) {
       {[
         ["Committed spend", money(s.totalCommitted || 0, { compact: true }), "all months", undefined],
         ["Spent", money(s.totalSpent || 0, { compact: true }), "trade + cash settled", undefined],
-        ["Cash budget", money(s.totalBudget || 0, { compact: true }), "sum of monthly budgets", undefined],
+        ["Cash budget", money(s.totalBudget || 0, { compact: true }), "sum of monthly budgets · net of VAT", undefined],
         ["Over-budget months", String(over), "cash-out basis", over ? "var(--red)" : "var(--green)"],
         ["Suppliers", String((s.suppliers || []).length), "with orders", undefined],
       ].map(([label, value, sub, tone]) => (
@@ -135,7 +135,7 @@ export default function ProcCash({ procCash }) {
   return (
     <>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, margin: "8px 0 12px", flexWrap: "wrap" }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>Cash budget vs committed</div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>Cash budget vs committed <span style={{ fontSize: 11.5, fontWeight: 400, color: "var(--faint)" }}>· net of VAT</span></div>
         {(totalMonths > liveMonths || allMonths) && (
           <button className="fos-btn-ghost" type="button" onClick={() => setAllMonths((x) => !x)}>
             {allMonths ? "Months with activity" : `All months (${totalMonths})`}

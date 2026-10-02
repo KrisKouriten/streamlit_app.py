@@ -315,7 +315,7 @@ export default async function DepartmentBudgetDashboard({ searchParams }) {
                   sub={`${d.proc.openCount} open${d.proc.pendingCount ? ` · ${d.proc.pendingCount} pending approval` : ""}`} tone={d.proc.pendingCount ? "amber" : undefined} />
                 <Stat label="Under challenge" value={String(d.proc.challengedCount)}
                   sub={d.proc.challengedCount ? `${money(d.proc.challengedValue, { compact: true })} in query` : "none"} tone={d.proc.challengedCount ? "red" : undefined} />
-                <Stat label="Cash budget" value={money(d.proc.cashBudget, { compact: true })} sub="Miniso + Local monthly" />
+                <Stat label="Cash budget" value={money(d.proc.cashBudget, { compact: true })} sub="Miniso + Local monthly · net of VAT" />
                 <Stat label="Purchases" value={String(d.proc.count)} sub="all sources" />
               </StatRow>
 

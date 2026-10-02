@@ -165,7 +165,7 @@ export async function POST(request, { params }) {
         if (body.op === "dept-add-invoice") {
           const inv = body.invoice || {};
           return NextResponse.json(await addPoInvoice(id, {
-            invoice_number: inv.invoice_number, invoice_amount: inv.invoice_amount,
+            invoice_number: inv.invoice_number, invoice_amount: inv.invoice_amount, vat_amount: inv.vat_amount,
             invoice_date: inv.invoice_date || null, invoice_status: "RECEIVED",
           }, session));
         }

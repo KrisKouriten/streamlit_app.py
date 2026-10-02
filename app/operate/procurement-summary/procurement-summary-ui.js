@@ -10,7 +10,7 @@ import {
   isForeignRow, fxToPL, inventoryCostFx, reportBasis, dcDrawdown, lcDrawdownGbp, lcBalanceGbp, outstandingCommitment, settledCommitment, paidOutsideLc,
 } from "../../../lib/procurement-close-rules";
 import { requestsVsBudget, BUDGET_CSV_TEMPLATE, shiftBudgetPlan, budgetShiftError, cashOutFor, phasingCheck } from "../../../lib/procurement-rules";
-import { grossOf, vatLabel } from "../../../lib/vat-rules";
+import { grossFromNet, vatRateOf, vatLabel, netVat, vatEntryError } from "../../../lib/vat-rules";
 import { money, StatRow, Stat, Badge } from "../../finance-os/ui";
 import MoneyInput from "../../money-input";
 import AutoFollowups from "../auto-followups";
@@ -153,12 +153,12 @@ function BudgetsPanel({ months = {}, onSaved }) {
       <div style={card}>
         <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 3 }}>Procurement budgets</div>
         <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14, lineHeight: 1.5 }}>
-          The monthly cash budget for Miniso and Local purchases, on the same payment-date basis as the committed and spent figures. Type a figure and click away to save. Extend as far ahead as you need.
+          The monthly cash budget for Miniso and Local purchases, net of VAT, on the same payment-date basis as the committed and spent figures (which are net too). Type a figure and click away to save. Extend as far ahead as you need.
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>
-              <th style={th}>Month</th><th style={thR}>Miniso budget</th><th style={thR}>Local budget</th>
+              <th style={th}>Month</th><th style={thR}>Miniso budget (net)</th><th style={thR}>Local budget (net)</th>
             </tr></thead>
             <tbody>
               {monthList.map((ym) => (
@@ -354,7 +354,7 @@ function BudgetImport({ onErr, onDone }) {
     <>
       <button style={ghost} onClick={() => fileRef.current?.click()}>Upload forecast (CSV)</button>
       <a style={{ ...ghost, textDecoration: "none" }} href={`data:text/csv;charset=utf-8,${encodeURIComponent(BUDGET_CSV_TEMPLATE)}`} download="procurement-budget-template.csv">Template</a>
-      <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Months across the top, a row for Miniso and a row for Local.</span>
+      <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Months across the top, a row for Miniso and a row for Local — figures net of VAT.</span>
       {state && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{state}</span>}
       <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} style={{ display: "none" }} />
     </>
@@ -498,13 +498,16 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
   );
 }
 
+// The order line's gross: its net (the Net column) plus VAT at the row's rate.
+const orderGross = (r) => grossFromNet(lineValue(r), vatRateOf(r)) ?? lineValue(r);
+
 export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {}, budgetCommit = {}, amendments = {} }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
   const [filter, setFilter] = useState("ATTENTION");
   const [inv, setInv] = useState(() => {
     const m = {};
-    for (const r of initialRows) m[r.purchase_id] = { number: r.invoice_number || "", amount: r.invoice_amount != null ? String(r.invoice_amount) : "" };
+    for (const r of initialRows) m[r.purchase_id] = { number: r.invoice_number || "", amount: r.invoice_amount != null ? String(r.invoice_amount) : "", vat: r.invoice_vat != null ? String(r.invoice_vat) : "" };
     return m;
   });
   const [challengeFor, setChallengeFor] = useState(null);
@@ -590,7 +593,11 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     }
   }
 
-  const saveInvoice = (r) => op(r.purchase_id, { op: "set-invoice", invoice_number: inv[r.purchase_id]?.number || null, invoice_amount: inv[r.purchase_id]?.amount || null }, "Invoice saved.");
+  // The invoice as keyed: net and VAT as on the document. The net is what the
+  // ex-VAT budget is charged; the VAT is kept so the gross shows.
+  const clean = (v) => { const c = String(v ?? "").replace(/[£,\s]/g, ""); return c === "" ? null : c; };
+  const invPayload = (id) => ({ invoice_number: inv[id]?.number || null, invoice_amount: clean(inv[id]?.amount), invoice_vat: clean(inv[id]?.vat) });
+  const saveInvoice = (r) => op(r.purchase_id, { op: "set-invoice", ...invPayload(r.purchase_id) }, "Invoice saved.");
   const setPayment = (r, payment_status) => op(r.purchase_id, { op: "set-payment-status", payment_status }, `Marked ${paymentStatusOf({ payment_status }).label.toLowerCase()}.`);
   // How a paid purchase settled — Cash or Trade pay. Trade pay is reported as
   // spend from the facility upload; cash is reported on top of it.
@@ -638,7 +645,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
   );
   const closeRow = (r) => {
     if (!window.confirm(`Close ${procRef(r)}? It will be reported as committed procurement spend.`)) return;
-    op(r.purchase_id, { op: "close", invoice_number: inv[r.purchase_id]?.number || null, invoice_amount: inv[r.purchase_id]?.amount || null }, "Closed — now committed spend.");
+    op(r.purchase_id, { op: "close", ...invPayload(r.purchase_id) }, "Closed — now committed spend.");
   };
   const approve = (r) => op(r.purchase_id, { op: "approve" }, "Approved.");
   const reopen = (r) => op(r.purchase_id, { op: "reopen-finance" }, "Re-opened.");
@@ -725,7 +732,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     // The export keeps Invoice no / net — they are still the record of what
     // Finance keyed, even though the screen now shows them only where they are
     // entered. Payment month rides alongside, on the cash-out basis.
-    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Gross value", "VAT basis", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net"];
+    const head = ["Reference", "Source", "Supplier", "Channel / Category", "Net value", "Gross value", "VAT basis", "Currency", "Amount (ccy)", "Cost rate", "Report basis", "Reported £", "Inventory (£ cost FX)", "Stock rate", "FX to P&L", "Payment month", "Finance status", "Payment status", "Invoice no", "Invoice net", "Invoice VAT", "Invoice gross"];
     const esc = (v) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -734,12 +741,13 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
     for (const r of rows) {
       const sv = inventoryCostFx(r, costingRate), v = fxToPL(r);
       lines.push([
-        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r), grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"), vatLabel(r),
+        procRef(r), r.source, r.supplier, channelCategory(r), lineValue(r), orderGross(r), vatLabel(r),
         r.currency || "GBP", isForeignRow(r) && r.amount_ccy != null ? r.amount_ccy : "", r.cost_rate_type || "",
         reportBasis(r), r.report_gbp != null ? r.report_gbp : "",
         sv != null ? sv : "", r.stock_rate_type || "", v != null ? v : "",
         cashOutFor(r) || "",
         r.finance_status, r.payment_status, r.invoice_number || "", r.invoice_amount != null ? r.invoice_amount : "",
+        r.invoice_vat != null ? r.invoice_vat : "", r.invoice_amount != null ? netVat(r.invoice_amount, r.invoice_vat).gross : "",
       ].map(esc).join(","));
     }
     const csv = lines.join("\n");
@@ -855,10 +863,16 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                         </td>
                         {/* Net is what Merch entered and what the ex-VAT budget
                             is charged; GROSS is the cash that leaves the bank.
-                            Both are shown so the two can be told apart. */}
+                            Both are of the same order line, so they always
+                            agree; the supplier's invoice, once keyed, shows
+                            beneath as net + VAT as on the document. */}
                         <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
-                          {money(grossOf(r, r.invoice_amount != null ? "invoice_amount" : "amount_gbp"))}
+                          {money(orderGross(r))}
                           <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{vatLabel(r)}</div>
+                          {r.invoice_amount != null && (() => {
+                            const nv = netVat(r.invoice_amount, r.invoice_vat);
+                            return <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap" }} title="The supplier's invoice">Inv {money(nv.net)}{nv.vat != null ? ` + ${money(nv.vat)} VAT = ${money(nv.gross)}` : " net · VAT not keyed"}</div>;
+                          })()}
                         </td>
                         <td className="fos-num" style={{ padding: "8px 10px", textAlign: "right", verticalAlign: "top" }}>
                           {(() => {
@@ -970,7 +984,8 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                                 <span style={groupLabel}>Invoice</span>
                                 <input style={{ ...inputSt, width: 140 }} placeholder="Invoice no" value={inv[id]?.number || ""} onChange={(e) => setInvField(id, "number", e.target.value)} />
                                 <MoneyInput style={{ ...inputSt, width: 120, textAlign: "right" }} placeholder="Invoice net" value={inv[id]?.amount || ""} onChange={(e) => setInvField(id, "amount", e.target.value)} />
-                                {financeActionError("invoice", r) === null && <button style={{ ...ghost, ...stripBtn }} disabled={isBusy} onClick={() => saveInvoice(r)}>Save invoice</button>}
+                                <MoneyInput style={{ ...inputSt, width: 100, textAlign: "right" }} placeholder="VAT" value={inv[id]?.vat || ""} onChange={(e) => setInvField(id, "vat", e.target.value)} />
+                                {financeActionError("invoice", r) === null && <button style={{ ...ghost, ...stripBtn }} disabled={isBusy || !!vatEntryError(inv[id]?.amount, inv[id]?.vat)} title={vatEntryError(inv[id]?.amount, inv[id]?.vat) || undefined} onClick={() => saveInvoice(r)}>Save invoice</button>}
                               </div>
                             )}
                             {/* Miniso stock that went on TradePay rather than an LC is

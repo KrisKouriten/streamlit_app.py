@@ -13,6 +13,7 @@ import {
 import DateField from "../../finance-os/date-field";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import MoneyInput from "../../money-input";
+import { netVat, vatEntryError } from "../../../lib/vat-rules.js";
 import SupplierPicker from "../supplier-picker";
 
 const gbp = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
@@ -687,7 +688,9 @@ function FragmentRow({ children }) { return <>{children}</>; }
 
 /*
  * The department's own invoice entry on a signed-off P.O: the supplier's
- * invoice number and net value, checked against what was ordered. Entered as
+ * invoice number, net value and VAT, as on the invoice. The net is checked
+ * against what was ordered (the P.O and the budget are both ex-VAT); the VAT
+ * is recorded so the gross shows. Entered as
  * Received; Finance take each one on from P.O Summary + Close. One the
  * department entered can be removed until Finance start working it.
  */
@@ -695,6 +698,7 @@ function DeptInvoices({ po, onChanged }) {
   const [list, setList] = useState(null);
   const [num, setNum] = useState("");
   const [amt, setAmt] = useState("");
+  const [vat, setVat] = useState("");
   const [date, setDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -716,8 +720,11 @@ function DeptInvoices({ po, onChanged }) {
     } catch (x) { setErr(x.message); return false; } finally { setBusy(false); }
   }
   async function add() {
-    if (await op({ op: "dept-add-invoice", invoice: { invoice_number: num.trim(), invoice_amount: String(amt).replace(/[£,\s]/g, ""), invoice_date: date || null } })) { setNum(""); setAmt(""); setDate(""); }
+    const v = String(vat).replace(/[£,\s]/g, "");
+    if (await op({ op: "dept-add-invoice", invoice: { invoice_number: num.trim(), invoice_amount: String(amt).replace(/[£,\s]/g, ""), vat_amount: v === "" ? null : v, invoice_date: date || null } })) { setNum(""); setAmt(""); setVat(""); setDate(""); }
   }
+  const draft = netVat(amt, vat);
+  const vatErr = vatEntryError(amt, vat);
   const total = (list || []).reduce((t, i) => t + (Number(i.invoice_amount) || 0), 0);
   const m = invoiceMatch(po.payment_value, total);
   const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
@@ -732,8 +739,8 @@ function DeptInvoices({ po, onChanged }) {
       </div>
       {list == null ? <div style={{ fontSize: 12, color: "var(--faint)" }}>Loading…</div> : list.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
-          <thead><tr>{["Invoice no", "Date", "Net value", "Status", ""].map((h, i) => (
-            <th key={i} style={{ ...cell, textAlign: i === 2 ? "right" : "left", fontFamily: "var(--mono)", fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
+          <thead><tr>{["Invoice no", "Date", "Net", "VAT", "Gross", "Status", ""].map((h, i) => (
+            <th key={i} style={{ ...cell, textAlign: i >= 2 && i <= 4 ? "right" : "left", fontFamily: "var(--mono)", fontSize: 10, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
           ))}</tr></thead>
           <tbody>
             {list.map((i) => (
@@ -741,6 +748,8 @@ function DeptInvoices({ po, onChanged }) {
                 <td style={cell}>{i.invoice_number}</td>
                 <td style={cell}>{i.invoice_date ? String(i.invoice_date).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
                 <td style={{ ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(i.invoice_amount, po.currency)}</td>
+                <td style={{ ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums", color: i.vat_amount == null ? "var(--faint)" : undefined }} title={i.vat_amount == null ? "VAT not recorded" : undefined}>{i.vat_amount == null ? "—" : money(i.vat_amount, po.currency)}</td>
+                <td style={{ ...cell, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(netVat(i.invoice_amount, i.vat_amount).gross, po.currency)}</td>
                 <td style={{ ...cell, color: "var(--muted)" }}>{String(i.invoice_status || (i.paid ? "PAID" : "RECEIVED")).replace(/_/g, " ").toLowerCase()}</td>
                 <td style={{ ...cell, textAlign: "right" }}>
                   {deptCanRemoveInvoice(i) && <button style={{ ...ghost, fontSize: 11.5 }} disabled={busy} onClick={() => { if (window.confirm(`Remove invoice ${i.invoice_number}?`)) op({ op: "dept-remove-invoice", invoice_id: i.invoice_id }); }}>Remove</button>}
@@ -752,10 +761,18 @@ function DeptInvoices({ po, onChanged }) {
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Invoice no / ref" style={{ ...inputSt, width: 170 }} />
-        <MoneyInput value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Net value (ex VAT)" style={{ ...inputSt, width: 150, textAlign: "right" }} />
-        <div style={{ width: 160 }}><DateField value={date} onChange={setDate} /></div>
-        <button style={btn("var(--accent)")} disabled={busy || !num.trim() || !(Number(String(amt).replace(/[£,\s]/g, "")) > 0)} onClick={add}>{busy ? "Saving…" : "Add invoice"}</button>
-        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Net of VAT, as on the P.O. Finance take it on from P.O Summary + Close.</span>
+        <MoneyInput value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Net (ex VAT)" style={{ ...inputSt, width: 140, textAlign: "right" }} />
+        <MoneyInput value={vat} onChange={(e) => setVat(e.target.value)} placeholder="VAT" style={{ ...inputSt, width: 110, textAlign: "right" }} />
+        {/* The date field sizes itself from inputStyle; a narrower wrapper let
+            it spill over the button beside it. */}
+        <DateField value={date} onChange={setDate} inputStyle={{ width: 190, flex: "0 0 190px" }} />
+        <button style={btn("var(--accent)")} disabled={busy || !num.trim() || !(Number(String(amt).replace(/[£,\s]/g, "")) > 0) || !!vatErr} onClick={add}>{busy ? "Saving…" : "Add invoice"}</button>
+      </div>
+      <div style={{ fontSize: 11.5, color: vatErr ? "var(--red)" : "var(--faint)", marginTop: 6 }}>
+        {vatErr || <>
+          {draft.net > 0 && <>Gross {money(draft.gross, po.currency)}{draft.vat == null ? " (no VAT entered)" : ""} · </>}
+          Net and VAT as on the invoice — the net is checked against the P.O and the budget, both ex-VAT. Finance take it on from P.O Summary + Close.
+        </>}
       </div>
       {err && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 6 }}>{err}</div>}
     </div>

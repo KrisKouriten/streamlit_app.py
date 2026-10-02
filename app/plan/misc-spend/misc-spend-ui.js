@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MISC_CATEGORY_GROUPS, miscTotals, miscAllowedFor } from "../../../lib/misc-spend-rules";
 import DateField from "../../finance-os/date-field";
 import MoneyInput from "../../money-input";
+import { netVat, vatEntryError } from "../../../lib/vat-rules";
 
 /* Miscellaneous spend — client. A log of small planned costs assigned to a
    Departmental Budget (Business or Project). Mirrors the P.O request form's shape
@@ -27,7 +28,7 @@ const ghost = { fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadi
 const th = { textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" };
 const td = { padding: "8px 10px", borderBottom: "1px solid var(--hairline)", verticalAlign: "top" };
 
-const EMPTY = { spend_date: "", department: "", budget_id: "", category: "", amount: "", description: "", notes: "" };
+const EMPTY = { spend_date: "", department: "", budget_id: "", category: "", amount: "", vat_amount: "", description: "", notes: "" };
 
 export default function MiscSpendUI({ initialRows, budgets = [], departments = [], me }) {
   const router = useRouter();
@@ -70,6 +71,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
   async function submit() {
     const body = {
       spend_date: f.spend_date || null, category: f.category, amount: f.amount === "" ? null : Number(f.amount),
+      vat_amount: f.vat_amount === "" ? null : Number(f.vat_amount),
       budget_id: f.budget_id ? Number(f.budget_id) : null, description: f.description || null, notes: f.notes || null,
     };
     if (editId) {
@@ -87,6 +89,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
       spend_date: r.spend_date ? new Date(r.spend_date).toISOString().slice(0, 10) : "",
       department: r.department || "", budget_id: r.budget_id ? String(r.budget_id) : "",
       category: r.category || "", amount: r.amount == null ? "" : String(r.amount),
+      vat_amount: r.vat_amount == null ? "" : String(r.vat_amount),
       description: r.description || "", notes: r.notes || "",
     });
     setMsg(null); setError(null);
@@ -99,7 +102,10 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
   }
 
   const shown = filterBudget ? rows.filter((r) => String(r.budget_id) === filterBudget) : rows;
-  const canSubmit = f.category && f.budget_id && Number(f.amount) > 0;
+  // Net and VAT as on the receipt; the budget is charged the net (ex-VAT).
+  const vatErr = vatEntryError(f.amount, f.vat_amount);
+  const draft = netVat(f.amount, f.vat_amount);
+  const canSubmit = f.category && f.budget_id && Number(f.amount) > 0 && !vatErr;
 
   return (
     <div>
@@ -122,7 +128,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
       {/* summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
         <div className="fos-card" style={{ padding: "12px 14px" }}>
-          <div style={{ fontSize: 11.5, color: "var(--faint)" }}>Logged total</div>
+          <div style={{ fontSize: 11.5, color: "var(--faint)" }}>Logged total (net of VAT)</div>
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }} className="fos-num">{money(totals.total)}</div>
         </div>
         <div className="fos-card" style={{ padding: "12px 14px" }}>
@@ -158,7 +164,10 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
               ))}
             </select>
           </label>
-          <label style={field}><span style={labelSt}>Amount (£) *</span><MoneyInput style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} placeholder="e.g. 45.00" /></label>
+          <label style={field}><span style={labelSt}>Net (£) *</span><MoneyInput style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} placeholder="e.g. 45.00" /></label>
+          <label style={field}><span style={labelSt}>VAT (£)</span><MoneyInput style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={f.vat_amount} onChange={(e) => setF((s) => ({ ...s, vat_amount: e.target.value }))} placeholder="e.g. 9.00" />
+            <span style={{ fontSize: 11, color: vatErr ? "var(--red)" : "var(--faint)" }}>{vatErr || (draft.net > 0 ? `Gross ${money(draft.gross)} · the budget is charged the net` : "as on the receipt · blank if none")}</span>
+          </label>
           <label style={field}><span style={labelSt}>Description</span><input style={inputSt} value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} placeholder="e.g. Client lunch, mileage to Leeds…" /></label>
           <label style={{ ...field, gridColumn: "1 / -1" }}><span style={labelSt}>Notes</span><input style={inputSt} value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} /></label>
         </div>
@@ -184,7 +193,7 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 820 }}>
               <thead><tr>
                 <th style={th}>Date</th><th style={th}>Category</th><th style={th}>Description</th><th style={th}>Budget</th>
-                <th style={{ ...th, textAlign: "right" }}>Amount</th><th style={{ ...th, textAlign: "right" }}></th>
+                <th style={{ ...th, textAlign: "right" }}>Net</th><th style={{ ...th, textAlign: "right" }}>VAT</th><th style={{ ...th, textAlign: "right" }}>Gross</th><th style={{ ...th, textAlign: "right" }}></th>
               </tr></thead>
               <tbody>
                 {shown.map((r) => (
@@ -199,6 +208,8 @@ export default function MiscSpendUI({ initialRows, budgets = [], departments = [
                       </div>
                     </td>
                     <td className="fos-num" style={{ ...td, textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>{money(r.amount)}</td>
+                    <td className="fos-num" style={{ ...td, textAlign: "right", whiteSpace: "nowrap", color: r.vat_amount == null ? "var(--faint)" : undefined }} title={r.vat_amount == null ? "VAT not recorded" : undefined}>{r.vat_amount == null ? "—" : money(r.vat_amount)}</td>
+                    <td className="fos-num" style={{ ...td, textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)" }}>{money(netVat(r.amount, r.vat_amount).gross)}</td>
                     <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
                       <button style={{ ...ghost, padding: "5px 10px", marginRight: 6 }} onClick={() => beginEdit(r)}>Edit</button>
                       <button style={{ ...ghost, padding: "5px 10px", color: "var(--red)", borderColor: "color-mix(in srgb, var(--red) 40%, var(--line))" }} onClick={() => del(r)}>Delete</button>
