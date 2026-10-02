@@ -8,7 +8,8 @@ import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
-import { supplierTermsPosition } from "../../../lib/supplier-terms-rules";
+import { supplierTermsPosition, supplierDueDate, supplierTermsDate, ukPaymentDate } from "../../../lib/supplier-terms-rules";
+import { orderEditError, orderAmount } from "../../../lib/procurement-edit-rules";
 import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel, netVat, vatEntryError } from "../../../lib/vat-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -35,6 +36,7 @@ const REQ_ACTIONS = {
   APPROVED: [["order", "Mark ordered"]],
 };
 const CSV_TEMPLATE = "Source,Supplier,Category,Order Month,Amount,Terms (days),Status,Reference\nMiniso,MINISO HQ,Core range,2026-07,420000,60,Committed,PO-1\nLocal,Design360,Fixtures,2026-07,42000,30,Committed,PO-2\n";
+const dmyOf = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "—");
 const monthLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric" }); };
 // Month arithmetic on "YYYY-MM" strings (they sort lexically, so comparisons work).
 const thisYm = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
@@ -485,13 +487,28 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
   }
   function openEdit(o) {
     setFxApprove(null);
-    setEdit(edit?.purchase_id === o.purchase_id ? null : { purchase_id: o.purchase_id, supplier: o.supplier || "", reference: o.reference || "" });
+    const day = (v) => (v ? String(v).slice(0, 10) : "");
+    setEdit(edit?.purchase_id === o.purchase_id ? null : {
+      purchase_id: o.purchase_id, source: o.source, currency: o.currency || "GBP", terms_days: o.terms_days,
+      approval_status: o.approval_status, was: orderAmount(o), locked: orderEditError(o),
+      supplier: o.supplier || "", reference: o.reference || "", category: o.category || "",
+      amount: String(orderAmount(o) || ""), order_ym: o.order_ym || "", delivery_ym: o.delivery_ym || "",
+      pickup_date: day(o.pickup_date), supplier_pay_date: day(o.supplier_pay_date),
+    });
   }
   async function saveEdit() {
     if (!edit || !edit.supplier.trim()) return;
-    await act(edit.purchase_id, "edit-supplier", { supplier: edit.supplier.trim(), reference: edit.reference });
+    const patch = {
+      supplier: edit.supplier.trim(), reference: edit.reference, category: edit.category,
+      amount: edit.amount, order_ym: edit.order_ym, delivery_ym: edit.delivery_ym,
+      supplier_pay_date: edit.supplier_pay_date || null,
+      ...(edit.source === "MINISO" ? { pickup_date: edit.pickup_date } : {}),
+    };
+    if (raisesApproved(edit) && !window.confirm("Raising the amount on an approved order sends it back to the head of department for approval. Continue?")) return;
+    await act(edit.purchase_id, "edit", { patch });
     setEdit(null);
   }
+  const raisesApproved = (e) => (e.approval_status === "HOD_APPROVED" || e.approval_status === "APPROVED") && Number(String(e.amount).replace(/,/g, "")) > (Number(e.was) || 0) + 0.005;
   // Suppliers to offer for this order's tab (Miniso vs everything else), falling
   // back to the full list; always keep the order's current name selectable.
   const editInp = { height: 30, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" };
@@ -551,15 +568,15 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
         {(search || supplierPick) && <button onClick={() => { setSearch(""); setSupplierPick(""); }} style={{ fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Clear</button>}
       </div>
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 860 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 980 }}>
           <thead><tr>
-            {["Supplier", "Category", "Submitted by", "Order", "Cash-out", "Amount", "Status", ""].map((h, i) => (
-              <th key={i} style={{ textAlign: i === 5 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
+            {["Supplier", "Category", "Submitted by", "Order", "Supplier payment", "Miniso UK payment", "Amount", "Status", ""].map((h, i) => (
+              <th key={i} title={i === 4 ? "Invoice date (order month-end) plus the supplier's terms, or the date set on the order" : i === 5 ? "180 days on the invoice / pickup date — drives the cash budget" : undefined} style={{ textAlign: i === 6 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
             {!shown.length && (
-              <tr><td colSpan={8} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>{q || supplierPick ? "No orders in this view match the supplier / search." : "No orders in this view."}</td></tr>
+              <tr><td colSpan={9} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>{q || supplierPick ? "No orders in this view match the supplier / search." : "No orders in this view."}</td></tr>
             )}
             {shown.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
@@ -580,7 +597,14 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap", color: "var(--muted)" }}>{monthLabel(cashOutFor(o))}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>
+                    {dmyOf(supplierDueDate(o))}
+                    <div style={{ fontSize: 10.5, color: "var(--faint)" }}>{o.supplier_pay_date ? "set on the order" : `${Number(o.terms_days) || 0} days terms`}</div>
+                  </td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap", color: "var(--muted)" }}>
+                    {dmyOf(ukPaymentDate(o))}
+                    <div style={{ fontSize: 10.5, color: "var(--faint)" }}>cash budget {monthLabel(cashOutFor(o))}</div>
+                  </td>
                   <td className="fos-num" style={{ padding: "9px 12px", textAlign: "right", borderBottom: bb, whiteSpace: "nowrap" }}>
                     {money(o.amount_gbp)}
                     {foreign && <div style={{ fontSize: 10.5, color: "var(--faint)", fontWeight: 400 }}>{ccyMoney(o.amount_ccy, o.currency)} {o.currency}{approved && o.cost_rate_type ? ` · ${FX_RATE_LABEL[o.cost_rate_type] || o.cost_rate_type}` : ""}</div>}
@@ -632,14 +656,14 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                 </tr>
                 {fxApprove === o.purchase_id && (
                   <tr>
-                    <td colSpan={8} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                    <td colSpan={9} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <FxApprove order={o} rates={fxRates} busy={busy} onCancel={() => setFxApprove(null)} onConfirm={(picks) => act(o.purchase_id, "finance-approve", picks)} />
                     </td>
                   </tr>
                 )}
                 {inv?.purchase_id === o.purchase_id && (
                   <tr>
-                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                    <td colSpan={9} style={{ padding: "12px 14px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
                         <label style={{ display: "block" }}><span style={FIELD_LAB}>Invoice no / ref</span>
                           <input style={{ ...editInp, width: 170 }} value={inv.number} onChange={(e) => setInv((s) => ({ ...s, number: e.target.value }))} placeholder="e.g. INV-1042" />
@@ -667,21 +691,65 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                 )}
                 {edit?.purchase_id === o.purchase_id && (
                   <tr>
-                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
-                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Supplier</span>
-                          <select style={{ ...editInp, width: 240 }} value={edit.supplier} onChange={(e) => setEdit((s) => ({ ...s, supplier: e.target.value }))}>
-                            {!suppliers.some((sp) => sp.name === edit.supplier) && edit.supplier && <option value={edit.supplier}>{edit.supplier} (current)</option>}
-                            {suppliers.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
-                          </select>
-                        </label>
-                        <label style={{ display: "block" }}><span style={FIELD_LAB}>Reference</span>
-                          <input style={{ ...editInp, width: 160 }} value={edit.reference} onChange={(e) => setEdit((s) => ({ ...s, reference: e.target.value }))} placeholder="optional" />
-                        </label>
-                        <button disabled={busy || !edit.supplier.trim()} onClick={saveEdit} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save</button>
-                        <button disabled={busy} onClick={() => setEdit(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Cancel</button>
-                        <span style={{ fontSize: 11, color: "var(--faint)", flex: "1 1 200px" }}>Corrects the supplier name / reference on this raised order. Amounts, dates and approvals are unchanged.</span>
-                      </div>
+                    <td colSpan={9} style={{ padding: "12px 14px", borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                      {edit.locked ? (
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{edit.locked}.</span>
+                          <button disabled={busy} onClick={() => setEdit(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Close</button>
+                        </div>
+                      ) : (() => {
+                        const setE = (k) => (e) => setEdit((s) => ({ ...s, [k]: e.target.value }));
+                        const draft = { source: edit.source, order_ym: edit.order_ym, pickup_date: edit.pickup_date, terms_days: edit.terms_days };
+                        const termsDate = supplierTermsDate(draft);
+                        const uk = ukPaymentDate(draft);
+                        const sym = CCY_SYMBOL[edit.currency] || edit.currency;
+                        return (
+                          <>
+                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Supplier</span>
+                                <select style={{ ...editInp, width: 220 }} value={edit.supplier} onChange={setE("supplier")}>
+                                  {!suppliers.some((sp) => sp.name === edit.supplier) && edit.supplier && <option value={edit.supplier}>{edit.supplier} (current)</option>}
+                                  {suppliers.map((sp) => <option key={sp.name} value={sp.name}>{sp.name}</option>)}
+                                </select>
+                              </label>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Reference</span>
+                                <input style={{ ...editInp, width: 140 }} value={edit.reference} onChange={setE("reference")} placeholder="optional" />
+                              </label>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Category</span>
+                                <input style={{ ...editInp, width: 140 }} value={edit.category} onChange={setE("category")} />
+                              </label>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Net amount ({sym})</span>
+                                <MoneyInput style={{ ...editInp, width: 130, textAlign: "right" }} className="fos-num" value={edit.amount} onChange={setE("amount")} />
+                              </label>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Order month</span>
+                                <input type="month" style={{ ...editInp, width: 150 }} value={edit.order_ym} onChange={setE("order_ym")} />
+                              </label>
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Delivery month</span>
+                                <input type="month" style={{ ...editInp, width: 150 }} value={edit.delivery_ym} onChange={setE("delivery_ym")} />
+                              </label>
+                              {edit.source === "MINISO" && (
+                                <label style={{ display: "block" }}><span style={FIELD_LAB}>Pickup date</span>
+                                  <input type="date" style={{ ...editInp, width: 150 }} value={edit.pickup_date} onChange={setE("pickup_date")} />
+                                </label>
+                              )}
+                              <label style={{ display: "block" }}><span style={FIELD_LAB}>Supplier payment date</span>
+                                <input type="date" style={{ ...editInp, width: 150 }} value={edit.supplier_pay_date} onChange={setE("supplier_pay_date")} />
+                              </label>
+                              <div style={{ display: "block" }}><span style={FIELD_LAB}>Miniso UK payment date</span>
+                                <div style={{ ...editInp, width: 150, display: "flex", alignItems: "center", background: "var(--raise)", color: "var(--muted)" }} title="180 days on the invoice / pickup date — drives the cash budget, so it can't be edited">{dmyOf(uk)} 🔒</div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                              <button disabled={busy || !edit.supplier.trim() || !(Number(String(edit.amount).replace(/,/g, "")) > 0)} onClick={saveEdit} style={{ fontSize: 12.5, fontWeight: 650, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", cursor: "pointer" }}>Save</button>
+                              <button disabled={busy} onClick={() => setEdit(null)} style={{ fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Cancel</button>
+                              <span style={{ fontSize: 11, color: raisesApproved(edit) ? "var(--amber)" : "var(--faint)", flex: "1 1 300px", lineHeight: 1.5 }}>
+                                {raisesApproved(edit) ? "Raising the amount sends this approved order back to the head of department for approval. " : ""}
+                                Supplier payment date: leave blank for the invoice date (order month-end) plus {Number(edit.terms_days) || 0} days terms{termsDate ? ` — ${dmyOf(termsDate)}` : ""}. The Miniso UK payment date is 180 days on the {edit.source === "MINISO" ? "pickup" : "invoice"} date and drives the cash budget, so it moves only with the order&rsquo;s dates.
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
                   </tr>
                 )}
@@ -855,7 +923,7 @@ function SupplierTerms({ orders = [], suppliers = [] }) {
         </button>
       ) : null}>
       {!shown.length ? <Empty>{rows.length ? "Nothing owed to any supplier on this tab." : "No suppliers yet."}</Empty> : (
-        <Table head={["Supplier", "Terms", "Credit limit", "Committed", "Available", "Current", "1–30 days", "31–60 days", "60+ days", "Next due"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 1]}>
+        <Table head={["Supplier", "Terms", "Credit limit", "Committed", "Available", "Due now", "Current", "1–30 days", "31–60 days", "60+ days", "Next due"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}>
           {shown.map((r) => {
             const aged = (v, tone) => (v > 0 ? <Td r tone={tone}>{money(v)}</Td> : <Td r>{dash}</Td>);
             return (
@@ -870,6 +938,7 @@ function SupplierTerms({ orders = [], suppliers = [] }) {
                 <Td r tone={r.available == null ? undefined : r.over ? "var(--red)" : r.near ? "var(--amber)" : "var(--green)"}>
                   {r.available == null ? dash : <>{money(r.available)}{r.utilisation != null && sub(`${Math.round(r.utilisation * 100)}% used${r.over ? " · over limit" : ""}`, r.over ? "var(--red)" : undefined)}</>}
                 </Td>
+                {aged(r.dueNow, "var(--red)")}
                 {aged(r.current)}
                 {aged(r.od30, "var(--amber)")}
                 {aged(r.od60, "var(--red)")}
@@ -884,7 +953,7 @@ function SupplierTerms({ orders = [], suppliers = [] }) {
               <Td r /><Td r />
               <Td r><strong>{money(total("open"))}</strong></Td>
               <Td r />
-              {["current", "od30", "od60", "od60plus"].map((k) => <Td key={k} r><strong>{total(k) > 0 ? money(total(k)) : "—"}</strong></Td>)}
+              {["dueNow", "current", "od30", "od60", "od60plus"].map((k) => <Td key={k} r><strong>{total(k) > 0 ? money(total(k)) : "—"}</strong></Td>)}
               <Td r />
             </tr>
           )}
