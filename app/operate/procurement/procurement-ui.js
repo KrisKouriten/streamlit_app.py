@@ -8,6 +8,7 @@ import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
 import { FX_RATE_TYPES, FX_RATE_LABEL, isForeignCurrency, findRate, convertToGbp, fxVariance } from "../../../lib/fx-rules";
+import { supplierTermsPosition } from "../../../lib/supplier-terms-rules";
 import { VAT_TREATMENTS, VAT_STANDARD, defaultVatRate, grossFromNet, vatRateOf, grossOf, netOf, vatLabel, netVat, vatEntryError } from "../../../lib/vat-rules";
 import MoneyInput from "../../money-input";
 import SupplierPicker from "../supplier-picker";
@@ -178,20 +179,7 @@ export default function ProcurementUI({ data, ready, loaded, illustrative, canMa
 
       {canManage && <AwaitingVsBudget rows={orders.filter((o) => o.source === tab)} months={s.months} />}
 
-      <Panel title="Suppliers" note="terms set when the drawdown pays the supplier; Local cash-out is the 180-day facility mark either way">
-        {s.suppliers.length === 0 ? <Empty>No suppliers yet.</Empty> : (
-          <Table head={["Supplier", "Orders", "Terms", "Committed"]} align={[0, 1, 1, 1]}>
-            {s.suppliers.map((sup) => (
-              <tr key={sup.supplier}>
-                <Td>{sup.supplier}</Td>
-                <Td r>{sup.orders}</Td>
-                <Td r>{sup.terms_days} days</Td>
-                <Td r>{money(sup.committed)}</Td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Panel>
+      <SupplierTerms orders={orders.filter((o) => o.source === tab)} suppliers={suppliers} />
 
       <OrdersPanel key={tab} orders={orders.filter((o) => o.source === tab)} openOrder={openOrder} amendments={amendments} roles={roles} canManage={canManage} fxRates={fxRates} suppliers={suppliers} onErr={setErr} onDone={() => router.refresh()} />
 
@@ -843,6 +831,64 @@ function Panel({ title, note, right, children }) {
     </section>
   );
 }
+/*
+ * Each supplier's trade terms: what we still owe them on live orders, when it
+ * falls due, and how much of the credit limit is left — so whoever raises an
+ * order can see the room they have and when it frees up. Paid orders (cash or
+ * trade pay) owe nothing. Rules in supplier-terms-rules.js.
+ */
+function SupplierTerms({ orders = [], suppliers = [] }) {
+  const rows = useMemo(() => supplierTermsPosition(orders, suppliers, new Date()), [orders, suppliers]);
+  const [showAll, setShowAll] = useState(false);
+  const open = rows.filter((r) => r.open > 0);
+  const shown = showAll ? rows : open;
+  const dmy = (iso) => (iso ? iso.split("-").reverse().join("/") : "—");
+  const dash = <span style={{ color: "var(--faint)" }}>—</span>;
+  const sub = (t, tone) => <div style={{ fontSize: 10.5, color: tone || "var(--faint)", marginTop: 2, fontWeight: 400 }}>{t}</div>;
+  const total = (k) => open.reduce((t, r) => t + (r[k] || 0), 0);
+  return (
+    <Panel title="Suppliers · trade terms"
+      note="open = what we still owe on live orders (paid in cash or on trade pay drops off) · due = order month-end + the supplier's terms · available = credit limit less open · net of VAT"
+      right={rows.length > open.length ? (
+        <button className="fos-btn-ghost" type="button" onClick={() => setShowAll((x) => !x)}>
+          {showAll ? "Open balances only" : `All suppliers (${rows.length})`}
+        </button>
+      ) : null}>
+      {!shown.length ? <Empty>{rows.length ? "Nothing owed to any supplier on this tab." : "No suppliers yet."}</Empty> : (
+        <Table head={["Supplier", "Terms", "Open orders", "Due now", "Due in 30 days", "Next due", "Credit limit", "Available"]} align={[0, 1, 1, 1, 1, 1, 1, 1]}>
+          {shown.map((r) => (
+            <tr key={r.supplier}>
+              <Td>{r.supplier}</Td>
+              <Td r>{r.terms_days} days</Td>
+              <Td r>
+                {r.open > 0 ? money(r.open) : dash}
+                {r.open > 0 && sub(`${r.openOrders} order${r.openOrders === 1 ? "" : "s"}${r.awaiting > 0 ? ` · ${money(r.awaiting)} awaiting approval` : ""}`)}
+              </Td>
+              <Td r tone={r.dueNow > 0 ? "var(--red)" : undefined}>{r.dueNow > 0 ? <>{money(r.dueNow)}{sub("today or overdue", "var(--red)")}</> : dash}</Td>
+              <Td r tone={r.due30 > 0 ? "var(--amber)" : undefined}>{r.due30 > 0 ? money(r.due30) : dash}</Td>
+              <Td r>{r.nextDue ? <>{dmy(r.nextDue.date)}{sub(`${money(r.nextDue.amount)} frees up`)}</> : dash}</Td>
+              <Td r>{r.limit == null ? <span style={{ color: "var(--faint)" }} title="Set a credit limit on the Supplier master">not set</span> : money(r.limit)}</Td>
+              <Td r tone={r.available == null ? undefined : r.over ? "var(--red)" : r.near ? "var(--amber)" : "var(--green)"}>
+                {r.available == null ? dash : <>{money(r.available)}{r.utilisation != null && sub(`${Math.round(r.utilisation * 100)}% used${r.over ? " · over limit" : ""}`, r.over ? "var(--red)" : undefined)}</>}
+              </Td>
+            </tr>
+          ))}
+          {open.length > 1 && (
+            <tr>
+              <Td><strong>Total</strong></Td>
+              <Td r />
+              <Td r><strong>{money(total("open"))}</strong></Td>
+              <Td r tone={total("dueNow") > 0 ? "var(--red)" : undefined}><strong>{total("dueNow") > 0 ? money(total("dueNow")) : "—"}</strong></Td>
+              <Td r><strong>{total("due30") > 0 ? money(total("due30")) : "—"}</strong></Td>
+              <Td r /><Td r /><Td r />
+            </tr>
+          )}
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
 function Table({ head, align, children }) {
   return (
     <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>

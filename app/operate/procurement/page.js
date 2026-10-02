@@ -57,7 +57,7 @@ export default async function Procurement({ searchParams }) {
         orders={pr.orders || []} roles={roles} fxRates={fxRates || []} amendments={amendments} openOrder={sp.order || null}
         otbVersions={versions} activeVersionId={activeVersion?.otb_version_id || null} merchRequests={merchRequests} channelOpts={channelOpts}
         supplierNames={(supplierList.suppliers || []).map((s) => s.name)}
-        suppliers={(supplierList.suppliers || []).map((s) => ({ name: s.name, source_type: s.source_type, payment_days: s.payment_days }))} />
+        suppliers={(supplierList.suppliers || []).map((s) => ({ name: s.name, source_type: s.source_type, payment_days: s.payment_days, credit_limit: s.credit_limit }))} />
     </div>
   );
 }
