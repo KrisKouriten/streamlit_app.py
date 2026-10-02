@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
-import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS, orderInvoiceError } from "../../../lib/procurement-rules";
+import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS, orderInvoiceError, orderPaid } from "../../../lib/procurement-rules";
 import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
@@ -613,7 +613,16 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                       <Badge tone={meta.tone}>{meta.label}</Badge>
                       {chal && <Badge tone="red">Challenged</Badge>}
+                      {/* Payment status — Finance mark it on Procurement Summary + Close. */}
+                      {!cancelled && (orderPaid(o)
+                        ? <Badge tone="green">Paid</Badge>
+                        : o.payment_status === "PART_PAID" ? <Badge tone="amber">Part-paid</Badge> : <Badge tone="accent">Unpaid</Badge>)}
                     </div>
+                    {!cancelled && orderPaid(o) && (o.payment_method || o.paid_date) && (
+                      <div style={{ fontSize: 10.5, color: "var(--green)", marginTop: 3 }}>
+                        Paid{o.payment_method ? ` · ${o.payment_method === "TRADE_PAY" ? "trade pay" : "cash"}` : ""}{o.paid_date ? ` · ${dmyOf(o.paid_date)}` : ""}
+                      </div>
+                    )}
                     {o.source === "LOCAL" && Number(o.invoice_amount) > 0 && (() => {
                       const m = invoiceMatch(o.amount_gbp, o.invoice_amount);
                       const col = { green: "var(--green)", amber: "var(--amber)", red: "var(--red)" }[m.tone] || "var(--muted)";
