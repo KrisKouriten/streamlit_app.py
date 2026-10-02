@@ -465,6 +465,8 @@ const hodApprovedStatus = (s) => s === "HOD_APPROVED" || s === "APPROVED";
 function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canManage, fxRates = [], suppliers = [], onErr, onDone }) {
   // Which orders to list (REQUEST_VIEWS) — a linked order shows under All.
   const [view, setView] = useState("ALL");
+  const [search, setSearch] = useState("");          // free-text search over the orders, as on P.O Requests
+  const [supplierPick, setSupplierPick] = useState(""); // "" = every supplier
   useEffect(() => {
     if (openOrder == null) return;
     const t = setTimeout(() => document.getElementById(`order-${openOrder}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
@@ -509,7 +511,14 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
   const del = (o) => { if (window.confirm(`Delete this order (${o.supplier}) permanently? This cannot be undone.`)) act(o.purchase_id, "delete"); };
   // GBP orders approve in one click; a foreign order opens the rate pickers first.
   const financeApprove = (o) => (isForeignCurrency(o.currency) ? setFxApprove(fxApprove === o.purchase_id ? null : o.purchase_id) : act(o.purchase_id, "finance-approve"));
-  const shown = orders.filter((REQUEST_VIEWS.find((v) => v.key === view) || REQUEST_VIEWS[0]).test);
+  const viewTest = (REQUEST_VIEWS.find((v) => v.key === view) || REQUEST_VIEWS[0]).test;
+  const q = search.trim().toLowerCase();
+  const matches = (o) => !q || [o.supplier, o.category, o.reference, o.created_by, o.invoice_number, o.purchase_id, o.currency]
+    .some((v) => String(v ?? "").toLowerCase().includes(q));
+  // Suppliers with an order on this tab, A–Z, for the filter.
+  const supplierNames = [...new Set(orders.map((o) => o.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const bySupplier = (o) => !supplierPick || o.supplier === supplierPick;
+  const shown = orders.filter((o) => viewTest(o) && bySupplier(o) && matches(o));
 
   return (
     <Panel title="Orders" note="raise → head of department → finance · cancel any time; only finance can delete, once head-approved or cancelled">
@@ -517,22 +526,23 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
         // A challenge is Finance handing the order back. It is the one state on
         // this page where somebody is waiting on the team who raised it, so it
         // gets said once at the top rather than only inside a row.
-        const q = challengedOrders(orders);
-        if (!q.length) return null;
+        const ch = challengedOrders(orders);
+        if (!ch.length) return null;
         return (
           <div style={{ border: "1px solid var(--red)", borderRadius: 9, padding: "10px 13px", marginBottom: 11, fontSize: 12.5, lineHeight: 1.55 }}>
             <strong style={{ color: "var(--red)" }}>
-              {q.length} order{q.length === 1 ? "" : "s"} challenged by Finance
+              {ch.length} order{ch.length === 1 ? "" : "s"} challenged by Finance
             </strong>{" "}
-            — {q.length === 1 ? "it is" : "they are"} marked below with the reason. Amend the order, or cancel it if it is no longer wanted. Finance re-review once it changes. An order not amended within 5 working days of the challenge is cancelled automatically.
+            — {ch.length === 1 ? "it is" : "they are"} marked below with the reason. Amend the order, or cancel it if it is no longer wanted. Finance re-review once it changes. An order not amended within 5 working days of the challenge is cancelled automatically.
           </div>
         );
       })()}
-      {/* Status headers — the same views as Purchase Order Requests. */}
-      <div style={{ display: "inline-flex", gap: 3, padding: 3, marginBottom: 11, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
+      {/* Status headers and search — the same as Purchase Order Requests. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 11 }}>
+      <div style={{ display: "inline-flex", gap: 3, padding: 3, background: "var(--raise)", border: "1px solid var(--line)", borderRadius: 10, flexWrap: "wrap" }}>
         {REQUEST_VIEWS.map((v) => {
           const on = v.key === view;
-          const n = orders.filter(v.test).length;
+          const n = orders.filter((o) => v.test(o) && bySupplier(o)).length;   // counts follow the supplier picked
           return (
             <button key={v.key} onClick={() => setView(v.key)} style={{
               fontSize: 12.5, fontWeight: on ? 650 : 500, padding: "5px 12px", borderRadius: 7, cursor: "pointer",
@@ -541,6 +551,16 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
             }}>{v.label} <span style={{ color: "var(--faint)", fontWeight: 500 }}>{n}</span></button>
           );
         })}
+      </div>
+        <select value={supplierPick} onChange={(e) => setSupplierPick(e.target.value)} aria-label="Filter by supplier"
+          style={{ height: 34, fontSize: 13, padding: "0 8px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: supplierPick ? "var(--ink)" : "var(--muted)", maxWidth: 240 }}>
+          <option value="">All suppliers ({supplierNames.length})</option>
+          {supplierNames.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search orders"
+          placeholder="Search supplier, category, reference, raised by or invoice no…"
+          style={{ height: 34, fontSize: 13, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", minWidth: 220, flex: 1 }} />
+        {(search || supplierPick) && <button onClick={() => { setSearch(""); setSupplierPick(""); }} style={{ fontSize: 12.5, fontWeight: 500, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>Clear</button>}
       </div>
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 860 }}>
@@ -551,7 +571,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
           </tr></thead>
           <tbody>
             {!shown.length && (
-              <tr><td colSpan={8} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>No orders in this view.</td></tr>
+              <tr><td colSpan={8} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>{q || supplierPick ? "No orders in this view match the supplier / search." : "No orders in this view."}</td></tr>
             )}
             {shown.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
