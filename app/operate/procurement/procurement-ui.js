@@ -848,39 +848,44 @@ function SupplierTerms({ orders = [], suppliers = [] }) {
   const total = (k) => open.reduce((t, r) => t + (r[k] || 0), 0);
   return (
     <Panel title="Suppliers · trade terms"
-      note="open = what we still owe on live orders (paid in cash or on trade pay drops off) · due = order month-end + the supplier's terms · available = credit limit less open · net of VAT"
+      note="committed = what we still owe on live orders (paid in cash or on trade pay drops off) · available = credit limit less committed · aged by days past the due date (order month-end + terms) · net of VAT"
       right={rows.length > open.length ? (
         <button className="fos-btn-ghost" type="button" onClick={() => setShowAll((x) => !x)}>
           {showAll ? "Open balances only" : `All suppliers (${rows.length})`}
         </button>
       ) : null}>
       {!shown.length ? <Empty>{rows.length ? "Nothing owed to any supplier on this tab." : "No suppliers yet."}</Empty> : (
-        <Table head={["Supplier", "Terms", "Open orders", "Due now", "Due in 30 days", "Next due", "Credit limit", "Available"]} align={[0, 1, 1, 1, 1, 1, 1, 1]}>
-          {shown.map((r) => (
-            <tr key={r.supplier}>
-              <Td>{r.supplier}</Td>
-              <Td r>{r.terms_days} days</Td>
-              <Td r>
-                {r.open > 0 ? money(r.open) : dash}
-                {r.open > 0 && sub(`${r.openOrders} order${r.openOrders === 1 ? "" : "s"}${r.awaiting > 0 ? ` · ${money(r.awaiting)} awaiting approval` : ""}`)}
-              </Td>
-              <Td r tone={r.dueNow > 0 ? "var(--red)" : undefined}>{r.dueNow > 0 ? <>{money(r.dueNow)}{sub("today or overdue", "var(--red)")}</> : dash}</Td>
-              <Td r tone={r.due30 > 0 ? "var(--amber)" : undefined}>{r.due30 > 0 ? money(r.due30) : dash}</Td>
-              <Td r>{r.nextDue ? <>{dmy(r.nextDue.date)}{sub(`${money(r.nextDue.amount)} frees up`)}</> : dash}</Td>
-              <Td r>{r.limit == null ? <span style={{ color: "var(--faint)" }} title="Set a credit limit on the Supplier master">not set</span> : money(r.limit)}</Td>
-              <Td r tone={r.available == null ? undefined : r.over ? "var(--red)" : r.near ? "var(--amber)" : "var(--green)"}>
-                {r.available == null ? dash : <>{money(r.available)}{r.utilisation != null && sub(`${Math.round(r.utilisation * 100)}% used${r.over ? " · over limit" : ""}`, r.over ? "var(--red)" : undefined)}</>}
-              </Td>
-            </tr>
-          ))}
+        <Table head={["Supplier", "Terms", "Credit limit", "Committed", "Available", "Current", "1–30 days", "31–60 days", "60+ days", "Next due"]} align={[0, 1, 1, 1, 1, 1, 1, 1, 1, 1]}>
+          {shown.map((r) => {
+            const aged = (v, tone) => (v > 0 ? <Td r tone={tone}>{money(v)}</Td> : <Td r>{dash}</Td>);
+            return (
+              <tr key={r.supplier}>
+                <Td>{r.supplier}{r.oldestDays != null && r.open > 0 && sub(`oldest ${r.oldestDays} days outstanding`, r.overdue > 0 ? "var(--red)" : undefined)}</Td>
+                <Td r>{r.terms_days} days</Td>
+                <Td r>{r.limit == null ? <span style={{ color: "var(--faint)" }} title="Set a credit limit on the Supplier master">not set</span> : money(r.limit)}</Td>
+                <Td r>
+                  {r.open > 0 ? money(r.open) : dash}
+                  {r.open > 0 && sub(`${r.openOrders} order${r.openOrders === 1 ? "" : "s"}${r.awaiting > 0 ? ` · ${money(r.awaiting)} awaiting approval` : ""}`)}
+                </Td>
+                <Td r tone={r.available == null ? undefined : r.over ? "var(--red)" : r.near ? "var(--amber)" : "var(--green)"}>
+                  {r.available == null ? dash : <>{money(r.available)}{r.utilisation != null && sub(`${Math.round(r.utilisation * 100)}% used${r.over ? " · over limit" : ""}`, r.over ? "var(--red)" : undefined)}</>}
+                </Td>
+                {aged(r.current)}
+                {aged(r.od30, "var(--amber)")}
+                {aged(r.od60, "var(--red)")}
+                {aged(r.od60plus, "var(--red)")}
+                <Td r>{r.nextDue ? <>{dmy(r.nextDue.date)}{sub(`${money(r.nextDue.amount)} frees up`)}</> : dash}</Td>
+              </tr>
+            );
+          })}
           {open.length > 1 && (
             <tr>
               <Td><strong>Total</strong></Td>
-              <Td r />
+              <Td r /><Td r />
               <Td r><strong>{money(total("open"))}</strong></Td>
-              <Td r tone={total("dueNow") > 0 ? "var(--red)" : undefined}><strong>{total("dueNow") > 0 ? money(total("dueNow")) : "—"}</strong></Td>
-              <Td r><strong>{total("due30") > 0 ? money(total("due30")) : "—"}</strong></Td>
-              <Td r /><Td r /><Td r />
+              <Td r />
+              {["current", "od30", "od60", "od60plus"].map((k) => <Td key={k} r><strong>{total(k) > 0 ? money(total(k)) : "—"}</strong></Td>)}
+              <Td r />
             </tr>
           )}
         </Table>
