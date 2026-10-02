@@ -53,3 +53,18 @@ test("still-committed balance is used (e.g. a part-drawn LC), and awaiting appro
   assert.equal(r.over, true);
   assert.equal(r.available, -300);
 });
+
+test("aged against the terms: current, 1–30, 31–60 and 60+ days past due", () => {
+  const [r] = supplierTermsPosition([
+    o({ order_ym: "2026-09", amount_gbp: 100 }),   // due 30/10 — current
+    o({ order_ym: "2026-08", amount_gbp: 200 }),   // due 30/09 — 2 days past
+    o({ order_ym: "2026-07", amount_gbp: 300 }),   // due 30/08 — 33 days past
+    o({ order_ym: "2026-05", amount_gbp: 400 }),   // due 30/06 — 94 days past
+  ], [], TODAY);
+  assert.equal(r.current, 100);
+  assert.equal(r.od30, 200);
+  assert.equal(r.od60, 300);
+  assert.equal(r.od60plus, 400);
+  assert.equal(r.overdue, 900);
+  assert.equal(r.oldestDays, 124);   // invoiced 31/05, 124 days ago
+});

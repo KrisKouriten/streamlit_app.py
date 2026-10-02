@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
-import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, getProcurementOrder, setOrderInvoice } from "../../../lib/procurement";
+import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, amendProcurementOrder, getProcurementOrder, setOrderInvoice } from "../../../lib/procurement";
 import { orderInvoiceError } from "../../../lib/procurement-rules";
 import { setFxRate } from "../../../lib/fx";
 import { getApproverEmails } from "../../../lib/dept-budget";
@@ -117,6 +117,23 @@ export async function POST(request) {
       case "cancel": {
         const d = deny(MANAGE, "Cancelling requires ADMIN, FINANCE or OPS"); if (d) return d;
         return NextResponse.json(await cancelProcurement(body.id, body.reason, actor));
+      }
+      // Edit a raised order — amount, dates, supplier, reference, category. An
+      // amount raised on an approved order goes back to the head of department.
+      case "edit": {
+        const d = deny(MANAGE, "Editing an order requires ADMIN, FINANCE or OPS"); if (d) return d;
+        const res = await amendProcurementOrder(body.id, body.patch || {}, actor);
+        if (res.reapprove) {
+          try {
+            const o = res.order;
+            const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
+            await notifyMerchAwaitingHod({
+              request: { purchaseId: o.purchase_id, submitter: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
+              hodEmails, baseUrl: baseUrlOf(request),
+            });
+          } catch (e) { console.error("procurement edit notify failed:", e.message); }
+        }
+        return NextResponse.json({ ok: true, changed: res.changed, reapprove: res.reapprove });
       }
       case "edit-supplier": {
         const d = deny(MANAGE, "Editing an order requires ADMIN, FINANCE or OPS"); if (d) return d;
