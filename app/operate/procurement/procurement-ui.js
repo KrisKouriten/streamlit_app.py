@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, pct, Badge, IllustrativeBanner } from "../../finance-os/ui";
 import { cashOutFor, PROC_STATUS_META, budgetImpact, requestsVsBudget, tradeFacilitySplit, financeChallenge, challengedOrders, monthsWithActivity, REQUEST_VIEWS, orderInvoiceError, orderPaid } from "../../../lib/procurement-rules";
+import { procRef } from "../../../lib/procurement-close-rules";
 import { invoiceMatch } from "../../../lib/po-rules";
 import { challengeReasonLabels } from "../../../lib/procurement-close-rules";
 import { challengeLapse, lapseNote } from "../../../lib/auto-workflow-rules.js";
@@ -366,7 +367,7 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
           </Field>
         )}
         <Field label="Status"><select value={f.status} onChange={set("status")} style={inp}><option value="COMMITTED">Committed</option><option value="PAID">Paid</option></select></Field>
-        <Field label="Reference"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
+        <Field label="Reference (optional)"><input value={f.reference} onChange={set("reference")} placeholder={eg.ref} style={inp} /></Field>
       </div>
       {!isMiniso && split && (
         <div style={{ fontSize: 11.5, marginTop: 11, lineHeight: 1.55, color: split.over ? "var(--red)" : "var(--faint)" }}>
@@ -387,6 +388,11 @@ function AddLine({ source, fxRates = [], suppliers = [], months = [], onDone }) 
             : <>Provisionally ≈ <strong>{money(gbpPreview)}</strong> at the {money(1)}=${spot} spot rate. Finance re-strikes the GBP cost at the chosen rate on approval.</>}
         </div>
       )}
+      {/* How the order's reference is decided — said on the form so nobody
+          expects a second, system-made reference as well as their own. */}
+      <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 11, lineHeight: 1.5 }}>
+        <strong>Reference:</strong> if you enter one (e.g. the supplier&rsquo;s P.O number or the WC trade-pay reference), that becomes this order&rsquo;s reference everywhere — Procurement Summary, dashboards, alerts and emails — and no other is created. Leave it blank and the system gives the order one: <strong>PP-</strong> followed by its order number (e.g. PP-1042). Each order needs its own reference, and the PP- / MR- format is kept for the system.
+      </div>
       {impact && <BudgetCheck impact={impact} />}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 13 }}>
         <button type="submit" className="fos-btn" disabled={busy} style={{ height: 34, fontSize: 12.5 }}>{busy ? "Adding…" : "Add purchase"}</button>
@@ -518,7 +524,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
   const financeApprove = (o) => (isForeignCurrency(o.currency) ? setFxApprove(fxApprove === o.purchase_id ? null : o.purchase_id) : act(o.purchase_id, "finance-approve"));
   const viewTest = (REQUEST_VIEWS.find((v) => v.key === view) || REQUEST_VIEWS[0]).test;
   const q = search.trim().toLowerCase();
-  const matches = (o) => !q || [o.supplier, o.category, o.reference, o.created_by, o.invoice_number, o.purchase_id, o.currency]
+  const matches = (o) => !q || [o.supplier, o.category, procRef(o), o.created_by, o.invoice_number, o.purchase_id, o.currency]
     .some((v) => String(v ?? "").toLowerCase().includes(q));
   // Suppliers with an order on this tab, A–Z, for the filter.
   const supplierNames = [...new Set(orders.map((o) => o.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -593,7 +599,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
               return (
                 <Fragment key={o.purchase_id}>
                 <tr id={`order-${o.purchase_id}`} style={{ opacity: cancelled ? 0.55 : 1, background: String(openOrder) === String(o.purchase_id) ? "var(--accent-bg)" : undefined }}>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}{o.reference ? <span style={{ color: "var(--faint)", fontWeight: 400 }}> · {o.reference}</span> : null}</td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}<span style={{ color: "var(--faint)", fontWeight: 400 }} title={o.reference ? "The reference typed when it was raised" : "No reference was typed, so the system gave it one"}> · {procRef(o)}</span></td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
@@ -722,7 +728,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                                 </select>
                               </label>
                               <label style={{ display: "block" }}><span style={FIELD_LAB}>Reference</span>
-                                <input style={{ ...editInp, width: 140 }} value={edit.reference} onChange={setE("reference")} placeholder="optional" />
+                                <input style={{ ...editInp, width: 140 }} value={edit.reference} onChange={setE("reference")} placeholder={`blank = PP-${edit.purchase_id}`} />
                               </label>
                               <label style={{ display: "block" }}><span style={FIELD_LAB}>Category</span>
                                 <input style={{ ...editInp, width: 140 }} value={edit.category} onChange={setE("category")} />
