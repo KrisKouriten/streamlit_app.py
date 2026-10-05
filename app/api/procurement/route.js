@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession, hasRole } from "../../../lib/auth";
 import { ingestProcurementCsv, setBudget, importBudgetGrid, shiftBudgetMonths, addProcurementPurchase, hodApproveProcurement, financeApproveProcurement, cancelProcurement, deleteProcurement, amendProcurementSupplier, amendProcurementOrder, getProcurementOrder, setOrderInvoice } from "../../../lib/procurement";
 import { orderInvoiceError } from "../../../lib/procurement-rules";
+import { procRef } from "../../../lib/procurement-close-rules";
 import { setFxRate } from "../../../lib/fx";
 import { getApproverEmails } from "../../../lib/dept-budget";
 import { resolveBaseUrl } from "../../../lib/invite-rules";
@@ -52,7 +53,7 @@ export async function POST(request) {
         try {
           const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
           await notifyMerchAwaitingHod({
-            request: { purchaseId: res.purchaseId, submitter: actor, channel: SOURCE_LABEL[body.source] || body.source, supplier: body.supplier, value: body.amount_gbp },
+            request: { purchaseId: res.purchaseId, ref: procRef({ reference: String(body.reference || "").trim() || null, purchase_id: res.purchaseId }), submitter: actor, channel: SOURCE_LABEL[body.source] || body.source, supplier: body.supplier, value: body.amount_gbp },
             hodEmails, baseUrl: baseUrlOf(request),
           });
         } catch (e) { console.error("procurement raise notify failed:", e.message); }
@@ -67,7 +68,7 @@ export async function POST(request) {
         if (order.approval_status !== "PENDING") return NextResponse.json({ error: "Only an order still awaiting head-of-department sign-off can be resubmitted" }, { status: 400 });
         const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
         await notifyMerchAwaitingHod({
-          request: { purchaseId: order.purchase_id, submitter: order.created_by, channel: SOURCE_LABEL[order.source] || order.source, supplier: order.supplier, value: order.amount_gbp },
+          request: { purchaseId: order.purchase_id, ref: procRef(order), submitter: order.created_by, channel: SOURCE_LABEL[order.source] || order.source, supplier: order.supplier, value: order.amount_gbp },
           hodEmails, baseUrl: baseUrlOf(request),
         });
         return NextResponse.json({ ok: true, notified: hodEmails.length });
@@ -100,7 +101,7 @@ export async function POST(request) {
         try {
           const o = res.order || {};
           await notifyMerchHodApproved({
-            request: { purchaseId: o.purchase_id, submitter: o.created_by, approver: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
+            request: { purchaseId: o.purchase_id, ref: o.purchase_id != null ? procRef(o) : undefined, submitter: o.created_by, approver: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
             baseUrl: baseUrlOf(request),
           });
         } catch (e) { console.error("procurement hod-approve notify failed:", e.message); }
@@ -128,7 +129,7 @@ export async function POST(request) {
             const o = res.order;
             const hodEmails = await getApproverEmails("Merchandising").catch(() => []);
             await notifyMerchAwaitingHod({
-              request: { purchaseId: o.purchase_id, submitter: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
+              request: { purchaseId: o.purchase_id, ref: procRef(o), submitter: actor, channel: SOURCE_LABEL[o.source] || o.source, supplier: o.supplier, value: o.amount_gbp },
               hodEmails, baseUrl: baseUrlOf(request),
             });
           } catch (e) { console.error("procurement edit notify failed:", e.message); }
