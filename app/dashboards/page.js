@@ -21,11 +21,13 @@ const DASHBOARDS = [
     blurb: "Consolidated cash position from the connected Xero entities, with bank-reconciliation status." },
   { n: 4, title: "Store Sales & KPI", href: "/finance-os/store-sales", kind: "feed",
     blurb: "Trading across every store — net sales, margin, like-for-like and the governed store KPIs." },
-  { n: 5, title: "Inventory", href: "/finance-os/inventory", kind: "illustrative",
+  { n: 5, title: "E-COM", href: "/ho-ecom", kind: "feed",
+    blurb: "Online trading on its own — sales vs forecast and last year, orders, AOV, conversion, margin, fees and marketing return." },
+  { n: 6, title: "Inventory", href: "/finance-os/inventory", kind: "illustrative",
     blurb: "Stock value, ageing, weeks-cover, availability and sell-through by category." },
-  { n: 6, title: "Franchise", href: "/finance-os/franchise", kind: "illustrative",
+  { n: 7, title: "Franchise", href: "/finance-os/franchise", kind: "illustrative",
     blurb: "Franchise-store sales, receivables, overdue exposure, credit limits and profitability." },
-  { n: 7, title: "Fixed Assets", href: "/finance-os/fixed-assets", kind: "illustrative",
+  { n: 8, title: "Fixed Assets", href: "/finance-os/fixed-assets", kind: "illustrative",
     blurb: "The asset register — cost, depreciation, net book value, return and payback." },
 ];
 

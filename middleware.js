@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { isPublicPath, requiredRolesForPath, isAllowed, originAllowed, mustChangePasswordGate } from "./lib/route-guards";
+import { ecomGate } from "./lib/ecom-access";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -102,6 +103,19 @@ export async function middleware(req) {
     }
     const url = req.nextUrl.clone();
     url.pathname = "/change-password";
+    url.search = "";
+    return withSecurityHeaders(NextResponse.redirect(url), dev);
+  }
+
+  // HO-ECOM: ECOM users are kept to it, and only those entitled reach it.
+  // Always on (lib/ecom-access.js).
+  const eg = ecomGate(pathname, payload.roles);
+  if (eg) {
+    if (eg.forbid || isApi) {
+      return withSecurityHeaders(NextResponse.json({ error: "You do not have access to this area" }, { status: 403 }), dev);
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = eg.redirect;
     url.search = "";
     return withSecurityHeaders(NextResponse.redirect(url), dev);
   }
