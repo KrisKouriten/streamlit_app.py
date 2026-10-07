@@ -603,7 +603,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
               return (
                 <Fragment key={o.purchase_id}>
                 <tr id={`order-${o.purchase_id}`} style={{ opacity: cancelled ? 0.55 : 1, background: String(openOrder) === String(o.purchase_id) ? "var(--accent-bg)" : undefined }}>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}<span style={{ color: "var(--faint)", fontWeight: 400 }} title={o.reference ? "The reference typed when it was raised" : "No reference was typed, so the system gave it one"}> · {procRef(o)}</span></td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none", maxWidth: 260, overflowWrap: "anywhere" }}>{o.supplier}<span style={{ color: "var(--faint)", fontWeight: 400 }} title={o.reference ? "The reference typed when it was raised" : "No reference was typed, so the system gave it one"}> · {procRef(o).split(/\s*[,;]\s*/).filter(Boolean).join(", ")}</span></td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>

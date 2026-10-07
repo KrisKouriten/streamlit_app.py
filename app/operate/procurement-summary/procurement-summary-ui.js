@@ -501,6 +501,24 @@ function AwaitingVsBudget({ rows = [], budgetMonths = {}, costingRate = null, ta
 // The order line's gross: its net (the Net column) plus VAT at the row's rate.
 const orderGross = (r) => grossFromNet(lineValue(r), vatRateOf(r)) ?? lineValue(r);
 
+/*
+ * The reference, kept narrow: an order can carry several P.O numbers in one
+ * reference ("GB01-PO003396,GB01-PO003385,…"). Unwrapped, that stretched the
+ * column across half the table and pushed the right-hand columns and the
+ * actions off the card. Each number now sits on its own line, and anything
+ * else long breaks rather than widening the column.
+ */
+function RefCell({ value }) {
+  const parts = String(value || "").split(/\s*[,;]\s*/).filter(Boolean);
+  // A P.O number never splits; only a single over-long reference breaks.
+  const whole = (p) => p.length <= 24;
+  return (
+    <div style={{ maxWidth: 180, lineHeight: 1.35 }} title={value}>
+      {parts.map((p, i) => <div key={i} style={whole(p) ? { whiteSpace: "nowrap" } : { overflowWrap: "anywhere" }}>{p}</div>)}
+    </div>
+  );
+}
+
 export default function ProcurementSummaryUI({ initialRows = [], costingRate = null, budgetMonths = {}, budgetCommit = {}, amendments = {} }) {
   const router = useRouter();
   const [tab, setTab] = useState("MINISO");
@@ -835,7 +853,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
           <div style={{ fontSize: 13, color: "var(--faint)" }}>No procurement purchases in this view.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1080 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1000 }}>
               <thead><tr>
                 {["Reference", "Source", "Type", "Supplier", "Channel / Category", "Net", "Gross", "Inventory (£ cost FX)", "Payment month", "Status", "Payment", "Drawn / settled", "Still committed"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "8px 10px", ...labelSt, borderBottom: "1px solid var(--line)" }}>{h}</th>
@@ -851,7 +869,7 @@ export default function ProcurementSummaryUI({ initialRows = [], costingRate = n
                   return (
                     <FragmentRow key={id}>
                       <tr>
-                        <td style={{ padding: "8px 10px", verticalAlign: "top", whiteSpace: "nowrap" }}>{procRef(r)}</td>
+                        <td style={{ padding: "8px 10px", verticalAlign: "top" }}><RefCell value={procRef(r)} /></td>
                         <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{r.source}</td>
                         <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{isMerchRequest(r) ? "Merch request" : "Cash purchase"}</td>
                         <td style={{ padding: "8px 10px", verticalAlign: "top" }}>{r.supplier}</td>
