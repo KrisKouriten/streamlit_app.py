@@ -576,13 +576,13 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
       <div className="fos-card fos-tbl" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 980 }}>
           <thead><tr>
-            {["Supplier", "Category", "Submitted by", "Order", "Supplier payment", "Miniso UK payment", "Amount", "Status", ""].map((h, i) => (
+            {["Supplier", "Category", "Submitted by", "Order", "Supplier payment", "Miniso UK payment", "Amount", "Status"].map((h, i) => (
               <th key={i} title={i === 4 ? "Invoice date (order month-end) plus the supplier's terms, or the date set on the order" : i === 5 ? "180 days on the invoice / pickup date — drives the cash budget" : undefined} style={{ textAlign: i === 6 ? "right" : "left", padding: "9px 12px", color: "var(--faint)", fontWeight: 600, fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", fontFamily: "var(--mono)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
             {!shown.length && (
-              <tr><td colSpan={9} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>{q || supplierPick ? "No orders in this view match the supplier / search." : "No orders in this view."}</td></tr>
+              <tr><td colSpan={8} style={{ padding: "12px", fontSize: 12.5, color: "var(--faint)" }}>{q || supplierPick ? "No orders in this view match the supplier / search." : "No orders in this view."}</td></tr>
             )}
             {shown.map((o, i) => {
               const meta = PROC_STATUS_META[o.approval_status] || { label: o.approval_status, tone: "muted" };
@@ -591,7 +591,11 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
               // Finance are waiting on an answer.
               const chal = financeChallenge(o);
               const last = i === shown.length - 1 && fxApprove !== o.purchase_id;
-              const bb = last ? "none" : "1px solid var(--hairline)";
+              // The order's actions sit on a line of their own beneath it, so the
+              // columns keep their width and no button is pushed off the edge.
+              // The row line is drawn under that actions line.
+              const rowEnd = last ? "none" : "1px solid var(--hairline)";
+              const bb = "none";
               const cancelled = o.approval_status === "CANCELLED";
               const foreign = isForeignCurrency(o.currency);
               const approved = o.approval_status === "APPROVED";
@@ -599,7 +603,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
               return (
                 <Fragment key={o.purchase_id}>
                 <tr id={`order-${o.purchase_id}`} style={{ opacity: cancelled ? 0.55 : 1, background: String(openOrder) === String(o.purchase_id) ? "var(--accent-bg)" : undefined }}>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none" }}>{o.supplier}<span style={{ color: "var(--faint)", fontWeight: 400 }} title={o.reference ? "The reference typed when it was raised" : "No reference was typed, so the system gave it one"}> · {procRef(o)}</span></td>
+                  <td style={{ padding: "9px 12px", borderBottom: bb, fontWeight: 550, textDecoration: cancelled ? "line-through" : "none", maxWidth: 260, overflowWrap: "anywhere" }}>{o.supplier}<span style={{ color: "var(--faint)", fontWeight: 400 }} title={o.reference ? "The reference typed when it was raised" : "No reference was typed, so the system gave it one"}> · {procRef(o).split(/\s*[,;]\s*/).filter(Boolean).join(", ")}</span></td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)" }}>{o.category || "—"}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, color: "var(--muted)", whiteSpace: "nowrap" }}>{submitterName(o.created_by)}</td>
                   <td style={{ padding: "9px 12px", borderBottom: bb, whiteSpace: "nowrap" }}>{monthLabel(o.order_ym)}</td>
@@ -648,15 +652,17 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: "9px 12px", borderBottom: bb, textAlign: "right", whiteSpace: "nowrap" }}>
+                </tr>
+                <tr style={{ opacity: cancelled ? 0.55 : 1, background: String(openOrder) === String(o.purchase_id) ? "var(--accent-bg)" : undefined }}>
+                  <td colSpan={8} style={{ padding: "0 12px 9px", borderBottom: rowEnd }}>
                     {cancelled ? (
-                      <span style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                      <span style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
                         <span style={{ fontSize: 11, color: "var(--faint)" }}>{o.cancel_reason ? `“${o.cancel_reason}”` : "—"}</span>
                         {/* A cancelled order commits nothing — Finance can clear it off the list. */}
                         {isFinance && <button disabled={busy} style={{ ...btn, borderColor: "var(--red)", color: "var(--red)", opacity: 1 }} onClick={() => del(o)}>Delete</button>}
                       </span>
                     ) : (
-                      <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                      <span style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                         {(isHod || isMerchApprover) && o.approval_status === "PENDING" && <button disabled={busy} style={{ ...btn, borderColor: "var(--accent)", color: "var(--accent)" }} onClick={() => act(o.purchase_id, "hod-approve")}>Approve (Head)</button>}
                         {canManage && o.approval_status === "PENDING" && <button disabled={busy} style={btn} title="Re-send the head-of-department sign-off request" onClick={() => act(o.purchase_id, "resubmit")}>Resubmit</button>}
                         {isFinance && (o.approval_status === "PENDING" || o.approval_status === "HOD_APPROVED") && <button disabled={busy} style={{ ...btn, borderColor: "var(--green)", color: "var(--green)" }} onClick={() => financeApprove(o)}>{foreign ? "Approve (Finance)…" : "Approve (Finance)"}</button>}
@@ -671,14 +677,14 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                 </tr>
                 {fxApprove === o.purchase_id && (
                   <tr>
-                    <td colSpan={9} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                    <td colSpan={8} style={{ padding: 0, borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <FxApprove order={o} rates={fxRates} busy={busy} onCancel={() => setFxApprove(null)} onConfirm={(picks) => act(o.purchase_id, "finance-approve", picks)} />
                     </td>
                   </tr>
                 )}
                 {inv?.purchase_id === o.purchase_id && (
                   <tr>
-                    <td colSpan={9} style={{ padding: "12px 14px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
+                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: "1px solid var(--hairline)", background: "var(--raise)" }}>
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
                         <label style={{ display: "block" }}><span style={FIELD_LAB}>Invoice no / ref</span>
                           <input style={{ ...editInp, width: 170 }} value={inv.number} onChange={(e) => setInv((s) => ({ ...s, number: e.target.value }))} placeholder="e.g. INV-1042" />
@@ -706,7 +712,7 @@ function OrdersPanel({ orders, openOrder = null, amendments = {}, roles, canMana
                 )}
                 {edit?.purchase_id === o.purchase_id && (
                   <tr>
-                    <td colSpan={9} style={{ padding: "12px 14px", borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
+                    <td colSpan={8} style={{ padding: "12px 14px", borderBottom: i === orders.length - 1 ? "none" : "1px solid var(--hairline)", background: "var(--raise)" }}>
                       {edit.locked ? (
                         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{edit.locked}.</span>
