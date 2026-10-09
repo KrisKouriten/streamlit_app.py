@@ -76,8 +76,6 @@ export default function PoSummaryUI({ initialPos, departments = [], chases = {} 
     return c;
   }, [deptPos]);
 
-  const setInvField = (poId, k, v) => setInv((s) => ({ ...s, [poId]: { ...s[poId], [k]: v } }));
-
   function toggleRow(poId, on) {
     setSelected((cur) => {
       const n = new Set(cur);

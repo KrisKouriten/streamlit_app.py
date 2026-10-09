@@ -6,7 +6,9 @@ import LiveStamp from "../live-stamp";
    separators; compact (£m / £k) for headline tiles, full pounds in tables. */
 
 // Money formatting lives in lib/money-rules.js so it can be unit-tested — this
-// file imports next/link and cannot be loaded by the test runner.
+// file imports next/link and cannot be loaded by the test runner. Re-exporting
+// alone doesn't make money() callable here, so the hero band imports it too.
+import { money } from "../../lib/money-rules.js";
 export { money, currencyPrefix, CCY_SYMBOL } from "../../lib/money-rules.js";
 
 export function pct(n, dp = 1) {
