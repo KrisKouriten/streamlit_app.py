@@ -13,15 +13,18 @@ const RAG_COLOR = { green: "var(--green)", amber: "var(--amber, #b8860b)", red: 
    (project-form.js, shared with the project page), and the register itself:
    status changed in place, dates, budget, and a Delete per project for whoever
    set it up or Finance. A project with P.Os or departmental budgets against it
-   can't be deleted (projectDeleteError) — the button says why. */
+   can't be deleted (projectDeleteError) — clicking or tapping its greyed-out
+   button says why. The form's errors stay in the form; the row actions report
+   on the line above the table, whether or not the form is open. */
 export default function BusinessProjectsUI({ projects, summary, me = null, canManage = false }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [msg, setMsg] = useState(null);
   const [open, setOpen] = useState(false);
+  const [formErr, setFormErr] = useState(null);
 
-  async function post(payload, note) {
+  async function post(payload, note, onError = setErr) {
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch("/api/business-projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -30,14 +33,17 @@ export default function BusinessProjectsUI({ projects, summary, me = null, canMa
       if (note) setMsg(note);
       router.refresh();
       return true;
-    } catch (e) { setErr(e.message); return false; } finally { setBusy(false); }
+    } catch (e) { onError(e.message); return false; } finally { setBusy(false); }
   }
 
   async function create(payload) {
-    if (await post(payload, `“${payload.name}” added.`)) setOpen(false);
+    setFormErr(null);
+    if (await post(payload, `“${payload.name}” added.`, setFormErr)) setOpen(false);
   }
 
-  function remove(p) {
+  function remove(p, blocked) {
+    // A blocked Delete stays clickable so it can say why, on touch screens too.
+    if (blocked) { window.alert(`“${p.name}” can't be deleted: ${blocked}.`); return; }
     const costNote = "Its planned cost lines will be deleted with it.";
     if (!window.confirm(`Delete the project “${p.name}”? ${costNote} This can't be undone.`)) return;
     post({ op: "delete", id: p.id }, `“${p.name}” deleted.`);
@@ -59,14 +65,16 @@ export default function BusinessProjectsUI({ projects, summary, me = null, canMa
       </div>
 
       {open ? (
-        <ProjectForm title="New business project" submitLabel="Save project" busy={busy} error={err}
-          onSubmit={create} onCancel={() => { setOpen(false); setErr(null); }} />
+        <ProjectForm title="New business project" submitLabel="Save project" busy={busy} error={formErr}
+          onSubmit={create} onCancel={() => { setOpen(false); setFormErr(null); }} />
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <button className="fos-btn" onClick={() => { setOpen(true); setErr(null); setMsg(null); }} style={{ fontSize: 13 }}>+ New project</button>
-          {msg && <span style={{ color: "var(--green)", fontSize: 13 }}>{msg}</span>}
-          {err && <span style={{ color: "var(--red)", fontSize: 13 }}>{err}</span>}
+        <div>
+          <button className="fos-btn" onClick={() => { setOpen(true); setFormErr(null); setErr(null); setMsg(null); }} style={{ fontSize: 13 }}>+ New project</button>
         </div>
+      )}
+
+      {(msg || err) && (
+        <div role="status" style={{ fontSize: 13, color: err ? "var(--red)" : "var(--green)", marginBottom: -8 }}>{err || msg}</div>
       )}
 
       <div className="fos-card fos-tbl" style={{ overflowX: "auto", padding: 0 }}>
@@ -97,9 +105,10 @@ export default function BusinessProjectsUI({ projects, summary, me = null, canMa
                   <td style={{ ...td(false), color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{projectDateLabel(p.target_date, p.target_ym)}</td>
                   <td style={{ ...td(true), fontVariantNumeric: "tabular-nums" }}>{gbp(p.budget)}</td>
                   <td style={td(true)}>
-                    <button type="button" onClick={() => remove(p)} disabled={busy || !!blocked} title={blocked || `Delete ${p.name}`}
-                      style={{ fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: 7, cursor: blocked ? "not-allowed" : "pointer", background: "transparent",
-                        border: `1px solid ${blocked ? "var(--line)" : "color-mix(in srgb, var(--red) 45%, var(--line))"}`, color: blocked ? "var(--faint)" : "var(--red)" }}>
+                    <button type="button" onClick={() => remove(p, blocked)} disabled={busy} aria-disabled={!!blocked || undefined}
+                      title={blocked || `Delete ${p.name}`}
+                      style={{ fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: 7, cursor: busy || blocked ? "not-allowed" : "pointer", background: "transparent",
+                        border: `1px solid ${busy || blocked ? "var(--line)" : "color-mix(in srgb, var(--red) 45%, var(--line))"}`, color: busy || blocked ? "var(--faint)" : "var(--red)" }}>
                       Delete
                     </button>
                   </td>
@@ -111,7 +120,7 @@ export default function BusinessProjectsUI({ projects, summary, me = null, canMa
       </div>
       {projects.some((p) => projectDeleteError(p, p.links || {}, { actor: me, canManage })) && (
         <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: -10 }}>
-          A greyed-out Delete means the project can&rsquo;t be removed yet — hover it to see why (P.Os or budgets still point at it, or it was set up by someone else).
+          A greyed-out Delete means the project can&rsquo;t be removed yet — click or tap it to see why (P.Os or budgets still point at it, or it was set up by someone else).
         </div>
       )}
     </div>

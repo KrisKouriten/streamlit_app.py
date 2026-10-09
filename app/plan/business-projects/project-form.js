@@ -22,7 +22,8 @@ const dateBox = { height: 38, width: "100%", borderRadius: 9, boxSizing: "border
 // Each section is a row of equal columns, capped at a comfortable width so
 // fields don't stretch across a wide screen; they stack on a narrow one.
 const MAX = 980;
-const cols = (n) => ({ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${n >= 3 ? 200 : 240}px, 1fr))`, columnGap: 20, rowGap: 16, maxWidth: MAX });
+// min(…, 100%) keeps a single column from overflowing a phone-width card.
+const cols = (n) => ({ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(min(${n >= 3 ? 200 : 240}px, 100%), 1fr))`, columnGap: 20, rowGap: 16, maxWidth: MAX });
 
 function Field({ label, hint, children }) {
   return (
@@ -55,9 +56,12 @@ export default function ProjectForm({ initial = null, title, submitLabel = "Save
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e?.target ? e.target.value : e }));
 
   // A project set up before the dates existed has a target month only. It is
-  // kept until a target finish date is given.
-  const legacyYm = initial && !initial.target_date && initial.target_ym ? initial.target_ym : null;
-  const datesWrong = f.start_date && f.target_date && f.target_date < f.start_date;
+  // kept until a target finish date is given, or removed here.
+  const [dropLegacy, setDropLegacy] = useState(false);
+  const legacyYm = !dropLegacy && initial && !initial.target_date && initial.target_ym ? initial.target_ym : null;
+  const keepsMonth = !!legacyYm && !f.target_date;
+  // The finish can't be before the start — a kept month included.
+  const datesWrong = !!f.start_date && (f.target_date ? f.target_date < f.start_date : keepsMonth && legacyYm < f.start_date.slice(0, 7));
 
   function submit(e) {
     e.preventDefault();
@@ -68,12 +72,12 @@ export default function ProjectForm({ initial = null, title, submitLabel = "Save
       start_date: f.start_date || null,
       target_date: f.target_date || null,
       budget: f.budget === "" ? null : f.budget,
-      ...(legacyYm && !f.target_date ? { target_ym: legacyYm } : {}),
+      ...(keepsMonth ? { target_ym: legacyYm } : {}),
     });
   }
 
   return (
-    <form onSubmit={submit} className="fos-card" style={{ padding: "22px 24px 20px", display: "grid", gap: 20 }}>
+    <form onSubmit={submit} className="fos-card" style={{ padding: "22px 24px 20px", display: "grid", gap: 20, minWidth: 0 }}>
       {title && (
         <div>
           <div style={{ fontSize: 15, fontWeight: 650 }}>{title}</div>
@@ -114,14 +118,21 @@ export default function ProjectForm({ initial = null, title, submitLabel = "Save
           <Field label="Planned start date">
             <DateField value={f.start_date} onChange={set("start_date")} inputStyle={dateBox} />
           </Field>
-          <Field label="Target finish date" hint={legacyYm && !f.target_date ? `Was set as a month only: ${projectDateLabel(null, legacyYm)}` : null}>
+          <Field label="Target finish date" hint={keepsMonth ? (
+            <>Was set as a month only: {projectDateLabel(null, legacyYm)} ·{" "}
+              <button type="button" onClick={(e) => { e.preventDefault(); setDropLegacy(true); }}
+                style={{ border: 0, background: "none", padding: 0, color: "var(--accent)", cursor: "pointer", fontSize: "inherit", fontFamily: "inherit" }}>Remove</button>
+            </>
+          ) : null}>
             <DateField value={f.target_date} onChange={set("target_date")} inputStyle={dateBox} />
           </Field>
           <Field label="Budget (£)">
             <MoneyInput style={{ ...inputSt, textAlign: "right" }} className="fos-num" value={f.budget} onChange={set("budget")} placeholder="0" />
           </Field>
         </div>
-        {datesWrong && <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 10 }}>The target finish date is before the planned start date.</div>}
+        {datesWrong && <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 10 }}>
+          {f.target_date ? "The target finish date is before the planned start date." : "The target finish month is before the planned start date — set a target finish date, or remove the month."}
+        </div>}
       </Section>
 
       <Section title="Notes">

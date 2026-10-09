@@ -25,18 +25,23 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
   const [showNew, setShowNew] = useState(false);
   const [nc, setNc] = useState({ department: "", cost_line: "", amount: "", notes: "" });
 
-  // Edit the project's own details in the same form used to set it up.
+  // Edit the project's own details in the same form used to set it up. A
+  // failed save shows in the form, by its Save button; cost-line errors keep
+  // to the banner at the top.
   const [editing, setEditing] = useState(false);
-  function beginEdit() { setEditing(true); setError(null); setMsg(null); }
+  const [editError, setEditError] = useState(null);
+  function beginEdit() { setEditing(true); setEditError(null); setError(null); setMsg(null); }
+  function endEdit() { setEditing(false); setEditError(null); }
   async function saveEdit(payload) {
-    const ok = await post({ id: project.id, ...payload }, "Project updated.");
-    if (ok) setEditing(false);
+    setEditError(null);
+    const ok = await post({ id: project.id, ...payload }, "Project updated.", setEditError);
+    if (ok) endEdit();
   }
 
   const { byDept, totals } = summariseProjectCosts(costs, actuals, project.budget);
 
   // One POST helper (mirrors capex-ui): on !ok surface {error}; on ok refresh.
-  async function post(body, note) {
+  async function post(body, note, onError = setError) {
     setBusy(true); setError(null); setMsg(null);
     try {
       const res = await fetch("/api/business-projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -45,7 +50,7 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
       if (note) setMsg(note);
       router.refresh();
       return true;
-    } catch (e) { setError(e.message); return false; }
+    } catch (e) { onError(e.message); return false; }
     finally { setBusy(false); }
   }
 
@@ -103,8 +108,8 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
 
       {editing && (
         <div style={{ marginBottom: 20 }}>
-          <ProjectForm initial={project} title="Edit project" submitLabel="Save changes" busy={busy} error={error}
-            onSubmit={saveEdit} onCancel={() => setEditing(false)} />
+          <ProjectForm initial={project} title="Edit project" submitLabel="Save changes" busy={busy} error={editError}
+            onSubmit={saveEdit} onCancel={endEdit} />
         </div>
       )}
 
