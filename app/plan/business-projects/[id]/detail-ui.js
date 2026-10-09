@@ -27,6 +27,7 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
 
   // Edit the project's own details in the same form used to set it up.
   const [editing, setEditing] = useState(false);
+  function beginEdit() { setEditing(true); setError(null); setMsg(null); }
   async function saveEdit(payload) {
     const ok = await post({ id: project.id, ...payload }, "Project updated.");
     if (ok) setEditing(false);

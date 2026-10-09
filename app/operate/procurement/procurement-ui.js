@@ -1043,6 +1043,7 @@ function MerchRequests({ otbVersions = [], activeVersionId = null, requests = []
   const inp = { height: 32, fontSize: 12.5, padding: "0 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--raise)", color: "var(--ink)", width: "100%" };
   const btn = (bg, fg = "#fff") => ({ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: `1px solid ${bg}`, background: bg, color: fg, cursor: "pointer" });
   const ghost = { fontSize: 12, fontWeight: 500, padding: "5px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer" };
+  const lab = { fontSize: 10, fontWeight: 600, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", fontFamily: "var(--mono)" };
 
   // Live available-OTB preview once a channel + value are set.
   useEffect(() => {
