@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { summariseProjectCosts, STATUSES, RAGS } from "../../../../lib/business-projects-rules";
+import { summariseProjectCosts, projectDateLabel } from "../../../../lib/business-projects-rules";
 import MoneyInput from "../../../money-input";
+import ProjectForm from "../project-form";
 
 /* Business Project drill-down — client. Presents per-department PLANNED costs
    (finance.business_project_cost) against ACTUAL P.O spend (POs tagged to this
@@ -24,21 +25,10 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
   const [showNew, setShowNew] = useState(false);
   const [nc, setNc] = useState({ department: "", cost_line: "", amount: "", notes: "" });
 
-  // Inline edit of the project's own details (name, owner, status, budget, …).
+  // Edit the project's own details in the same form used to set it up.
   const [editing, setEditing] = useState(false);
-  const [ef, setEf] = useState(null);
-  function beginEdit() {
-    setEf({
-      name: project.name || "", category: project.category || "", owner: project.owner || "",
-      status: project.status || "Planned", rag: project.rag || "green",
-      target_ym: project.target_ym || "", budget: project.budget == null ? "" : String(project.budget),
-      notes: project.notes || "",
-    });
-    setEditing(true);
-  }
-  async function saveEdit() {
-    if (!ef.name.trim()) { setError("Project name is required"); return; }
-    const ok = await post({ id: project.id, ...ef, budget: ef.budget === "" ? null : Number(ef.budget) }, "Project updated.");
+  async function saveEdit(payload) {
+    const ok = await post({ id: project.id, ...payload }, "Project updated.");
     if (ok) setEditing(false);
   }
 
@@ -102,31 +92,18 @@ export default function ProjectDetailUI({ project, costs, actuals }) {
             <span style={{ color: RAG_COLOR[project.rag] || "var(--muted)", fontWeight: 700 }} title={`RAG: ${project.rag}`}>●</span>
           </div>
           <div style={{ fontSize: 12.5, color: "var(--faint)", marginTop: 3 }}>
-            {project.status}{project.category ? ` · ${project.category}` : ""}{project.owner ? ` · ${project.owner}` : ""}{project.target_ym ? ` · target ${project.target_ym}` : ""}
+            {project.status}{project.category ? ` · ${project.category}` : ""}{project.owner ? ` · ${project.owner}` : ""}
+            {project.start_date ? ` · starts ${projectDateLabel(project.start_date)}` : ""}
+            {project.target_date || project.target_ym ? ` · target finish ${projectDateLabel(project.target_date, project.target_ym)}` : ""}
           </div>
         </div>
         {!editing && <button onClick={beginEdit} style={ghost}>Edit project</button>}
       </div>
 
-      {editing && ef && (
-        <div style={{ ...card, border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--line))", background: "var(--accent-bg)" }}>
-          <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 12 }}>Edit project</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, alignItems: "end" }}>
-            <label style={{ ...field, gridColumn: "1 / -1" }}><span style={labelSt}>Name *</span><input style={inputSt} value={ef.name} onChange={(e) => setEf((s) => ({ ...s, name: e.target.value }))} /></label>
-            <label style={field}><span style={labelSt}>Category</span><input style={inputSt} value={ef.category} onChange={(e) => setEf((s) => ({ ...s, category: e.target.value }))} /></label>
-            <label style={field}><span style={labelSt}>Owner</span><input style={inputSt} value={ef.owner} onChange={(e) => setEf((s) => ({ ...s, owner: e.target.value }))} /></label>
-            <label style={field}><span style={labelSt}>Status</span>
-              <select style={inputSt} value={ef.status} onChange={(e) => setEf((s) => ({ ...s, status: e.target.value }))}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select></label>
-            <label style={field}><span style={labelSt}>RAG</span>
-              <select style={inputSt} value={ef.rag} onChange={(e) => setEf((s) => ({ ...s, rag: e.target.value }))}>{RAGS.map((s) => <option key={s}>{s}</option>)}</select></label>
-            <label style={field}><span style={labelSt}>Target (YYYY-MM)</span><input style={inputSt} placeholder="2026-09" value={ef.target_ym} onChange={(e) => setEf((s) => ({ ...s, target_ym: e.target.value }))} /></label>
-            <label style={field}><span style={labelSt}>Budget (£)</span><MoneyInput style={inputSt} value={ef.budget} onChange={(e) => setEf((s) => ({ ...s, budget: e.target.value }))} /></label>
-            <label style={{ ...field, gridColumn: "1 / -1" }}><span style={labelSt}>Notes</span><input style={inputSt} value={ef.notes} onChange={(e) => setEf((s) => ({ ...s, notes: e.target.value }))} /></label>
-          </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-            <button onClick={saveEdit} disabled={busy || !ef.name.trim()} style={btn("var(--accent)")}>{busy ? "Saving…" : "Save changes"}</button>
-            <button onClick={() => setEditing(false)} style={ghost}>Cancel</button>
-          </div>
+      {editing && (
+        <div style={{ marginBottom: 20 }}>
+          <ProjectForm initial={project} title="Edit project" submitLabel="Save changes" busy={busy} error={error}
+            onSubmit={saveEdit} onCancel={() => setEditing(false)} />
         </div>
       )}
 

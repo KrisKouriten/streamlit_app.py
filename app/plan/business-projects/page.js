@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "../../../lib/auth";
+import { getSession, hasRole } from "../../../lib/auth";
 import { getBusinessProjects } from "../../../lib/business-projects";
 import { summarise } from "../../../lib/business-projects-rules";
 import { PageHeader } from "../../finance-os/ui";
@@ -28,7 +28,8 @@ export default async function BusinessProjects() {
           Run migration <span style={{ fontFamily: "var(--mono)" }}>026</span> to enable the Business Projects register.
         </div>
       ) : (
-        <BusinessProjectsUI projects={projects} summary={summary} />
+        <BusinessProjectsUI projects={projects} summary={summary}
+          me={session.email || session.name || null} canManage={hasRole(session, "ADMIN", "FINANCE")} />
       )}
     </div>
   );

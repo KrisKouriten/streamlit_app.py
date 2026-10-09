@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSession } from "../../../lib/auth";
-import { upsertBusinessProject, upsertProjectCost, deleteProjectCost } from "../../../lib/business-projects";
+import { getSession, hasRole } from "../../../lib/auth";
+import { upsertBusinessProject, upsertProjectCost, deleteProjectCost, deleteBusinessProject } from "../../../lib/business-projects";
 import { audit } from "../../../lib/governance";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 // Create or update a business project, or manage its planned cost lines. Any
 // signed-in user (HO planning module). Branches on body.op:
 //   "cost-upsert" → upsertProjectCost   "cost-delete" → deleteProjectCost
+//   "delete"      → deleteBusinessProject (whoever set it up, or Finance /
+//                   Admin; refused while P.Os or budgets point at it)
 //   (default)     → upsertBusinessProject
 export async function POST(request) {
   const session = await getSession();
@@ -23,6 +25,11 @@ export async function POST(request) {
     if (body.op === "cost-delete") {
       const r = await deleteProjectCost(body.cost_id, actor);
       await audit({ actor, eventType: "business_project.cost.delete", objectType: "business_project_cost", objectRef: String(body.cost_id) });
+      return NextResponse.json({ ok: true, ...r });
+    }
+    if (body.op === "delete") {
+      const r = await deleteBusinessProject(body.id, { actor, canManage: hasRole(session, "ADMIN", "FINANCE") });
+      await audit({ actor, eventType: "business_project.delete", objectType: "business_project", objectRef: String(r.id), detail: { name: r.name, cost_lines: r.costLines } });
       return NextResponse.json({ ok: true, ...r });
     }
     const r = await upsertBusinessProject(body, actor);

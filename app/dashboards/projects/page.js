@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "../../../lib/auth";
 import { getProjectsWithSpend } from "../../../lib/business-projects";
-import { summarise, groupByCategory, groupByMonth } from "../../../lib/business-projects-rules";
+import { summarise, groupByCategory, groupByMonth, projectDateLabel } from "../../../lib/business-projects-rules";
 import { PageHeader, StatRow, Stat, Panel, Table, Badge, Bar, ProvenanceBadge, IllustrativeBanner, money, num } from "../../finance-os/ui";
 import PerspectivePanel from "../../perspective-panel";
 
@@ -90,15 +90,15 @@ export default async function ProjectsDashboard() {
             />
           </Panel>
 
-          <Panel title="Delivery timeline" note="by target month · open projects">
+          <Panel title="Delivery timeline" note="by target finish month · open projects">
             <Table
               columns={[
-                { label: "Target month", render: (r) => monthLabel(r.ym) },
+                { label: "Target finish month", render: (r) => monthLabel(r.ym) },
                 { label: "Projects", align: "right", render: (r) => num(r.count) },
                 { label: "Committed £", align: "right", render: (r) => money(r.budget, { compact: true }) },
               ]}
               rows={byMonth}
-              empty="No target months set on the open projects."
+              empty="No target finish dates set on the open projects."
             />
           </Panel>
 
@@ -108,7 +108,8 @@ export default async function ProjectsDashboard() {
                 { label: "Project", render: (r) => <a href={`/plan/business-projects/${r.id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{r.name}</a> },
                 { label: "Status", render: (r) => <Badge tone={STATUS_TONE[r.status] || "muted"}>{r.status}</Badge> },
                 { label: "RAG", render: (r) => <Badge tone={RAG_TONE[r.rag] || "muted"}>{r.rag}</Badge> },
-                { label: "Target", render: (r) => monthLabel(r.target_ym) },
+                { label: "Planned start", render: (r) => projectDateLabel(r.start_date) },
+                { label: "Target finish", render: (r) => projectDateLabel(r.target_date, r.target_ym) },
                 { label: "Budget", align: "right", render: (r) => money(r.budget, { compact: true }) },
                 { label: "Planned", align: "right", render: (r) => money(r.planned, { compact: true }) },
                 { label: "Actual (P.O)", align: "right", render: (r) => money(r.actual, { compact: true }) },
