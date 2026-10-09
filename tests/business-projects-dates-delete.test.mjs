@@ -36,3 +36,22 @@ test("delete: whoever set it up, or Finance; never while P.Os or budgets point a
   assert.match(projectDeleteError(p, { pos: 1 }, { canManage: true }), /1 P\.O is tagged/);
   assert.match(projectDeleteError(p, { budgets: 1 }, { canManage: true }), /departmental budget is set against/);
 });
+
+test("dates: a kept target month can't be before the planned start", () => {
+  // Sep 2026 kept from before the dates, start set to November: refused.
+  assert.match(validateProject({ name: "X", start_date: "2026-11-01", target_ym: "2026-09" }).errors.join(), /target finish month is before the planned start/);
+  // Same month as the start, or later: fine.
+  assert.deepEqual(validateProject({ name: "X", start_date: "2026-09-20", target_ym: "2026-09" }).errors, []);
+  assert.deepEqual(validateProject({ name: "X", start_date: "2026-08-01", target_ym: "2026-09" }).errors, []);
+  // A finish date replaces the month, so only the date is compared.
+  assert.deepEqual(validateProject({ name: "X", start_date: "2026-11-01", target_ym: "2026-09", target_date: "2027-01-31" }).errors, []);
+  // Removing the month (no target_ym, no finish date) clears it.
+  assert.equal(validateProject({ name: "X", start_date: "2026-11-01" }).clean.target_ym, null);
+});
+
+test("delete: a tagged P.O's advice is to mark the project Done — moving it is only possible while editable", () => {
+  const why = projectDeleteError({ created_by: "a" }, { pos: 1 }, { canManage: true });
+  assert.match(why, /mark the project Done/);
+  assert.match(why, /only while it is a draft, rejected or challenged/);
+  assert.doesNotMatch(why, /move it to another project on P\.O Requests first/);
+});
